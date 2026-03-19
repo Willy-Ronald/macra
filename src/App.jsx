@@ -697,13 +697,18 @@ const MealCreator = ({onSave,onBack}) => {
   const [name,setName]=useState("");
   const [ingredients,setIngredients]=useState([]);
   const [showAdd,setShowAdd]=useState(false);
+  const allUnits = ["g","oz","ml","fl oz","cup","tbsp","tsp","serving","piece"];
   const [ing,setIng]=useState({name:"",servingSize:"",servingUnit:"g",cal:0,p:0,c:0,f:0,qty:1});
   const empty={name:"",servingSize:"",servingUnit:"g",cal:0,p:0,c:0,f:0,qty:1};
 
-  const totals = ingredients.reduce((a,x)=>{
-    const m = x.qty * (x.servingUnit==="g" && x.servingSize ? 1 : 1);
-    return {cal:a.cal+x.cal*x.qty,p:a.p+x.p*x.qty,c:a.c+x.c*x.qty,f:a.f+x.f*x.qty};
-  },{cal:0,p:0,c:0,f:0});
+  const fmtServing = (x) => {
+    const sz = x.servingSize ? x.servingSize : "1";
+    return sz + " " + x.servingUnit;
+  };
+
+  const totals = ingredients.reduce((a,x)=>({
+    cal:a.cal+x.cal*x.qty,p:a.p+x.p*x.qty,c:a.c+x.c*x.qty,f:a.f+x.f*x.qty
+  }),{cal:0,p:0,c:0,f:0});
 
   const addIngredient = () => {
     if(!ing.name) return;
@@ -756,7 +761,7 @@ const MealCreator = ({onSave,onBack}) => {
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
           <div style={{flex:1}}>
             <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{x.name}</p>
-            <p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{x.servingSize}{x.servingUnit} per serving</p>
+            <p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{fmtServing(x)} per serving</p>
             <div style={{display:"flex",gap:8,marginTop:6}}>
               {[{v:Math.round(x.cal*x.qty),l:"cal",c:T.acc},{v:Math.round(x.p*x.qty)+"g",l:"P",c:T.pro},{v:Math.round(x.c*x.qty)+"g",l:"C",c:T.carb},{v:Math.round(x.f*x.qty)+"g",l:"F",c:T.fat}].map(m=>
                 <span key={m.l} style={{fontSize:11,fontFamily:T.mono,color:m.c}}>{m.v}<span style={{color:T.txM,fontSize:9}}> {m.l}</span></span>
@@ -764,9 +769,11 @@ const MealCreator = ({onSave,onBack}) => {
             </div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <button onClick={()=>updateQty(x.id,-0.25)} style={{width:28,height:28,borderRadius:8,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font}}>−</button>
-            <span style={{fontSize:14,fontWeight:600,color:T.tx,fontFamily:T.mono,minWidth:28,textAlign:"center"}}>{x.qty}</span>
-            <button onClick={()=>updateQty(x.id,0.25)} style={{width:28,height:28,borderRadius:8,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font}}>+</button>
+            <button onClick={()=>updateQty(x.id,-1)} style={{width:28,height:28,borderRadius:8,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font}}>−</button>
+            <div style={{textAlign:"center",minWidth:32}}>
+              <span style={{fontSize:14,fontWeight:600,color:T.tx,fontFamily:T.mono}}>x{x.qty}</span>
+            </div>
+            <button onClick={()=>updateQty(x.id,1)} style={{width:28,height:28,borderRadius:8,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font}}>+</button>
             <button onClick={()=>removeIngredient(x.id)} style={{width:28,height:28,borderRadius:8,border:"none",background:"rgba(239,68,68,0.1)",color:"#EF4444",fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",marginLeft:4}}>×</button>
           </div>
         </div>
@@ -780,27 +787,33 @@ const MealCreator = ({onSave,onBack}) => {
       <Lbl>Name</Lbl>
       <input value={ing.name} onChange={e=>setIng(p=>({...p,name:e.target.value}))} placeholder="e.g. Chicken Breast" style={{...inputStyle,marginTop:6,marginBottom:14}}/>
 
-      <div style={{display:"flex",gap:8,marginBottom:14}}>
-        <div style={{flex:1}}>
-          <Lbl>Serving Size</Lbl>
-          <input value={ing.servingSize} onChange={e=>setIng(p=>({...p,servingSize:e.target.value}))} placeholder="150" type="number" style={{...smallInput,marginTop:6,textAlign:"left"}}/>
+      <div style={{display:"flex",gap:8,marginBottom:10}}>
+        <div style={{flex:"0 0 80px"}}>
+          <Lbl>Amount</Lbl>
+          <input value={ing.servingSize} onChange={e=>setIng(p=>({...p,servingSize:e.target.value}))} placeholder="1" type="number" inputMode="decimal" style={{...smallInput,marginTop:6,textAlign:"left"}}/>
         </div>
         <div style={{flex:1}}>
           <Lbl>Unit</Lbl>
-          <div style={{display:"flex",gap:4,marginTop:6}}>
-            {["g","oz","ml","cup"].map(u=>
+          <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6}}>
+            {allUnits.map(u=>
               <button key={u} onClick={()=>setIng(p=>({...p,servingUnit:u}))} style={{
-                flex:1,padding:"10px 0",borderRadius:8,border:"none",
+                padding:"8px 0",borderRadius:8,border:"none",
                 background:ing.servingUnit===u?T.acc:"transparent",
                 color:ing.servingUnit===u?T.bg:T.txM,
-                fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:T.font
+                fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:T.font,
+                flex:u.length>3?"0 0 calc(25% - 3px)":"0 0 calc(20% - 4px)",
+                textAlign:"center",
               }}>{u}</button>
             )}
           </div>
         </div>
       </div>
 
-      <p style={{fontSize:11,color:T.txM,margin:"0 0 10px"}}>Macros per serving</p>
+      {/* Serving context label */}
+      <p style={{fontSize:11,color:T.acc,margin:"4px 0 12px",fontWeight:500}}>
+        Macros per {ing.servingSize||"1"} {ing.servingUnit}
+      </p>
+
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,marginBottom:14}}>
         {[{k:"cal",l:"Cal",c:T.acc},{k:"p",l:"Protein",c:T.pro},{k:"c",l:"Carbs",c:T.carb},{k:"f",l:"Fat",c:T.fat}].map(m=>
           <div key={m.k}>
