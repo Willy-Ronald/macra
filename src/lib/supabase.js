@@ -183,6 +183,49 @@ export async function getWeekPlans(userId) {
   return plans;
 }
 
+// ── GENERATION LOG ─────────────────────────────────────────────
+
+/**
+ * Returns how many AI plans this user has generated in different
+ * time windows (used to display remaining count in the UI).
+ * Reads via the anon key with the user's active session (RLS applies).
+ */
+export async function getGenerationUsage(userId) {
+  if (!supabase) return null;
+  try {
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const dayStart     = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    const monthStart   = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+    const [weeklyRes, dailyRes, monthlyRes] = await Promise.all([
+      supabase
+        .from("generation_log")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .gte("generated_at", sevenDaysAgo),
+      supabase
+        .from("generation_log")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .gte("generated_at", dayStart),
+      supabase
+        .from("generation_log")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .gte("generated_at", monthStart),
+    ]);
+
+    return {
+      weeklyCount:  weeklyRes.count  || 0,
+      dailyCount:   dailyRes.count   || 0,
+      monthlyCount: monthlyRes.count || 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ── CUSTOM GROCERY LIST ─────────────────────────────────────────
 
 export async function getCustomGroceryList(userId) {

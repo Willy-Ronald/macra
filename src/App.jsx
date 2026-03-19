@@ -5,6 +5,7 @@ import {
   saveMeal, getSavedMeals,
   logMeal, getTodayLog, getLogByDate, deleteMealLog,
   saveMealPlan, getWeekPlans,
+  getGenerationUsage,
   getCustomGroceryList, saveCustomGroceryList,
 } from "./lib/supabase";
 import { generateMealPlan } from "./lib/claude";
@@ -600,27 +601,52 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
 };
 
 // ─── PLAN (AI-POWERED) ─────────────────────────────────────────
-const Plan = ({profile,userId,onWeekPlanUpdate}) => {
-  const [sel,setSel]=useState("A"); // "A" | "B"
+const FREE_WEEKLY  = 1;
+const PRO_DAILY    = 3;
+const PRO_MONTHLY  = 20;
+
+const Plan = ({profile,userId,isPro,onWeekPlanUpdate}) => {
+  const [sel,setSel]=useState("A");
   const [loading,setLoading]=useState(false);
   const [loadMsg,setLoadMsg]=useState("");
   const [genError,setGenError]=useState("");
-  const [abPlan,setAbPlan]=useState({}); // { A: meals[], B: meals[] }
+  const [limitHit,setLimitHit]=useState(false);
+  const [abPlan,setAbPlan]=useState({});
   const [genCount,setGenCount]=useState(0);
   const [plansLoaded,setPlansLoaded]=useState(false);
+  const [remaining,setRemaining]=useState(null); // null = not yet loaded
 
-  // Load saved plans from Supabase on mount (key 0=A, key 1=B)
+  // Load saved plans + current usage on mount
   useEffect(()=>{
     if(!userId||plansLoaded) return;
     (async()=>{
-      const plans = await getWeekPlans(userId);
+      const [plans,usage] = await Promise.all([
+        getWeekPlans(userId),
+        getGenerationUsage(userId),
+      ]);
       const loaded={};
       if(plans[0]) loaded.A=plans[0];
       if(plans[1]) loaded.B=plans[1];
       if(Object.keys(loaded).length>0) setAbPlan(loaded);
       setPlansLoaded(true);
+
+      // Derive remaining from live usage
+      if(usage){
+        if(!isPro){
+          const rem={weekly:Math.max(0,FREE_WEEKLY-usage.weeklyCount)};
+          setRemaining(rem);
+          if(rem.weekly===0) setLimitHit(true);
+        } else {
+          const rem={
+            daily:  Math.max(0,PRO_DAILY  -usage.dailyCount),
+            monthly:Math.max(0,PRO_MONTHLY-usage.monthlyCount),
+          };
+          setRemaining(rem);
+          if(rem.daily===0||rem.monthly===0) setLimitHit(true);
+        }
+      }
     })();
-  },[userId,plansLoaded]);
+  },[userId,plansLoaded,isPro]);
 
   const defaultMeals=[
     {type:"BREAKFAST",name:"Greek Yogurt Parfait",desc:"Greek yogurt, granola, berries, honey",cal:380,p:28,c:45,f:12,time:"10 min",ingredients:[{name:"Greek yogurt",qty:1,unit:"cup"},{name:"granola",qty:0.5,unit:"cup"},{name:"mixed berries",qty:0.5,unit:"cup"},{name:"honey",qty:1,unit:"tbsp"}]},
@@ -632,49 +658,70 @@ const Plan = ({profile,userId,onWeekPlanUpdate}) => {
   const generatePlan = async () => {
     setLoading(true);
     setGenError("");
-    const messages = [
-      "Analyzing your macro targets...",
-      "Building Day A meals...",
-      "Building Day B meals...",
-      "Calculating ingredients...",
-      "Balancing protein distribution...",
-      "Finalizing your A/B plan..."
-    ];
-    let i=0;
-    setLoadMsg(messages[0]);
-    const interval = setInterval(()=>{i++;if(i<messages.length)setLoadMsg(messages[i]);},1500);
+    setLimitHit(false);
+    const msgs=["Analyzing your macro targets...","Building Day A meals...","Building Day B meals...","Calculating ingredients...","Balancing protein distribution...","Finalizing your A/B plan..."];
+    let i=0; setLoadMsg(msgs[0]);
+    const interval=setInterval(()=>{i++;if(i<msgs.length)setLoadMsg(msgs[i]);},1500);
 
     try {
-      const plan = await generateMealPlan(profile); // returns { A: [...], B: [...] }
+      const result = await generateMealPlan(profile,userId,isPro); // {abPlan,remaining}
       clearInterval(interval);
+      const plan=result.abPlan;
       setAbPlan(plan);
+      if(result.remaining) setRemaining(result.remaining);
       setGenCount(c=>c+1);
       setLoading(false);
-      // Save: Day A → day_of_week 0, Day B → day_of_week 1
       if(userId){
-        if(plan.A) await saveMealPlan(userId, 0, plan.A);
-        if(plan.B) await saveMealPlan(userId, 1, plan.B);
+        if(plan.A) await saveMealPlan(userId,0,plan.A);
+        if(plan.B) await saveMealPlan(userId,1,plan.B);
       }
-      // Update parent: { 0: A meals, 1: B meals }
-      if(onWeekPlanUpdate) onWeekPlanUpdate({0:plan.A, 1:plan.B});
-    } catch(err) {
+      if(onWeekPlanUpdate) onWeekPlanUpdate({0:plan.A,1:plan.B});
+    } catch(err){
       clearInterval(interval);
       setLoading(false);
-      setGenError(err.message || "Generation failed — please try again");
-      console.error("AI generation failed:", err);
+      if(err.limitReached){
+        setLimitHit(true);
+        setGenError(err.message);
+        if(err.remaining) setRemaining(err.remaining);
+      } else {
+        setGenError(err.message||"Generation failed — please try again");
+      }
+      console.error("AI generation failed:",err);
     }
   };
 
-  const meals = abPlan[sel] || defaultMeals;
-  const dayTotals = meals.reduce((a,m)=>({cal:a.cal+m.cal,p:a.p+m.p,c:a.c+m.c,f:a.f+m.f}),{cal:0,p:0,c:0,f:0});
+  const meals=abPlan[sel]||defaultMeals;
+  const dayTotals=meals.reduce((a,m)=>({cal:a.cal+m.cal,p:a.p+m.p,c:a.c+m.c,f:a.f+m.f}),{cal:0,p:0,c:0,f:0});
+
+  // ── Build the usage text shown below the button ──
+  const usageLine = () => {
+    if(!remaining) return null;
+    if(!isPro){
+      return remaining.weekly>0
+        ? `${remaining.weekly} of ${FREE_WEEKLY} free plan remaining this week`
+        : null; // limit hit — shown separately
+    }
+    // Pro
+    const dayTxt   = `${remaining.daily} of ${PRO_DAILY} left today`;
+    const monthTxt = `${remaining.monthly} of ${PRO_MONTHLY} left this month`;
+    return `${dayTxt} · ${monthTxt}`;
+  };
+
+  // Which specific limit did a Pro user hit?
+  const proLimitKind = () => {
+    if(!remaining||isPro===false) return null;
+    if(remaining.daily===0)   return "daily";
+    if(remaining.monthly===0) return "monthly";
+    return null;
+  };
 
   return <div style={{padding:"0 20px 24px"}}>
     <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
     <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"4px 0 16px",letterSpacing:"-0.02em"}}>Meal Plan</h1>
 
-    {/* A/B Day tabs */}
+    {/* A/B tabs */}
     <Card style={{display:"flex",padding:4,marginBottom:8}}>
-      {[{k:"A",days:"Mon · Wed · Fri · Sun"},{k:"B",days:"Tue · Thu · Sat"}].map(d=>(
+      {[{k:"A"},{k:"B"}].map(d=>(
         <button key={d.k} onClick={()=>setSel(d.k)} style={{flex:1,padding:"10px 0",borderRadius:8,border:"none",background:sel===d.k?T.acc:"transparent",color:sel===d.k?T.bg:T.txM,fontSize:14,fontWeight:700,cursor:"pointer",transition:"all 0.2s ease"}}>Day {d.k}</button>
       ))}
     </Card>
@@ -688,23 +735,21 @@ const Plan = ({profile,userId,onWeekPlanUpdate}) => {
       )}
     </div>
 
-    {/* Loading State */}
+    {/* Loading */}
     {loading && <Card style={{padding:"40px 20px",textAlign:"center",marginBottom:12}}>
-      <div style={{marginBottom:16}}>
-        <div style={{width:40,height:40,margin:"0 auto",borderRadius:"50%",border:`3px solid ${T.bd}`,borderTopColor:T.acc,animation:"spin 1s linear infinite"}}/>
-      </div>
+      <div style={{width:40,height:40,margin:"0 auto 16px",borderRadius:"50%",border:`3px solid ${T.bd}`,borderTopColor:T.acc,animation:"spin 1s linear infinite"}}/>
       <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:"0 0 4px"}}>{loadMsg}</p>
       <p style={{fontSize:12,color:T.txM,margin:0}}>Powered by Claude AI</p>
     </Card>}
 
-    {/* Error State */}
-    {!loading && genError && <Card style={{padding:"16px 18px",marginBottom:12,border:`1px solid rgba(239,68,68,0.3)`,background:"rgba(239,68,68,0.06)"}}>
+    {/* Non-limit error */}
+    {!loading && genError && !limitHit && <Card style={{padding:"16px 18px",marginBottom:12,border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.06)"}}>
       <p style={{fontSize:13,fontWeight:600,color:"#EF4444",margin:"0 0 4px"}}>Generation failed</p>
       <p style={{fontSize:12,color:T.tx2,margin:"0 0 12px",lineHeight:1.5}}>{genError}</p>
       <button onClick={generatePlan} style={{padding:"10px 20px",borderRadius:10,border:"none",background:T.acc,color:T.bg,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:T.font}}>↺ Retry</button>
     </Card>}
 
-    {/* Meal Cards */}
+    {/* Meal cards */}
     {!loading && meals.map((m,i)=><Card key={i+"-"+sel+"-"+genCount} style={{padding:18,marginBottom:8,animation:"fadeUp 0.4s ease both",animationDelay:`${i*0.08}s`}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
         <span style={{fontSize:10,fontWeight:600,color:T.acc,letterSpacing:"0.14em"}}>{m.type}</span>
@@ -725,15 +770,53 @@ const Plan = ({profile,userId,onWeekPlanUpdate}) => {
       </div>}
     </Card>)}
 
+    {/* Bottom actions */}
     {!loading && <>
-      {abPlan[sel] && <Card style={{padding:"10px 14px",marginBottom:10,background:T.accG,border:`1px solid ${T.accM}`,display:"flex",alignItems:"center",gap:8}}>
+      {abPlan[sel] && !limitHit && <Card style={{padding:"10px 14px",marginBottom:10,background:T.accG,border:`1px solid ${T.accM}`,display:"flex",alignItems:"center",gap:8}}>
         <span style={{fontSize:13}}>✦</span>
         <p style={{fontSize:12,color:T.tx2,margin:0}}>AI-generated A/B plan · Grocery list auto-populates from ingredients</p>
       </Card>}
-      <button onClick={generatePlan} style={{width:"100%",padding:15,borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",marginTop:4,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+
+      {/* Limit-hit banner */}
+      {limitHit && <Card style={{padding:"18px 20px",marginBottom:12,background:T.accG,border:`1px solid ${T.accM}`,textAlign:"center"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginBottom:8}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="1.5" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          <span style={{fontSize:11,fontWeight:700,color:T.acc,letterSpacing:"0.1em"}}>LIMIT REACHED</span>
+        </div>
+        <p style={{fontSize:13,color:T.tx2,margin:"0 0 14px",lineHeight:1.5}}>{genError}</p>
+        {!isPro ? (
+          <button style={{padding:"12px 28px",borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font}}>
+            Upgrade to Pro — $4.99/mo
+          </button>
+        ) : (
+          <p style={{fontSize:12,color:T.txM,margin:0}}>
+            {proLimitKind()==="daily" ? "Resets tomorrow at midnight" : "Resets on the 1st of next month"}
+          </p>
+        )}
+      </Card>}
+
+      {/* Generate / Regenerate button */}
+      <button
+        onClick={generatePlan}
+        disabled={limitHit}
+        style={{width:"100%",padding:15,borderRadius:T.r,border:"none",
+          background:limitHit?T.bd:T.acc,
+          color:limitHit?T.txM:T.bg,
+          fontSize:14,fontWeight:700,
+          cursor:limitHit?"not-allowed":"pointer",
+          marginTop:4,display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+          opacity:limitHit?0.5:1,
+        }}>
         <span>✦</span> {abPlan.A||abPlan.B ? "Regenerate Plan" : "Generate AI Plan"}
       </button>
-      {genCount===0 && <p style={{fontSize:11,color:T.txM,textAlign:"center",margin:"10px 0 0"}}>Macra Free: 1 AI plan · Go Pro for unlimited</p>}
+
+      {/* Usage counter */}
+      {usageLine() && <p style={{fontSize:11,color:T.txM,textAlign:"center",margin:"10px 0 0",fontFamily:T.mono}}>
+        {usageLine()}
+      </p>}
+      {!isPro && !limitHit && remaining && remaining.weekly > 0 && <p style={{fontSize:11,color:T.txM,textAlign:"center",margin:"4px 0 0"}}>
+        Go Pro for 3/day · 20/month generations
+      </p>}
     </>}
   </div>;
 };
@@ -1845,7 +1928,7 @@ export default function App() {
 
   const screens = {
     home:<Dashboard setTab={switchTab} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal} onUnlogMeal={handleUnlogMeal} todayPlan={todayPlan} weekPlans={weekPlans} userId={user?.id}/>,
-    plan:<Plan profile={profile} userId={user?.id} onWeekPlanUpdate={(plans)=>{
+    plan:<Plan profile={profile} userId={user?.id} isPro={isPro} onWeekPlanUpdate={(plans)=>{
       // plans = { 0: dayA[], 1: dayB[] }
       setWeekPlans(plans);
       const dow=new Date().getDay();
