@@ -861,60 +861,127 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
 
   // ── Food search state ──
   const [searchQuery,setSearchQuery]=useState("");
-  const [searchResults,setSearchResults]=useState([]);
+  const [savedResults,setSavedResults]=useState([]);
+  const [usdaResults,setUsdaResults]=useState([]);
+  const [offResults,setOffResults]=useState([]);
   const [searchLoading,setSearchLoading]=useState(false);
   const [searchError,setSearchError]=useState("");
   const [selectedFood,setSelectedFood]=useState(null);
   const [servings,setServings]=useState(1);
-  const [editNutrition,setEditNutrition]=useState(null); // editable macros for incomplete data
+  const [editNutrition,setEditNutrition]=useState(null);
   const [searchLogSuccess,setSearchLogSuccess]=useState(false);
   const debounceRef = useRef(null);
+  const abortRef = useRef(null);
+
+  const clearSearch = () => {
+    if(abortRef.current) abortRef.current.abort();
+    if(debounceRef.current) clearTimeout(debounceRef.current);
+    setSearchQuery("");setSavedResults([]);setUsdaResults([]);setOffResults([]);
+    setSelectedFood(null);setSearchError("");setEditNutrition(null);setSearchLogSuccess(false);setSearchLoading(false);
+  };
 
   const searchFoods = async (query) => {
-    if(!query||query.length<2){setSearchResults([]);setSearchError("");return;}
+    if(!query||query.length<2){setSavedResults([]);setUsdaResults([]);setOffResults([]);setSearchError("");return;}
+
+    // Abort previous requests
+    if(abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const signal = controller.signal;
+
+    // 1. Local saved meals (instant)
+    const q = query.toLowerCase();
+    const localMatches = savedMeals.filter(m=>m.name.toLowerCase().includes(q)).slice(0,5).map(m=>({
+      id:"saved-"+m.id, name:m.name, brand:"", servingSize:"1 meal", cal:m.totals.cal, protein:m.totals.p, carbs:m.totals.c, fat:m.totals.f, hasNutrition:true, per:"meal", source:"saved",
+    }));
+    setSavedResults(localMatches);
+
     setSearchLoading(true);setSearchError("");
-    try {
-      const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=10`;
-      const res = await fetch(url);
-      if(!res.ok) throw new Error("API error");
-      const data = await res.json();
-      const items = (data.products||[]).map(p => {
-        const n = p.nutriments||{};
-        const servingSize = p.serving_size||p.quantity||"—";
-        const cal = Math.round(n["energy-kcal_serving"]||n["energy-kcal_100g"]||0);
-        const protein = Math.round(n.proteins_serving||n.proteins_100g||0);
-        const carbs = Math.round(n.carbohydrates_serving||n.carbohydrates_100g||0);
-        const fat = Math.round(n.fat_serving||n.fat_100g||0);
-        const hasNutrition = cal>0;
-        return {
-          id:p._id||p.code,
-          name:p.product_name||"Unknown Product",
-          brand:p.brands||"",
-          servingSize,
-          cal,protein,carbs,fat,
-          hasNutrition,
-          per: n["energy-kcal_serving"] ? "serving" : "100g",
-        };
-      }).filter(p=>p.name&&p.name!=="Unknown Product");
-      setSearchResults(items);
-      if(items.length===0) setSearchError("No results found. Try a different search term.");
-    } catch {
-      setSearchResults([]);
-      setSearchError("Couldn't reach food database. Try manual entry instead.");
+    let usdaOk=false, offOk=false;
+
+    // 2. USDA FoodData Central (with 5s timeout)
+    const usdaFetch = async () => {
+      try {
+        const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=DEMO_KEY&query=${encodeURIComponent(query)}&pageSize=8&dataType=SR%20Legacy,Foundation`;
+        const res = await fetch(url, {signal, timeout: 5000});
+        if(signal.aborted) return;
+        if(!res.ok) throw new Error();
+        const data = await res.json();
+        const items = (data.foods||[]).map(f=>{
+          const getNut = (id) => {const n=f.foodNutrients?.find(n=>n.nutrientId===id);return n?Math.round(n.value):0;};
+          return {
+            id:"usda-"+f.fdcId, name:f.description||"", brand:f.brandName||"",
+            servingSize:"100g", cal:getNut(1008), protein:getNut(1003), carbs:getNut(1005), fat:getNut(1004),
+            hasNutrition:getNut(1008)>0, per:"100g", source:"usda",
+          };
+        }).filter(f=>f.name);
+        if(!signal.aborted){setUsdaResults(items);usdaOk=true;}
+      } catch(e){if(e.name!=="AbortError"&&!signal.aborted) setUsdaResults([]);}
+    };
+
+    // 3. OpenFoodFacts (with 5s timeout)
+    const offFetch = async () => {
+      try {
+        const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=8`;
+        const res = await fetch(url, {signal, timeout: 5000});
+        if(signal.aborted) return;
+        if(!res.ok) throw new Error();
+        const data = await res.json();
+        const items = (data.products||[]).map(p=>{
+          const n=p.nutriments||{};
+          return {
+            id:"off-"+(p._id||p.code), name:p.product_name||"", brand:p.brands||"",
+            servingSize:p.serving_size||p.quantity||"—",
+            cal:Math.round(n["energy-kcal_serving"]||n["energy-kcal_100g"]||0),
+            protein:Math.round(n.proteins_serving||n.proteins_100g||0),
+            carbs:Math.round(n.carbohydrates_serving||n.carbohydrates_100g||0),
+            fat:Math.round(n.fat_serving||n.fat_100g||0),
+            hasNutrition:(n["energy-kcal_serving"]||n["energy-kcal_100g"]||0)>0,
+            per:n["energy-kcal_serving"]?"serving":"100g", source:"off",
+          };
+        }).filter(p=>p.name);
+        if(!signal.aborted){setOffResults(items);offOk=true;}
+      } catch(e){if(e.name!=="AbortError"&&!signal.aborted) setOffResults([]);}
+    };
+
+    // Race with 5s timeout each
+    const withTimeout = (fn) => Promise.race([fn(), new Promise(r=>setTimeout(r,5000))]);
+    await Promise.allSettled([withTimeout(usdaFetch), withTimeout(offFetch)]);
+
+    if(!signal.aborted){
+      setSearchLoading(false);
+      if(!usdaOk && !offOk && localMatches.length===0) setSearchError("Couldn't reach food databases. Try manual entry instead.");
     }
-    setSearchLoading(false);
   };
+
+  // Deduplicated + grouped results
+  const allResults = (() => {
+    const seen = new Set();
+    const dedup = (items) => items.filter(r => {
+      const key = r.name.toLowerCase().replace(/\s+/g," ").trim();
+      if(seen.has(key)) return false;
+      seen.add(key);return true;
+    });
+    return {saved:dedup(savedResults), usda:dedup(usdaResults), off:dedup(offResults)};
+  })();
+  const hasResults = allResults.saved.length>0||allResults.usda.length>0||allResults.off.length>0;
 
   const handleSearchInput = (val) => {
     setSearchQuery(val);
     setSelectedFood(null);setSearchLogSuccess(false);
+    if(!val||val.length<2){
+      if(abortRef.current) abortRef.current.abort();
+      setSavedResults([]);setUsdaResults([]);setOffResults([]);setSearchError("");setSearchLoading(false);
+      if(debounceRef.current) clearTimeout(debounceRef.current);
+      return;
+    }
     if(debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(()=>searchFoods(val),300);
   };
 
   const selectFood = (food) => {
-    setSelectedFood(food);setServings(1);
-    setSearchResults([]);
+    setSelectedFood(food);
+    setServings(food.per==="100g"?1:1);
     if(!food.hasNutrition) setEditNutrition({cal:food.cal,p:food.protein,c:food.carbs,f:food.fat});
     else setEditNutrition(null);
   };
@@ -925,7 +992,7 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
     const type = getMealTypeByTime();
     onLogMeal({type,name:selectedFood.name+(selectedFood.brand?` (${selectedFood.brand})`:""),cal:Math.round((+n.cal||0)*servings),p:Math.round((+n.p||0)*servings),c:Math.round((+n.c||0)*servings),f:Math.round((+n.f||0)*servings)});
     setSearchLogSuccess(true);
-    setTimeout(()=>{setSearchLogSuccess(false);setSelectedFood(null);setSearchQuery("");setEditNutrition(null)},1500);
+    setTimeout(()=>{setSearchLogSuccess(false);setSelectedFood(null);setSearchQuery("");setEditNutrition(null);setSavedResults([]);setUsdaResults([]);setOffResults([])},1500);
   };
 
   const quickLog = (item, feedbackId) => {
@@ -953,41 +1020,50 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
     <p style={{fontSize:13,color:T.txM,margin:"0 0 20px"}}>What did you eat?</p>
 
     {/* ── Search Bar ── */}
-    <div style={{position:"relative",marginBottom:searchResults.length>0||selectedFood?8:20}}>
-      <Card style={{padding:"0",display:"flex",alignItems:"center",gap:10,overflow:"hidden"}}>
+    <div style={{position:"relative",marginBottom:hasResults||selectedFood?8:20}}>
+      <Card style={{padding:"0",display:"flex",alignItems:"center",overflow:"hidden"}}>
         <div style={{padding:"13px 0 13px 16px",display:"flex",alignItems:"center"}}>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="1.5" strokeLinecap="round"><circle cx="11" cy="11" r="7.5"/><path d="M21 21l-4.35-4.35"/></svg>
+          {searchLoading
+            ? <><div style={{width:17,height:17,borderRadius:"50%",border:`2px solid ${T.bd}`,borderTopColor:T.acc,animation:"spin 1s linear infinite"}}/><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style></>
+            : <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="1.5" strokeLinecap="round"><circle cx="11" cy="11" r="7.5"/><path d="M21 21l-4.35-4.35"/></svg>}
         </div>
-        <input value={searchQuery} onChange={e=>handleSearchInput(e.target.value)} placeholder="Search foods... e.g. chicken breast, Chobani" style={{flex:1,padding:"13px 16px 13px 0",border:"none",background:"transparent",color:T.tx,fontSize:14,fontFamily:T.font,fontWeight:500,outline:"none"}}/>
-        {searchQuery && <div onClick={()=>{setSearchQuery("");setSearchResults([]);setSelectedFood(null);setSearchError("");setEditNutrition(null)}} style={{padding:"13px 16px 13px 0",cursor:"pointer"}}>
+        <input value={searchQuery} onChange={e=>handleSearchInput(e.target.value)} placeholder="Search foods... e.g. chicken breast, Chobani" style={{flex:1,padding:"13px 10px",border:"none",background:"transparent",color:T.tx,fontSize:14,fontFamily:T.font,fontWeight:500,outline:"none"}}/>
+        {searchQuery && <div onClick={clearSearch} style={{padding:"13px 16px 13px 0",cursor:"pointer"}}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </div>}
       </Card>
 
-      {/* Search loading */}
-      {searchLoading && <Card style={{padding:"14px 16px",marginTop:4}}>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:18,height:18,borderRadius:"50%",border:`2px solid ${T.bd}`,borderTopColor:T.acc,animation:"spin 1s linear infinite"}}/>
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-          <span style={{fontSize:13,color:T.tx2}}>Searching foods...</span>
-        </div>
-      </Card>}
-
-      {/* Search error */}
-      {searchError && !searchLoading && <Card style={{padding:"14px 16px",marginTop:4}}>
+      {/* Search error — only when both APIs fail */}
+      {searchError && !searchLoading && !hasResults && <Card style={{padding:"14px 16px",marginTop:4}}>
         <p style={{fontSize:13,color:T.txM,margin:0}}>{searchError}</p>
       </Card>}
 
-      {/* Search results dropdown */}
-      {searchResults.length>0 && !selectedFood && <div style={{marginTop:4,maxHeight:320,overflowY:"auto",borderRadius:T.r,border:`1px solid ${T.bd}`,background:T.sf}}>
-        {searchResults.map((r,i)=><div key={r.id+"-"+i} onClick={()=>selectFood(r)} style={{padding:"12px 16px",borderBottom:i<searchResults.length-1?`1px solid ${T.bd}`:"none",cursor:"pointer",transition:"background 0.15s"}}>
-          <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0,lineHeight:1.3}}>{r.name}</p>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:4}}>
-            <span style={{fontSize:11,color:T.txM}}>{r.brand||"Generic"}</span>
-            <span style={{fontSize:12,fontFamily:T.mono,color:r.hasNutrition?T.acc:T.txM,fontWeight:600}}>{r.hasNutrition?`${r.cal} cal/${r.per}`:"No cal data"}</span>
+      {/* Search results grouped by source */}
+      {hasResults && !selectedFood && <div style={{marginTop:4,maxHeight:380,overflowY:"auto",borderRadius:T.r,border:`1px solid ${T.bd}`,background:T.sf}}>
+        {[{label:"Your Meals",items:allResults.saved,color:T.ok},{label:"Foods",items:allResults.usda,color:T.acc},{label:"Branded Products",items:allResults.off,color:T.tx2}].map(group=>
+          group.items.length>0 && <div key={group.label}>
+            <div style={{padding:"8px 16px 4px",background:T.bg,borderBottom:`1px solid ${T.bd}`,position:"sticky",top:0,zIndex:1}}>
+              <span style={{fontSize:10,fontWeight:700,color:group.color,letterSpacing:"0.1em",textTransform:"uppercase"}}>{group.label}</span>
+            </div>
+            {group.items.map((r,i)=><div key={r.id} onClick={()=>selectFood(r)} style={{padding:"11px 16px",borderBottom:`1px solid ${T.bd}`,cursor:"pointer"}}>
+              <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0,lineHeight:1.3}}>{r.name}</p>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:3}}>
+                <span style={{fontSize:11,color:T.txM}}>{r.brand||""}</span>
+                <span style={{fontSize:12,fontFamily:T.mono,color:r.hasNutrition?T.acc:T.txM,fontWeight:600}}>{r.hasNutrition?`${r.cal} cal/${r.per}`:"No cal data"}</span>
+              </div>
+            </div>)}
           </div>
-        </div>)}
+        )}
+        {searchLoading && <div style={{padding:"10px 16px",display:"flex",alignItems:"center",gap:8}}>
+          <div style={{width:14,height:14,borderRadius:"50%",border:`2px solid ${T.bd}`,borderTopColor:T.acc,animation:"spin 1s linear infinite"}}/>
+          <span style={{fontSize:12,color:T.txM}}>Loading more results...</span>
+        </div>}
       </div>}
+
+      {/* No results after search completes */}
+      {searchQuery.length>=2 && !searchLoading && !hasResults && !searchError && !selectedFood && <Card style={{padding:"14px 16px",marginTop:4}}>
+        <p style={{fontSize:13,color:T.txM,margin:0}}>No results found. Try a different term or use manual entry.</p>
+      </Card>}
     </div>
 
     {/* ── Selected food detail card ── */}
@@ -1021,13 +1097,22 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
         )}
       </div>
 
-      {/* Servings selector */}
+      {/* Servings / amount selector */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:14,marginBottom:16}}>
-        <Lbl>Servings</Lbl>
+        <Lbl>{selectedFood.per==="100g"?"Amount (g)":"Servings"}</Lbl>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <button onClick={()=>setServings(s=>Math.max(0.5,+(s-0.5).toFixed(1)))} style={{width:32,height:32,borderRadius:8,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font}}>−</button>
-          <span style={{fontSize:20,fontWeight:700,color:T.tx,fontFamily:T.mono,minWidth:40,textAlign:"center"}}>{servings}</span>
-          <button onClick={()=>setServings(s=>+(s+0.5).toFixed(1))} style={{width:32,height:32,borderRadius:8,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font}}>+</button>
+          {selectedFood.per==="100g" ? <>
+            <button onClick={()=>setServings(s=>Math.max(0.1,+(s-0.5).toFixed(1)))} style={{width:32,height:32,borderRadius:8,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font}}>−</button>
+            <div style={{textAlign:"center",minWidth:50}}>
+              <span style={{fontSize:20,fontWeight:700,color:T.tx,fontFamily:T.mono}}>{Math.round(servings*100)}</span>
+              <span style={{fontSize:11,color:T.txM,marginLeft:2}}>g</span>
+            </div>
+            <button onClick={()=>setServings(s=>+(s+0.5).toFixed(1))} style={{width:32,height:32,borderRadius:8,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font}}>+</button>
+          </> : <>
+            <button onClick={()=>setServings(s=>Math.max(0.5,+(s-0.5).toFixed(1)))} style={{width:32,height:32,borderRadius:8,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font}}>−</button>
+            <span style={{fontSize:20,fontWeight:700,color:T.tx,fontFamily:T.mono,minWidth:40,textAlign:"center"}}>{servings}</span>
+            <button onClick={()=>setServings(s=>+(s+0.5).toFixed(1))} style={{width:32,height:32,borderRadius:8,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font}}>+</button>
+          </>}
         </div>
       </div>
 
