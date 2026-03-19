@@ -859,6 +859,75 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
   const [manualSuccess,setManualSuccess]=useState(false);
   const recent=[{id:"r0",n:"Grilled Chicken Bowl",cal:580,p:48,c:52,f:22},{id:"r1",n:"Protein Shake + Banana",cal:340,p:35,c:28,f:8},{id:"r2",n:"Egg & Avocado Toast",cal:420,p:22,c:34,f:24},{id:"r3",n:"Turkey & Hummus Wrap",cal:490,p:38,c:42,f:18}];
 
+  // ── Food search state ──
+  const [searchQuery,setSearchQuery]=useState("");
+  const [searchResults,setSearchResults]=useState([]);
+  const [searchLoading,setSearchLoading]=useState(false);
+  const [searchError,setSearchError]=useState("");
+  const [selectedFood,setSelectedFood]=useState(null);
+  const [servings,setServings]=useState(1);
+  const [editNutrition,setEditNutrition]=useState(null); // editable macros for incomplete data
+  const [searchLogSuccess,setSearchLogSuccess]=useState(false);
+  const debounceRef = useRef(null);
+
+  const searchFoods = async (query) => {
+    if(!query||query.length<2){setSearchResults([]);setSearchError("");return;}
+    setSearchLoading(true);setSearchError("");
+    try {
+      const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=10`;
+      const res = await fetch(url);
+      if(!res.ok) throw new Error("API error");
+      const data = await res.json();
+      const items = (data.products||[]).map(p => {
+        const n = p.nutriments||{};
+        const servingSize = p.serving_size||p.quantity||"—";
+        const cal = Math.round(n["energy-kcal_serving"]||n["energy-kcal_100g"]||0);
+        const protein = Math.round(n.proteins_serving||n.proteins_100g||0);
+        const carbs = Math.round(n.carbohydrates_serving||n.carbohydrates_100g||0);
+        const fat = Math.round(n.fat_serving||n.fat_100g||0);
+        const hasNutrition = cal>0;
+        return {
+          id:p._id||p.code,
+          name:p.product_name||"Unknown Product",
+          brand:p.brands||"",
+          servingSize,
+          cal,protein,carbs,fat,
+          hasNutrition,
+          per: n["energy-kcal_serving"] ? "serving" : "100g",
+        };
+      }).filter(p=>p.name&&p.name!=="Unknown Product");
+      setSearchResults(items);
+      if(items.length===0) setSearchError("No results found. Try a different search term.");
+    } catch {
+      setSearchResults([]);
+      setSearchError("Couldn't reach food database. Try manual entry instead.");
+    }
+    setSearchLoading(false);
+  };
+
+  const handleSearchInput = (val) => {
+    setSearchQuery(val);
+    setSelectedFood(null);setSearchLogSuccess(false);
+    if(debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(()=>searchFoods(val),300);
+  };
+
+  const selectFood = (food) => {
+    setSelectedFood(food);setServings(1);
+    setSearchResults([]);
+    if(!food.hasNutrition) setEditNutrition({cal:food.cal,p:food.protein,c:food.carbs,f:food.fat});
+    else setEditNutrition(null);
+  };
+
+  const logSearchedFood = () => {
+    if(!selectedFood||!onLogMeal) return;
+    const n = editNutrition||{cal:selectedFood.cal,p:selectedFood.protein,c:selectedFood.carbs,f:selectedFood.fat};
+    const type = getMealTypeByTime();
+    onLogMeal({type,name:selectedFood.name+(selectedFood.brand?` (${selectedFood.brand})`:""),cal:Math.round((+n.cal||0)*servings),p:Math.round((+n.p||0)*servings),c:Math.round((+n.c||0)*servings),f:Math.round((+n.f||0)*servings)});
+    setSearchLogSuccess(true);
+    setTimeout(()=>{setSearchLogSuccess(false);setSelectedFood(null);setSearchQuery("");setEditNutrition(null)},1500);
+  };
+
   const quickLog = (item, feedbackId) => {
     if(!onLogMeal) return;
     const type = getMealTypeByTime();
@@ -882,10 +951,103 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
   return <div style={{padding:"0 20px 24px"}}>
     <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"4px 0 4px",letterSpacing:"-0.02em"}}>Log Meal</h1>
     <p style={{fontSize:13,color:T.txM,margin:"0 0 20px"}}>What did you eat?</p>
-    <Card style={{padding:"13px 16px",marginBottom:20,display:"flex",alignItems:"center",gap:10}}>
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="1.5" strokeLinecap="round"><circle cx="11" cy="11" r="7.5"/><path d="M21 21l-4.35-4.35"/></svg>
-      <span style={{fontSize:14,color:T.txM}}>Search food or scan barcode...</span>
-    </Card>
+
+    {/* ── Search Bar ── */}
+    <div style={{position:"relative",marginBottom:searchResults.length>0||selectedFood?8:20}}>
+      <Card style={{padding:"0",display:"flex",alignItems:"center",gap:10,overflow:"hidden"}}>
+        <div style={{padding:"13px 0 13px 16px",display:"flex",alignItems:"center"}}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="1.5" strokeLinecap="round"><circle cx="11" cy="11" r="7.5"/><path d="M21 21l-4.35-4.35"/></svg>
+        </div>
+        <input value={searchQuery} onChange={e=>handleSearchInput(e.target.value)} placeholder="Search foods... e.g. chicken breast, Chobani" style={{flex:1,padding:"13px 16px 13px 0",border:"none",background:"transparent",color:T.tx,fontSize:14,fontFamily:T.font,fontWeight:500,outline:"none"}}/>
+        {searchQuery && <div onClick={()=>{setSearchQuery("");setSearchResults([]);setSelectedFood(null);setSearchError("");setEditNutrition(null)}} style={{padding:"13px 16px 13px 0",cursor:"pointer"}}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </div>}
+      </Card>
+
+      {/* Search loading */}
+      {searchLoading && <Card style={{padding:"14px 16px",marginTop:4}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:18,height:18,borderRadius:"50%",border:`2px solid ${T.bd}`,borderTopColor:T.acc,animation:"spin 1s linear infinite"}}/>
+          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          <span style={{fontSize:13,color:T.tx2}}>Searching foods...</span>
+        </div>
+      </Card>}
+
+      {/* Search error */}
+      {searchError && !searchLoading && <Card style={{padding:"14px 16px",marginTop:4}}>
+        <p style={{fontSize:13,color:T.txM,margin:0}}>{searchError}</p>
+      </Card>}
+
+      {/* Search results dropdown */}
+      {searchResults.length>0 && !selectedFood && <div style={{marginTop:4,maxHeight:320,overflowY:"auto",borderRadius:T.r,border:`1px solid ${T.bd}`,background:T.sf}}>
+        {searchResults.map((r,i)=><div key={r.id+"-"+i} onClick={()=>selectFood(r)} style={{padding:"12px 16px",borderBottom:i<searchResults.length-1?`1px solid ${T.bd}`:"none",cursor:"pointer",transition:"background 0.15s"}}>
+          <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0,lineHeight:1.3}}>{r.name}</p>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:4}}>
+            <span style={{fontSize:11,color:T.txM}}>{r.brand||"Generic"}</span>
+            <span style={{fontSize:12,fontFamily:T.mono,color:r.hasNutrition?T.acc:T.txM,fontWeight:600}}>{r.hasNutrition?`${r.cal} cal/${r.per}`:"No cal data"}</span>
+          </div>
+        </div>)}
+      </div>}
+    </div>
+
+    {/* ── Selected food detail card ── */}
+    {selectedFood && !searchLogSuccess && <Card style={{padding:18,marginBottom:20,border:`1px solid ${T.acc}30`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+        <div style={{flex:1}}>
+          <p style={{fontSize:16,fontWeight:600,color:T.tx,margin:"0 0 2px"}}>{selectedFood.name}</p>
+          {selectedFood.brand && <p style={{fontSize:12,color:T.txM,margin:0}}>{selectedFood.brand}</p>}
+          <p style={{fontSize:11,color:T.txM,margin:"4px 0 0"}}>Serving: {selectedFood.servingSize} {selectedFood.per==="100g"?"(per 100g)":""}</p>
+        </div>
+        <div onClick={()=>{setSelectedFood(null);setEditNutrition(null)}} style={{cursor:"pointer",padding:4}}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </div>
+      </div>
+
+      {!selectedFood.hasNutrition && <div style={{padding:"8px 12px",borderRadius:8,background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.15)",marginBottom:14}}>
+        <p style={{fontSize:12,color:"#EF4444",margin:0,fontWeight:500}}>Nutrition data unavailable — edit values below before logging.</p>
+      </div>}
+
+      {/* Macro display / edit */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,marginBottom:16}}>
+        {[{k:"cal",l:"Calories",v:editNutrition?editNutrition.cal:selectedFood.cal,c:T.acc},{k:"p",l:"Protein",v:editNutrition?editNutrition.p:selectedFood.protein,c:T.pro},{k:"c",l:"Carbs",v:editNutrition?editNutrition.c:selectedFood.carbs,c:T.carb},{k:"f",l:"Fat",v:editNutrition?editNutrition.f:selectedFood.fat,c:T.fat}].map(x=>
+          <div key={x.k} style={{textAlign:"center"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:3,marginBottom:4}}>
+              <div style={{width:5,height:5,borderRadius:"50%",background:x.c}}/>
+              <span style={{fontSize:9,color:T.txM,fontWeight:600}}>{x.l}</span>
+            </div>
+            {editNutrition ? <input value={x.v} onChange={e=>setEditNutrition(p=>({...p,[x.k]:e.target.value}))} type="number" style={{...inputStyle,textAlign:"center",padding:"8px 4px",fontSize:15,fontWeight:700,color:x.c,fontFamily:T.mono}}/> : <p style={{fontSize:18,fontWeight:700,color:x.c,margin:0,fontFamily:T.mono}}>{Math.round(x.v*servings)}</p>}
+            {!editNutrition && x.k!=="cal" && <span style={{fontSize:9,color:T.txM}}>g</span>}
+          </div>
+        )}
+      </div>
+
+      {/* Servings selector */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:14,marginBottom:16}}>
+        <Lbl>Servings</Lbl>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <button onClick={()=>setServings(s=>Math.max(0.5,+(s-0.5).toFixed(1)))} style={{width:32,height:32,borderRadius:8,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font}}>−</button>
+          <span style={{fontSize:20,fontWeight:700,color:T.tx,fontFamily:T.mono,minWidth:40,textAlign:"center"}}>{servings}</span>
+          <button onClick={()=>setServings(s=>+(s+0.5).toFixed(1))} style={{width:32,height:32,borderRadius:8,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font}}>+</button>
+        </div>
+      </div>
+
+      {(() => {
+        const n = editNutrition || { cal: selectedFood.cal };
+        const totalCal = Math.round((+n.cal || 0) * servings);
+        const canLog = totalCal > 0;
+        return <button onClick={logSearchedFood} style={{width:"100%",padding:14,borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font,opacity:canLog?1:0.4,pointerEvents:canLog?"auto":"none"}}>
+          Log It — {totalCal} cal
+        </button>;
+      })()}
+    </Card>}
+
+    {/* Search log success */}
+    {searchLogSuccess && <Card style={{padding:"24px 18px",marginBottom:20,textAlign:"center"}}>
+      <div style={{width:44,height:44,borderRadius:"50%",background:T.ok,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+      </div>
+      <p style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>Meal Logged!</p>
+    </Card>}
     <div style={{display:"flex",gap:8,marginBottom:24}}>
       {[
         {l:"Manual",i:"✎",h:view==="manual",action:()=>setView(view==="manual"?"main":"manual")},
