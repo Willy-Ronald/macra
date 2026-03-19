@@ -3,9 +3,10 @@ import {
   supabase, signUp, signIn, signOut, getUser,
   saveProfile, getProfile,
   saveMeal, getSavedMeals,
-  logMeal, getTodayLog, deleteMealLog,
+  logMeal, getTodayLog, getLogByDate, deleteMealLog,
   saveMealPlan, getWeekPlans,
 } from "./lib/supabase";
+import { generateMealPlan } from "./lib/claude";
 
 const T = {
   bg:"#09090B",sf:"#121215",bd:"#1E1E22",acc:"#C8B88A",
@@ -397,29 +398,46 @@ const Onboarding = ({onComplete}) => {
 };
 
 // ─── DASHBOARD ─────────────────────────────────────────────────
-const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[]}) => {
+const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[],weekPlans={},userId}) => {
+  const [viewDate,setViewDate]=useState(()=>new Date());
+  const [historyLog,setHistoryLog]=useState(null); // null = showing today
   const m = profile?.macros || {target:2200,proteinG:180,carbG:240,fatG:70};
-  // Calculate consumed from real log data
-  const consumed = todayLog.reduce((a,x)=>({cal:a.cal+(x.calories||0),p:a.p+(x.protein||0),c:a.c+(x.carbs||0),f:a.f+(x.fat||0)}),{cal:0,p:0,c:0,f:0});
+
+  const todayStr = new Date().toISOString().split("T")[0];
+  const viewStr = viewDate.toISOString().split("T")[0];
+  const isToday = viewStr === todayStr;
+
+  const displayLog = isToday ? todayLog : (historyLog||[]);
+
+  // Load historical log when navigating to a past day
+  useEffect(()=>{
+    if(isToday){setHistoryLog(null);return;}
+    if(!userId) return;
+    (async()=>{const log = await getLogByDate(userId,viewStr);setHistoryLog(log);})();
+  },[viewStr,isToday,userId]);
+
+  const consumed = displayLog.reduce((a,x)=>({cal:a.cal+(x.calories||0),p:a.p+(x.protein||0),c:a.c+(x.carbs||0),f:a.f+(x.fat||0)}),{cal:0,p:0,c:0,f:0});
   const cal={cur:consumed.cal,tgt:m.target};
   const mac=[{k:"Protein",cur:consumed.p,tgt:m.proteinG,c:T.pro},{k:"Carbs",cur:consumed.c,tgt:m.carbG,c:T.carb},{k:"Fat",cur:consumed.f,tgt:m.fatG,c:T.fat}];
 
-  // Build plan meals list, marking which are already logged
+  // Get plan meals for the viewed day
+  const viewDow = viewDate.getDay();
+  const dowIndex = viewDow === 0 ? 6 : viewDow - 1; // Mon=0..Sun=6
+  const dayPlanMeals = isToday && todayPlan.length>0 ? todayPlan : (weekPlans[dowIndex]||[]);
   const defaultPlanMeals = [
     {type:"BREAKFAST",name:"Egg & Avocado Toast",cal:420,p:22,c:34,f:24,time:"10 min"},
     {type:"LUNCH",name:"Grilled Chicken Bowl",cal:580,p:48,c:52,f:22,time:"15 min"},
     {type:"SNACK",name:"Protein Shake + Banana",cal:340,p:35,c:28,f:8,time:"2 min"},
     {type:"DINNER",name:"Salmon & Sweet Potato",cal:680,p:52,c:48,f:24,time:"30 min"},
   ];
-  const planMeals = todayPlan.length > 0 ? todayPlan : defaultPlanMeals;
-  const loggedNamesLower = new Set(todayLog.map(x=>(x.name||"").toLowerCase()));
+  const planMeals = dayPlanMeals.length > 0 ? dayPlanMeals : defaultPlanMeals;
+  const loggedNamesLower = new Set(displayLog.map(x=>(x.name||"").toLowerCase()));
   const unloggedPlan = planMeals.filter(pm => !loggedNamesLower.has(pm.name.toLowerCase()));
 
   const remaining = Math.max(0, cal.tgt - cal.cur);
   const proteinLeft = Math.max(0,m.proteinG - consumed.p);
   const mealsLeft = unloggedPlan.length;
 
-  // Dynamic insight based on real data
   const insightText = consumed.cal === 0
     ? `Start your day! Your target is ${m.target} calories with ${m.proteinG}g protein.`
     : proteinLeft > 20 && mealsLeft > 0
@@ -430,17 +448,41 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
     ? `You've reached your ${m.target} cal target for today. Great job!`
     : `${remaining} calories remaining. Keep it up!`;
 
-  const now = new Date();
   const dayNames = ["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
   const monthNames = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
-  const dateStr = `${dayNames[now.getDay()]}, ${monthNames[now.getMonth()]} ${now.getDate()}`;
+  const dateStr = `${dayNames[viewDate.getDay()]}, ${monthNames[viewDate.getMonth()]} ${viewDate.getDate()}`;
+
+  const goDay = (delta) => {
+    const d = new Date(viewDate);
+    d.setDate(d.getDate()+delta);
+    if(d > new Date()) return; // can't go to future
+    setViewDate(d);
+  };
 
   return <div style={{padding:"0 20px 24px"}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:28,paddingTop:4}}>
+    {/* Date navigation bar */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:4,marginBottom:isToday?0:8}}>
+      <button onClick={()=>goDay(-1)} style={{background:"none",border:"none",color:T.tx2,fontSize:18,cursor:"pointer",padding:"8px 12px 8px 0"}}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.tx2} strokeWidth="2" strokeLinecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div style={{textAlign:"center"}}>
+        <p style={{fontSize:11,color:isToday?T.txM:T.acc,fontWeight:600,margin:0,letterSpacing:"0.08em"}}>{isToday?"TODAY":dateStr}</p>
+        {isToday && <p style={{fontSize:11,color:T.txM,fontWeight:500,margin:"2px 0 0",letterSpacing:"0.08em"}}>{dateStr}</p>}
+      </div>
+      <button onClick={()=>goDay(1)} style={{background:"none",border:"none",color:isToday?T.bd:T.tx2,fontSize:18,cursor:isToday?"default":"pointer",padding:"8px 0 8px 12px"}}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={isToday?T.bd:T.tx2} strokeWidth="2" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+    </div>
+
+    {/* Back to Today button */}
+    {!isToday && <button onClick={()=>setViewDate(new Date())} style={{width:"100%",padding:10,borderRadius:10,border:`1px solid ${T.acc}40`,background:T.accG,color:T.acc,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:T.font,marginBottom:12}}>
+      ← Back to Today
+    </button>}
+
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:28}}>
       <div>
-        <p style={{fontSize:11,color:T.txM,fontWeight:500,margin:0,letterSpacing:"0.08em"}}>{dateStr}</p>
         <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"6px 0 0",letterSpacing:"-0.02em"}}>
-          {profile?.name ? `Hey, ${profile.name}` : "Daily Overview"}
+          {isToday ? (profile?.name ? `Hey, ${profile.name}` : "Daily Overview") : "Day Review"}
         </h1>
       </div>
       <div style={{width:38,height:38,borderRadius:"50%",background:T.acc,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -473,41 +515,43 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
       </div>
     </Card>
 
-    {/* ── Section A: Today's Plan ── */}
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"24px 0 14px"}}>
-      <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>Today's Plan</h2>
-      <span onClick={()=>setTab("plan")} style={{fontSize:12,color:T.acc,fontWeight:500,cursor:"pointer"}}>View Plan</span>
-    </div>
-    {unloggedPlan.length === 0 && <Card style={{padding:"16px",textAlign:"center",marginBottom:6}}>
-      <p style={{fontSize:13,color:T.txM,margin:0}}>All planned meals logged! Nice work.</p>
-    </Card>}
-    {unloggedPlan.map((pm,i)=><Card key={"plan-"+i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,border:`1px dashed ${T.bd}`,background:"transparent",cursor:"pointer"}} onClick={()=>{
-      if(onLogMeal) onLogMeal({type:pm.type||"meal",name:pm.name,cal:pm.cal,p:pm.p||0,c:pm.c||0,f:pm.f||0});
-    }}>
-      <div style={{display:"flex",alignItems:"center",gap:12}}>
-        <div style={{width:7,height:7,borderRadius:"50%",background:T.txM}}/>
-        <div>
-          <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{pm.name}</p>
-          <div style={{display:"flex",gap:8,marginTop:3}}>
-            {[{v:pm.cal,l:"cal",c:T.acc},{v:(pm.p||0)+"g",l:"P",c:T.pro},{v:(pm.c||0)+"g",l:"C",c:T.carb},{v:(pm.f||0)+"g",l:"F",c:T.fat}].map(x=>
-              <span key={x.l} style={{fontSize:10,fontFamily:T.mono,color:x.c}}>{x.v}<span style={{color:T.txM,fontSize:8}}> {x.l}</span></span>
-            )}
+    {/* ── Section A: Day's Plan (only for today) ── */}
+    {isToday && <>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"24px 0 14px"}}>
+        <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>Today's Plan</h2>
+        <span onClick={()=>setTab("plan")} style={{fontSize:12,color:T.acc,fontWeight:500,cursor:"pointer"}}>View Plan</span>
+      </div>
+      {unloggedPlan.length === 0 && <Card style={{padding:"16px",textAlign:"center",marginBottom:6}}>
+        <p style={{fontSize:13,color:T.txM,margin:0}}>All planned meals logged! Nice work.</p>
+      </Card>}
+      {unloggedPlan.map((pm,i)=><Card key={"plan-"+i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,border:`1px dashed ${T.bd}`,background:"transparent",cursor:"pointer"}} onClick={()=>{
+        if(onLogMeal) onLogMeal({type:pm.type||"meal",name:pm.name,cal:pm.cal,p:pm.p||0,c:pm.c||0,f:pm.f||0});
+      }}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:7,height:7,borderRadius:"50%",background:T.txM}}/>
+          <div>
+            <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{pm.name}</p>
+            <div style={{display:"flex",gap:8,marginTop:3}}>
+              {[{v:pm.cal,l:"cal",c:T.acc},{v:(pm.p||0)+"g",l:"P",c:T.pro},{v:(pm.c||0)+"g",l:"C",c:T.carb},{v:(pm.f||0)+"g",l:"F",c:T.fat}].map(x=>
+                <span key={x.l} style={{fontSize:10,fontFamily:T.mono,color:x.c}}>{x.v}<span style={{color:T.txM,fontSize:8}}> {x.l}</span></span>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-      <span style={{fontSize:13,fontWeight:600,fontFamily:T.mono,color:T.acc}}>Log →</span>
-    </Card>)}
+        <span style={{fontSize:13,fontWeight:600,fontFamily:T.mono,color:T.acc}}>Log →</span>
+      </Card>)}
+    </>}
 
-    {/* ── Section B: Eaten Today ── */}
+    {/* ── Section B: Eaten / Meals Logged ── */}
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"24px 0 14px"}}>
-      <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>Eaten Today</h2>
-      <span style={{fontSize:12,color:T.txM,fontFamily:T.mono}}>{todayLog.length} meal{todayLog.length!==1?"s":""}</span>
+      <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>{isToday?"Eaten Today":"Meals Logged"}</h2>
+      <span style={{fontSize:12,color:T.txM,fontFamily:T.mono}}>{displayLog.length} meal{displayLog.length!==1?"s":""}</span>
     </div>
-    {todayLog.length === 0 && <Card style={{padding:"16px",textAlign:"center",marginBottom:6}}>
-      <p style={{fontSize:13,color:T.txM,margin:0}}>Nothing logged yet. Tap a meal above or go to the Log tab.</p>
+    {displayLog.length === 0 && <Card style={{padding:"16px",textAlign:"center",marginBottom:6}}>
+      <p style={{fontSize:13,color:T.txM,margin:0}}>{isToday?"Nothing logged yet. Tap a meal above or go to the Log tab.":"No meals logged on this day."}</p>
     </Card>}
-    {todayLog.map((x)=><Card key={x.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,cursor:"pointer"}} onClick={()=>{
-      if(onUnlogMeal && x.id) onUnlogMeal(x.id);
+    {displayLog.map((x)=><Card key={x.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,cursor:isToday?"pointer":"default"}} onClick={()=>{
+      if(isToday && onUnlogMeal && x.id) onUnlogMeal(x.id);
     }}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
         <div style={{width:7,height:7,borderRadius:"50%",background:T.ok,boxShadow:`0 0 8px ${T.ok}40`}}/>
@@ -520,22 +564,23 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
           </div>
         </div>
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:4}}>
+      {isToday && <div style={{display:"flex",alignItems:"center",gap:4}}>
         <span style={{fontSize:11,color:T.txM}}>✕</span>
-      </div>
+      </div>}
     </Card>)}
 
-    <Card style={{padding:"14px 16px",marginTop:16,background:T.accG,border:`1px solid ${T.accM}`,display:"flex",alignItems:"flex-start",gap:10}}>
+    {isToday && <Card style={{padding:"14px 16px",marginTop:16,background:T.accG,border:`1px solid ${T.accM}`,display:"flex",alignItems:"flex-start",gap:10}}>
       <span style={{fontSize:14}}>✦</span>
       <p style={{fontSize:13,color:T.tx2,margin:0,lineHeight:1.5}}>{insightText}</p>
-    </Card>
+    </Card>}
   </div>;
 };
 
 // ─── PLAN (AI-POWERED) ─────────────────────────────────────────
-const Plan = ({profile,userId}) => {
+const Plan = ({profile,userId,onWeekPlanUpdate}) => {
   const days=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-  const [sel,setSel]=useState(2);
+  const todayDow = new Date().getDay();
+  const [sel,setSel]=useState(todayDow===0?6:todayDow-1);
   const [loading,setLoading]=useState(false);
   const [loadMsg,setLoadMsg]=useState("");
   const [weekPlan,setWeekPlan]=useState({});
@@ -559,84 +604,40 @@ const Plan = ({profile,userId}) => {
     {type:"DINNER",name:"Herb-Crusted Salmon",desc:"Wild salmon, sweet potato, broccoli",cal:680,p:52,c:48,f:24,time:"30 min"},
   ];
 
-  // AI-generated sample plans to simulate API response
-  const aiPlans = [
-    [
-      {type:"BREAKFAST",name:"Spinach & Feta Egg Cups",desc:"Whole eggs, fresh spinach, crumbled feta, cherry tomatoes",cal:340,p:26,c:8,f:24,time:"20 min"},
-      {type:"LUNCH",name:"Thai Peanut Chicken Bowl",desc:"Grilled chicken thigh, brown rice, shredded cabbage, peanut sauce",cal:650,p:52,c:58,f:20,time:"20 min"},
-      {type:"SNACK",name:"Cottage Cheese & Berries",desc:"Full-fat cottage cheese, mixed berries, chia seeds",cal:280,p:24,c:22,f:10,time:"3 min"},
-      {type:"DINNER",name:"Steak Fajita Plate",desc:"Flank steak, bell peppers, onions, guacamole, corn tortillas",cal:720,p:56,c:48,f:30,time:"25 min"},
-    ],
-    [
-      {type:"BREAKFAST",name:"Overnight Protein Oats",desc:"Rolled oats, whey protein, almond butter, banana",cal:420,p:32,c:52,f:14,time:"5 min prep"},
-      {type:"LUNCH",name:"Mediterranean Tuna Plate",desc:"Seared tuna steak, quinoa tabbouleh, hummus, cucumber",cal:580,p:48,c:42,f:18,time:"15 min"},
-      {type:"SNACK",name:"Turkey Roll-Ups",desc:"Deli turkey, avocado, mustard, wrapped in lettuce",cal:240,p:22,c:6,f:14,time:"5 min"},
-      {type:"DINNER",name:"Lemon Herb Chicken Thighs",desc:"Bone-in thighs, roasted potatoes, green beans, garlic",cal:750,p:58,c:52,f:28,time:"40 min"},
-    ],
-    [
-      {type:"BREAKFAST",name:"Smoked Salmon Toast",desc:"Sourdough, cream cheese, smoked salmon, capers, dill",cal:390,p:28,c:34,f:16,time:"8 min"},
-      {type:"LUNCH",name:"Chipotle-Style Burrito Bowl",desc:"Chicken, cilantro lime rice, black beans, pico, sour cream",cal:640,p:50,c:62,f:18,time:"15 min"},
-      {type:"SNACK",name:"Protein Smoothie",desc:"Whey isolate, frozen mango, spinach, coconut water",cal:260,p:30,c:28,f:4,time:"3 min"},
-      {type:"DINNER",name:"Garlic Butter Shrimp Pasta",desc:"Jumbo shrimp, whole wheat linguine, broccolini, parmesan",cal:700,p:52,c:60,f:24,time:"20 min"},
-    ],
-  ];
-
   const generatePlan = async () => {
     setLoading(true);
     const messages = [
       "Analyzing your macro targets...",
       "Building meals around your preferences...",
+      "Generating 7-day meal plan...",
       "Balancing protein distribution...",
-      "Optimizing meal timing...",
+      "Optimizing meal variety...",
       "Finalizing your plan..."
     ];
     let i=0;
     setLoadMsg(messages[0]);
-    const interval = setInterval(()=>{i++;if(i<messages.length)setLoadMsg(messages[i])},800);
+    const interval = setInterval(()=>{i++;if(i<messages.length)setLoadMsg(messages[i])},1500);
 
-    // ── PRODUCTION API CALL (uncomment when deploying) ──
-    /*
     try {
-      const m = profile?.macros || {target:2200,proteinG:180,carbG:240,fatG:70};
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages: [{
-            role: "user",
-            content: `Generate a single day meal plan as JSON. Target: ${m.target} calories, ${m.proteinG}g protein, ${m.carbG}g carbs, ${m.fatG}g fat. Diet: ${(profile?.diet||[]).join(", ")||"no restrictions"}. Goal: ${profile?.goal||"lean_bulk"}.
-Return ONLY a JSON array of 4 meals with this exact structure, no other text:
-[{"type":"BREAKFAST","name":"...","desc":"ingredients list","cal":000,"p":00,"c":00,"f":00,"time":"X min"},...]
-Types must be: BREAKFAST, LUNCH, SNACK, DINNER. Macros must sum close to targets.`
-          }]
-        })
-      });
-      const data = await response.json();
-      const text = data.content.map(i=>i.text||"").join("");
-      const clean = text.replace(/```json|```/g,"").trim();
-      const meals = JSON.parse(clean);
+      const plan = await generateMealPlan(profile);
       clearInterval(interval);
-      setWeekPlan(prev=>({...prev,[sel]:meals}));
+      setWeekPlan(plan);
       setGenCount(c=>c+1);
       setLoading(false);
+      // Save all 7 days to Supabase
+      if(userId){
+        for(let d=0;d<7;d++){
+          if(plan[d]) await saveMealPlan(userId, d, plan[d]);
+        }
+      }
+      // Update parent state so Dashboard gets the new plans
+      if(onWeekPlanUpdate) onWeekPlanUpdate(plan);
     } catch(err) {
       clearInterval(interval);
       setLoading(false);
+      setLoadMsg("Generation failed — try again");
       console.error("AI generation failed:", err);
     }
-    */
-
-    // ── PROTOTYPE SIMULATION ──
-    await new Promise(r=>setTimeout(r,4000));
-    clearInterval(interval);
-    const plan = aiPlans[genCount % aiPlans.length];
-    setWeekPlan(prev=>({...prev,[sel]:plan}));
-    setGenCount(c=>c+1);
-    setLoading(false);
-    // Save to Supabase
-    if(userId) saveMealPlan(userId, sel, plan);
   };
 
   const meals = weekPlan[sel] || defaultMeals;
@@ -1578,6 +1579,7 @@ export default function App() {
   const [isPro,setIsPro] = useState(false);
   const [todayLog,setTodayLog] = useState([]);
   const [todayPlan,setTodayPlan] = useState([]);
+  const [weekPlans,setWeekPlans] = useState({});
 
   // Check auth state after splash
   const checkAuth = async () => {
@@ -1600,8 +1602,9 @@ export default function App() {
         // Load today's log
         const log = await getTodayLog(u.id);
         setTodayLog(log);
-        // Load today's meal plan
+        // Load meal plans
         const plans = await getWeekPlans(u.id);
+        setWeekPlans(plans);
         const todayDow = new Date().getDay();
         const dowIndex = todayDow === 0 ? 6 : todayDow - 1; // Mon=0..Sun=6
         if(plans[dowIndex]) setTodayPlan(plans[dowIndex]);
@@ -1631,6 +1634,7 @@ export default function App() {
       const log = await getTodayLog(u.id);
       setTodayLog(log);
       const plans = await getWeekPlans(u.id);
+      setWeekPlans(plans);
       const todayDow = new Date().getDay();
       const dowIndex = todayDow === 0 ? 6 : todayDow - 1;
       if(plans[dowIndex]) setTodayPlan(plans[dowIndex]);
@@ -1648,7 +1652,7 @@ export default function App() {
 
   const handleSignOut = async () => {
     await signOut();
-    setUser(null);setProfile(null);setSavedMeals([]);setTodayLog([]);setTodayPlan([]);
+    setUser(null);setProfile(null);setSavedMeals([]);setTodayLog([]);setTodayPlan([]);setWeekPlans({});
     setTab("home");setPhase("auth");
   };
 
@@ -1682,8 +1686,8 @@ export default function App() {
   if(phase==="onboarding") return <Onboarding onComplete={handleComplete}/>;
 
   const screens = {
-    home:<Dashboard setTab={switchTab} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal} onUnlogMeal={handleUnlogMeal} todayPlan={todayPlan}/>,
-    plan:<Plan profile={profile} userId={user?.id}/>,
+    home:<Dashboard setTab={switchTab} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal} onUnlogMeal={handleUnlogMeal} todayPlan={todayPlan} weekPlans={weekPlans} userId={user?.id}/>,
+    plan:<Plan profile={profile} userId={user?.id} onWeekPlanUpdate={(plans)=>{setWeekPlans(plans);const dow=new Date().getDay();const idx=dow===0?6:dow-1;if(plans[idx])setTodayPlan(plans[idx]);}}/>,
     log:<LogMeal savedMeals={savedMeals} onSaveMeal={handleSaveMeal} todayLog={todayLog} onLogMeal={handleLogMeal}/>,
     grocery:<Grocery isPro={isPro} setIsPro={setIsPro}/>,
     profile:<ProfileScreen profile={profile} onSignOut={handleSignOut}/>

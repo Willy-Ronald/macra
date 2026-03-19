@@ -4,7 +4,7 @@
  * Vercel Serverless Function
  * Endpoint: POST /api/generate-plan
  *
- * Proxies Claude API calls so the API key stays secret.
+ * Generates a full 7-day meal plan via Claude API.
  */
 
 export default async function handler(req, res) {
@@ -27,20 +27,32 @@ export default async function handler(req, res) {
     const diet = (profile.diet || []).join(", ") || "no restrictions";
     const goal = (profile.goal || "lean_bulk").replace("_", " ");
 
-    const prompt = `Generate a single day meal plan as JSON.
-Target macros: ${macros.target} calories, ${macros.proteinG}g protein, ${macros.carbG}g carbs, ${macros.fatG}g fat.
+    const prompt = `Generate a FULL 7-day meal plan as JSON.
+
+Target macros PER DAY:
+- Calories: ${macros.target}
+- Protein: ${macros.proteinG}g (MUST be within 3% of target)
+- Carbs: ${macros.carbG}g (MUST be within 3% of target)
+- Fat: ${macros.fatG}g (MUST be within 3% of target)
+
 Dietary preferences: ${diet}.
 Goal: ${goal}.
 
-Requirements:
-- Exactly 4 meals: BREAKFAST, LUNCH, SNACK, DINNER
-- Total macros must sum within 5% of targets
+STRICT REQUIREMENTS:
+- Each day has exactly 4 meals: BREAKFAST, LUNCH, SNACK, DINNER
+- Each day's total protein MUST be within 3% of ${macros.proteinG}g
+- Each day's total carbs MUST be within 3% of ${macros.carbG}g
+- Each day's total fat MUST be within 3% of ${macros.fatG}g
+- Each day must have COMPLETELY DIFFERENT meals — do NOT repeat the same meal across days
+- Use varied cuisines and cooking styles across the week
 - Include realistic prep times
 - Ingredients should be common grocery store items
 - Each meal description should list the main ingredients
 
-Return ONLY a JSON array with this exact structure, no other text:
-[{"type":"BREAKFAST","name":"Meal Name","desc":"ingredient list","cal":000,"p":00,"c":00,"f":00,"time":"X min"},{"type":"LUNCH",...},{"type":"SNACK",...},{"type":"DINNER",...}]`;
+Return ONLY a JSON object where keys are 0 (Monday) through 6 (Sunday), and each value is an array of 4 meals. No other text, no markdown.
+
+Example structure:
+{"0":[{"type":"BREAKFAST","name":"...","desc":"ingredients","cal":000,"p":00,"c":00,"f":00,"time":"X min"},{"type":"LUNCH",...},{"type":"SNACK",...},{"type":"DINNER",...}],"1":[...],...,"6":[...]}`;
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -51,7 +63,7 @@ Return ONLY a JSON array with this exact structure, no other text:
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
+        max_tokens: 4000,
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -65,9 +77,9 @@ Return ONLY a JSON array with this exact structure, no other text:
     const data = await response.json();
     const text = data.content.map((block) => block.text || "").join("");
     const clean = text.replace(/```json|```/g, "").trim();
-    const meals = JSON.parse(clean);
+    const weekPlan = JSON.parse(clean);
 
-    res.json({ meals });
+    res.json({ weekPlan });
   } catch (err) {
     console.error("Generate plan error:", err);
     res.status(500).json({ error: "Failed to generate meal plan" });

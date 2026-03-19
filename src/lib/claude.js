@@ -7,9 +7,9 @@
  */
 
 /**
- * Generate a single day's meal plan based on user profile
+ * Generate a full 7-day meal plan based on user profile
  * @param {Object} profile - User profile with macros, diet, goal
- * @returns {Array} Array of 4 meal objects
+ * @returns {Object} Object with keys 0-6 (Mon-Sun), each an array of 4 meals
  */
 export async function generateMealPlan(profile) {
   const response = await fetch("/api/generate-plan", {
@@ -24,7 +24,7 @@ export async function generateMealPlan(profile) {
   }
 
   const data = await response.json();
-  return data.meals;
+  return data.weekPlan;
 }
 
 /**

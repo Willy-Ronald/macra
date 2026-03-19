@@ -131,6 +131,17 @@ export async function getTodayLog(userId) {
   return data || [];
 }
 
+export async function getLogByDate(userId, dateStr) {
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from("meal_log")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("date", dateStr)
+    .order("logged_at", { ascending: true });
+  return data || [];
+}
+
 export async function deleteMealLog(logId) {
   if (!supabase) return;
   const { error } = await supabase.from("meal_log").delete().eq("id", logId);
