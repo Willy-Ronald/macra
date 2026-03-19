@@ -122,32 +122,41 @@ export default async function handler(req, res) {
     const diet = (profile.diet || []).join(", ") || "no restrictions";
     const goal = (profile.goal || "lean_bulk").replace("_", " ");
 
-    const prompt = `Generate an A/B day meal plan as JSON with exactly 2 day variations.
+    const prompt = `Generate an A/B day meal plan that matches these daily macro targets:
+- Calories: ${macros.target} (within 3%)
+- Protein: ${macros.proteinG}g (within 3%)
+- Carbs: ${macros.carbG}g (within 3%)
+- Fat: ${macros.fatG}g (within 3%)
+- Dietary preferences: ${diet}
+- Goal: ${goal}
 
-Target macros PER DAY:
-- Calories: ${macros.target}
-- Protein: ${macros.proteinG}g (MUST be within 3% of target)
-- Carbs: ${macros.carbG}g (MUST be within 3% of target)
-- Fat: ${macros.fatG}g (MUST be within 3% of target)
-
-Dietary preferences: ${diet}.
-Goal: ${goal}.
-
-STRICT REQUIREMENTS:
+Rules:
+- Day A and Day B must have completely different meals
 - Each day has exactly 4 meals: BREAKFAST, LUNCH, SNACK, DINNER
-- Day A and Day B must have COMPLETELY DIFFERENT meals — do NOT repeat any meal
-- Use varied cuisines and cooking styles
-- Include realistic prep times
-- Ingredients should be common grocery store items
-- For each meal, include an "ingredients" array where each ingredient has: name (string), qty (number), and unit (string: oz, g, lbs, cups, tbsp, tsp, piece, slice, etc)
-- Example ingredient: {"name":"chicken breast","qty":8,"unit":"oz"}
+- Use varied cuisines and realistic grocery store ingredients
+- Each meal needs an ingredients array
 
-Return ONLY a JSON object with keys "A" and "B". No other text, no markdown, no explanation.
+Return ONLY valid JSON. No markdown, no code blocks, no backticks, no explanation. Just the raw JSON object starting with { and ending with }.
 
-Example structure:
-{"A":[{"type":"BREAKFAST","name":"...","desc":"main ingredients listed","cal":000,"p":00,"c":00,"f":00,"time":"X min","ingredients":[{"name":"...","qty":1,"unit":"cup"}]},{"type":"LUNCH","name":"...","desc":"...","cal":000,"p":00,"c":00,"f":00,"time":"X min","ingredients":[...]},{"type":"SNACK","name":"...","desc":"...","cal":000,"p":00,"c":00,"f":00,"time":"X min","ingredients":[...]},{"type":"DINNER","name":"...","desc":"...","cal":000,"p":00,"c":00,"f":00,"time":"X min","ingredients":[...]}],"B":[...4 meals...]}`;
+The JSON must follow this exact structure:
+{
+  "A": [
+    {"type":"BREAKFAST","name":"Meal name","desc":"Short ingredient list","cal":400,"p":30,"c":45,"f":12,"time":"10 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"cup"}]},
+    {"type":"LUNCH","name":"Meal name","desc":"Short ingredient list","cal":600,"p":50,"c":55,"f":18,"time":"20 min","ingredients":[{"name":"ingredient name","qty":"6","unit":"oz"}]},
+    {"type":"SNACK","name":"Meal name","desc":"Short ingredient list","cal":300,"p":25,"c":20,"f":10,"time":"5 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"serving"}]},
+    {"type":"DINNER","name":"Meal name","desc":"Short ingredient list","cal":700,"p":55,"c":50,"f":22,"time":"30 min","ingredients":[{"name":"ingredient name","qty":"8","unit":"oz"}]}
+  ],
+  "B": [
+    {"type":"BREAKFAST","name":"Different meal","desc":"Short ingredient list","cal":400,"p":30,"c":45,"f":12,"time":"10 min","ingredients":[{"name":"ingredient name","qty":"2","unit":"piece"}]},
+    {"type":"LUNCH","name":"Different meal","desc":"Short ingredient list","cal":600,"p":50,"c":55,"f":18,"time":"20 min","ingredients":[{"name":"ingredient name","qty":"0.5","unit":"cup"}]},
+    {"type":"SNACK","name":"Different meal","desc":"Short ingredient list","cal":300,"p":25,"c":20,"f":10,"time":"5 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"oz"}]},
+    {"type":"DINNER","name":"Different meal","desc":"Short ingredient list","cal":700,"p":55,"c":50,"f":22,"time":"30 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"lbs"}]}
+  ]
+}`;
 
     // ── Call Claude API ──
+    // Prefill the assistant turn with "{" to guarantee the response starts
+    // as a JSON object — the most reliable way to get pure JSON from Claude.
     const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -158,7 +167,10 @@ Example structure:
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 2000,
-        messages: [{ role: "user", content: prompt }],
+        messages: [
+          { role: "user",      content: prompt },
+          { role: "assistant", content: "{"    }, // prefill: forces response to begin with {
+        ],
       }),
     });
 
@@ -171,20 +183,41 @@ Example structure:
     }
 
     const claudeData = await claudeRes.json();
-    const text  = claudeData.content.map((b) => b.text || "").join("");
-    const clean = text.replace(/```json|```/g, "").trim();
+    // Claude's reply is the continuation after the prefill "{", so prepend it back.
+    const continuation = claudeData.content.map((b) => b.text || "").join("");
+    const rawText = "{" + continuation;
+
+    console.log("Claude raw response (first 500 chars):", rawText.slice(0, 500));
+
+    // Extract the outermost {...} JSON object — handles any stray text or fences.
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error("No JSON object found in response. Full raw:", rawText);
+      return res.status(500).json({ error: "AI returned no JSON — please try again." });
+    }
+    const clean = jsonMatch[0];
 
     let abPlan;
     try {
       abPlan = JSON.parse(clean);
     } catch (parseErr) {
-      console.error("JSON parse error:", parseErr.message, "| Raw:", clean.slice(0, 400));
-      return res.status(500).json({ error: "AI returned malformed JSON — please try again." });
+      console.error("JSON.parse failed:", parseErr.message);
+      console.error("Full raw text from Claude:", rawText);
+      console.error("Extracted clean string (first 600):", clean.slice(0, 600));
+      return res.status(500).json({
+        error: "AI returned malformed JSON — please try again.",
+      });
     }
 
     if (!abPlan.A || !abPlan.B || !Array.isArray(abPlan.A) || !Array.isArray(abPlan.B)) {
-      console.error("Invalid plan structure, keys:", Object.keys(abPlan));
+      console.error("Parsed JSON missing A/B arrays. Keys:", Object.keys(abPlan));
+      console.error("Full parsed object:", JSON.stringify(abPlan).slice(0, 400));
       return res.status(500).json({ error: "AI returned unexpected format — please try again." });
+    }
+
+    if (abPlan.A.length !== 4 || abPlan.B.length !== 4) {
+      console.warn(`Meal count mismatch: A=${abPlan.A.length}, B=${abPlan.B.length} (expected 4 each)`);
+      // Non-fatal: continue with whatever was returned
     }
 
     // ── Log this generation (don't block response on failure) ──
