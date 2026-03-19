@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "./lib/supabase";
 const Landing = () => {
+  const navigate = useNavigate();
+  const [authChecked, setAuthChecked] = useState(false);
   const [vis, setVis] = useState(false);
   const [scrollY, setScrollY] = useState(0);
   const [featVis, setFeatVis] = useState([false,false,false,false,false]);
@@ -7,6 +11,13 @@ const Landing = () => {
   const carouselRef = useRef(null);
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
+    supabase.auth.getSession().then(({data:{session}}) => {
+      if(session) { navigate("/app", {replace:true}); return; }
+      setAuthChecked(true);
+    }).catch(() => setAuthChecked(true));
+  }, [navigate]);
+  useEffect(() => {
+    if(!authChecked) return;
     setTimeout(() => setVis(true), 100);
     const h = () => setScrollY(window.scrollY);
     const r = () => setIsMobile(window.innerWidth < 768);
@@ -14,7 +25,7 @@ const Landing = () => {
     window.addEventListener("scroll", h, { passive: true });
     window.addEventListener("resize", r);
     return () => { window.removeEventListener("scroll", h); window.removeEventListener("resize", r); };
-  }, []);
+  }, [authChecked]);
   useEffect(() => {
     const obs = new IntersectionObserver(
       (entries) => entries.forEach((e) => {
@@ -172,6 +183,13 @@ const Landing = () => {
       </div>
     </div>,
   ];
+  if(!authChecked) return <div style={{background:"#09090B",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style={{width:32,height:32,borderRadius:8,background:"linear-gradient(135deg, #C8B88A, #A89560)",display:"flex",alignItems:"center",justifyContent:"center",animation:"pulse 1.5s ease infinite"}}>
+      <span style={{fontSize:17,fontWeight:800,color:"#09090B",fontFamily:"'Outfit',sans-serif"}}>M</span>
+    </div>
+    <style>{"@keyframes pulse{0%,100%{opacity:.4;transform:scale(0.95)}50%{opacity:1;transform:scale(1)}}"}</style>
+  </div>;
+
   return (
     <div style={{background:bg,color:"#FAFAF9",fontFamily:"'Outfit',sans-serif",minHeight:"100vh",overflowX:"hidden"}}>
       <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet"/>
