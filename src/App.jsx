@@ -866,18 +866,30 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
   const [searchLoading,setSearchLoading]=useState(false);
   const [searchError,setSearchError]=useState("");
   const [selectedFood,setSelectedFood]=useState(null);
-  const [servings,setServings]=useState(1);
-  const [selectedPortion,setSelectedPortion]=useState(null); // for USDA portion picker
+  const [selectedPortion,setSelectedPortion]=useState(null);
+  const [qtyValue,setQtyValue]=useState("1");
+  const [qtyUnit,setQtyUnit]=useState("servings"); // servings | g | oz
   const [editNutrition,setEditNutrition]=useState(null);
   const [searchLogSuccess,setSearchLogSuccess]=useState(false);
   const debounceRef = useRef(null);
   const abortRef = useRef(null);
 
+  // Parse gram weight from a serving_size string like "215g", "1 burger (215g)", "150 ml"
+  const parseServingGrams = (str) => {
+    if(!str) return null;
+    const m = str.match(/\(?\s*(\d+(?:\.\d+)?)\s*g\s*\)?/i);
+    if(m) return parseFloat(m[1]);
+    const ml = str.match(/\(?\s*(\d+(?:\.\d+)?)\s*ml\s*\)?/i);
+    if(ml) return parseFloat(ml[1]); // approximate ml≈g for liquids
+    return null;
+  };
+
   const clearSearch = () => {
     if(abortRef.current) abortRef.current.abort();
     if(debounceRef.current) clearTimeout(debounceRef.current);
     setSearchQuery("");setSavedResults([]);setUsdaResults([]);setOffResults([]);
-    setSelectedFood(null);setSelectedPortion(null);setSearchError("");setEditNutrition(null);setSearchLogSuccess(false);setSearchLoading(false);
+    setSelectedFood(null);setSelectedPortion(null);setQtyValue("1");setQtyUnit("servings");
+    setSearchError("");setEditNutrition(null);setSearchLogSuccess(false);setSearchLoading(false);
   };
 
   const searchFoods = async (query) => {
@@ -890,16 +902,16 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
 
     const q = query.toLowerCase();
     const localMatches = savedMeals.filter(m=>m.name.toLowerCase().includes(q)).slice(0,5).map(m=>({
-      id:"saved-"+m.id, name:m.name, brand:"", servingSize:"1 meal", servingLabel:"Per 1 meal",
+      id:"saved-"+m.id, name:m.name, brand:"", servingLabel:"Per 1 meal", servingGrams:null,
       cal:m.totals.cal, protein:m.totals.p, carbs:m.totals.c, fat:m.totals.f,
-      hasNutrition:true, per:"serving", source:"saved",
+      basePer100:null, hasNutrition:true, source:"saved",
     }));
     setSavedResults(localMatches);
 
     setSearchLoading(true);setSearchError("");
     let usdaOk=false, offOk=false;
 
-    // USDA FoodData Central — parse foodMeasures for portion options
+    // USDA FoodData Central
     const usdaFetch = async () => {
       try {
         const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=DEMO_KEY&query=${encodeURIComponent(query)}&pageSize=8&dataType=SR%20Legacy,Foundation`;
@@ -909,34 +921,30 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
         const data = await res.json();
         const items = (data.foods||[]).map(f=>{
           const getNut = (id) => {const n=f.foodNutrients?.find(n=>n.nutrientId===id);return n?Math.round(n.value*10)/10:0;};
-          // per-100g base values
           const base = {cal:getNut(1008), protein:getNut(1003), carbs:getNut(1005), fat:getNut(1004)};
-          // Parse portions from foodMeasures
-          const portions = [{label:"100g",gramWeight:100,isDefault:true}];
+          const portions = [{label:"100g",gramWeight:100}];
           (f.foodMeasures||[]).forEach(m=>{
             if(m.gramWeight && m.gramWeight>0 && m.disseminationText && m.disseminationText!=="Quantity not specified"){
               portions.push({label:m.disseminationText, gramWeight:Math.round(m.gramWeight)});
             }
           });
-          // Default to first named portion if available, else 100g
-          const defaultPortion = portions.length>1 ? portions[1] : portions[0];
-          const mult = defaultPortion.gramWeight/100;
+          const defP = portions.length>1 ? portions[1] : portions[0];
+          const mult = defP.gramWeight/100;
           return {
             id:"usda-"+f.fdcId, name:f.description||"", brand:f.brandName||"",
-            servingSize:defaultPortion.label+(defaultPortion.gramWeight!==100?" ("+defaultPortion.gramWeight+"g)":""),
-            servingLabel:"Per "+defaultPortion.label,
+            servingLabel:"Per "+defP.label+(defP.gramWeight!==100?" ("+defP.gramWeight+"g)":""),
+            servingGrams:defP.gramWeight,
             cal:Math.round(base.cal*mult), protein:Math.round(base.protein*mult),
             carbs:Math.round(base.carbs*mult), fat:Math.round(base.fat*mult),
-            basePer100:{cal:base.cal, protein:base.protein, carbs:base.carbs, fat:base.fat},
-            portions, activePortion:portions.indexOf(defaultPortion),
-            hasNutrition:base.cal>0, per:"serving", source:"usda",
+            basePer100:base, portions, activePortion:portions.indexOf(defP),
+            hasNutrition:base.cal>0, source:"usda",
           };
         }).filter(f=>f.name);
         if(!signal.aborted){setUsdaResults(items);usdaOk=true;}
       } catch(e){if(e.name!=="AbortError"&&!signal.aborted) setUsdaResults([]);}
     };
 
-    // OpenFoodFacts — prefer per-serving when available
+    // OpenFoodFacts — 3-tier serving detection
     const offFetch = async () => {
       try {
         const url = `https://us.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=8&lc=en&cc=us`;
@@ -946,29 +954,43 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
         const data = await res.json();
         const items = (data.products||[]).map(p=>{
           const n=p.nutriments||{};
-          const hasServing = !!(n["energy-kcal_serving"] && p.serving_size);
-          const servSize = p.serving_size||p.quantity||"";
-          let servingLabel, cal, protein, carbs, fat, per;
-          if(hasServing){
-            cal=Math.round(n["energy-kcal_serving"]||0);
+          const servSize = p.serving_size||"";
+          const servGrams = parseServingGrams(servSize);
+          const has100 = !!(n["energy-kcal_100g"]);
+          let cal,protein,carbs,fat,servingLabel;
+
+          // Tier 1: per-serving nutrient values exist
+          if(n["energy-kcal_serving"] && n["energy-kcal_serving"]>0){
+            cal=Math.round(n["energy-kcal_serving"]);
             protein=Math.round(n.proteins_serving||0);
             carbs=Math.round(n.carbohydrates_serving||0);
             fat=Math.round(n.fat_serving||0);
+            servingLabel=servSize ? "Per "+servSize : "Per serving";
+          }
+          // Tier 2: no per-serving values, but serving_size has grams + we have per-100g
+          else if(servGrams && has100){
+            const mult = servGrams/100;
+            cal=Math.round((n["energy-kcal_100g"]||0)*mult);
+            protein=Math.round((n.proteins_100g||0)*mult);
+            carbs=Math.round((n.carbohydrates_100g||0)*mult);
+            fat=Math.round((n.fat_100g||0)*mult);
             servingLabel="Per "+servSize;
-            per="serving";
-          } else {
+          }
+          // Tier 3: fallback to per-100g
+          else {
             cal=Math.round(n["energy-kcal_100g"]||0);
             protein=Math.round(n.proteins_100g||0);
             carbs=Math.round(n.carbohydrates_100g||0);
             fat=Math.round(n.fat_100g||0);
             servingLabel="Per 100g";
-            per="100g";
           }
+
           return {
             id:"off-"+(p._id||p.code), name:p.product_name||"", brand:p.brands||"",
-            servingSize:hasServing?servSize:"100g", servingLabel,
+            servingLabel, servingGrams: servGrams||(servingLabel==="Per 100g"?100:null),
             cal, protein, carbs, fat,
-            hasNutrition:cal>0, per, source:"off",
+            basePer100: has100 ? {cal:Math.round(n["energy-kcal_100g"]||0),protein:Math.round(n.proteins_100g||0),carbs:Math.round(n.carbohydrates_100g||0),fat:Math.round(n.fat_100g||0)} : null,
+            hasNutrition:cal>0, source:"off",
           };
         }).filter(p=>p.name);
         if(!signal.aborted){setOffResults(items);offOk=true;}
@@ -1009,11 +1031,9 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
   };
 
   const selectFood = (food) => {
-    setSelectedFood(food);setServings(1);
-    // For USDA foods with portions, set active portion
+    setSelectedFood(food);setQtyValue("1");setQtyUnit("servings");
     if(food.portions && food.portions.length>1){
-      const pi = food.activePortion||0;
-      setSelectedPortion(pi);
+      setSelectedPortion(food.activePortion||0);
     } else {
       setSelectedPortion(null);
     }
@@ -1021,29 +1041,40 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
     else setEditNutrition(null);
   };
 
-  // Get effective macros for the selected food (considering USDA portion selection)
-  const getEffectiveMacros = () => {
-    if(!selectedFood) return {cal:0,p:0,c:0,f:0,label:""};
+  // Get the per-1-serving macros for the current portion selection
+  const getPerServing = () => {
+    if(!selectedFood) return {cal:0,p:0,c:0,f:0,grams:100};
     if(selectedFood.portions && selectedPortion!==null && selectedFood.basePer100){
-      const portion = selectedFood.portions[selectedPortion];
-      const mult = portion.gramWeight/100;
+      const pt = selectedFood.portions[selectedPortion];
+      const m = pt.gramWeight/100;
       const b = selectedFood.basePer100;
-      return {
-        cal:Math.round(b.cal*mult), p:Math.round(b.protein*mult),
-        c:Math.round(b.carbs*mult), f:Math.round(b.fat*mult),
-        label:portion.label+(portion.gramWeight!==100?" ("+portion.gramWeight+"g)":""),
-      };
+      return {cal:Math.round(b.cal*m),p:Math.round(b.protein*m),c:Math.round(b.carbs*m),f:Math.round(b.fat*m),grams:pt.gramWeight};
     }
-    return {cal:selectedFood.cal, p:selectedFood.protein, c:selectedFood.carbs, f:selectedFood.fat, label:selectedFood.servingSize};
+    return {cal:selectedFood.cal,p:selectedFood.protein,c:selectedFood.carbs,f:selectedFood.fat,grams:selectedFood.servingGrams||100};
+  };
+
+  // Calculate final macros based on qty + unit
+  const getFinalMacros = () => {
+    if(editNutrition) return {cal:+editNutrition.cal||0,p:+editNutrition.p||0,c:+editNutrition.c||0,f:+editNutrition.f||0};
+    const ps = getPerServing();
+    const qty = parseFloat(qtyValue)||0;
+    if(qtyUnit==="servings"){
+      return {cal:Math.round(ps.cal*qty),p:Math.round(ps.p*qty),c:Math.round(ps.c*qty),f:Math.round(ps.f*qty)};
+    }
+    // Convert g/oz to a multiplier relative to per-serving
+    const grams = qtyUnit==="oz" ? qty*28.3495 : qty;
+    const servGrams = ps.grams||100;
+    const mult = grams/servGrams;
+    return {cal:Math.round(ps.cal*mult),p:Math.round(ps.p*mult),c:Math.round(ps.c*mult),f:Math.round(ps.f*mult)};
   };
 
   const logSearchedFood = () => {
     if(!selectedFood||!onLogMeal) return;
-    const eff = editNutrition ? {cal:+editNutrition.cal||0,p:+editNutrition.p||0,c:+editNutrition.c||0,f:+editNutrition.f||0} : getEffectiveMacros();
+    const fm = getFinalMacros();
     const type = getMealTypeByTime();
-    onLogMeal({type,name:selectedFood.name+(selectedFood.brand?` (${selectedFood.brand})`:""),cal:Math.round(eff.cal*servings),p:Math.round(eff.p*servings),c:Math.round(eff.c*servings),f:Math.round(eff.f*servings)});
+    onLogMeal({type,name:selectedFood.name+(selectedFood.brand?` (${selectedFood.brand})`:""),cal:fm.cal,p:fm.p,c:fm.c,f:fm.f});
     setSearchLogSuccess(true);
-    setTimeout(()=>{setSearchLogSuccess(false);setSelectedFood(null);setSelectedPortion(null);setSearchQuery("");setEditNutrition(null);setSavedResults([]);setUsdaResults([]);setOffResults([])},1500);
+    setTimeout(()=>{setSearchLogSuccess(false);setSelectedFood(null);setSelectedPortion(null);setSearchQuery("");setQtyValue("1");setQtyUnit("servings");setEditNutrition(null);setSavedResults([]);setUsdaResults([]);setOffResults([])},1500);
   };
 
   const quickLog = (item, feedbackId) => {
@@ -1119,15 +1150,19 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
 
     {/* ── Selected food detail card ── */}
     {selectedFood && !searchLogSuccess && (()=>{
-      const eff = editNutrition ? {cal:+editNutrition.cal||0,p:+editNutrition.p||0,c:+editNutrition.c||0,f:+editNutrition.f||0} : getEffectiveMacros();
+      const fm = getFinalMacros();
+      const ps = getPerServing();
+      const portionLabel = selectedFood.portions && selectedPortion!==null
+        ? selectedFood.portions[selectedPortion].label+(selectedFood.portions[selectedPortion].gramWeight!==100?" ("+selectedFood.portions[selectedPortion].gramWeight+"g)":"")
+        : selectedFood.servingLabel||"Per serving";
       return <Card style={{padding:18,marginBottom:20,border:`1px solid ${T.acc}30`}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
         <div style={{flex:1}}>
           <p style={{fontSize:16,fontWeight:600,color:T.tx,margin:"0 0 2px"}}>{selectedFood.name}</p>
           {selectedFood.brand && <p style={{fontSize:12,color:T.txM,margin:0}}>{selectedFood.brand}</p>}
-          <p style={{fontSize:11,color:T.acc,margin:"4px 0 0",fontWeight:500}}>{selectedFood.portions && selectedPortion!==null ? "Per "+selectedFood.portions[selectedPortion].label+(selectedFood.portions[selectedPortion].gramWeight!==100?" ("+selectedFood.portions[selectedPortion].gramWeight+"g)":"") : selectedFood.servingLabel||"Per "+selectedFood.servingSize}</p>
+          <p style={{fontSize:11,color:T.acc,margin:"4px 0 0",fontWeight:500}}>{portionLabel}</p>
         </div>
-        <div onClick={()=>{setSelectedFood(null);setSelectedPortion(null);setEditNutrition(null)}} style={{cursor:"pointer",padding:4}}>
+        <div onClick={()=>{setSelectedFood(null);setSelectedPortion(null);setEditNutrition(null);setQtyValue("1");setQtyUnit("servings")}} style={{cursor:"pointer",padding:4}}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </div>
       </div>
@@ -1137,7 +1172,7 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
         <Lbl>Portion Size</Lbl>
         <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>
           {selectedFood.portions.map((pt,pi)=>
-            <button key={pi} onClick={()=>{setSelectedPortion(pi);setServings(1)}} style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${selectedPortion===pi?T.acc:T.bd}`,background:selectedPortion===pi?T.accM:"transparent",color:selectedPortion===pi?T.acc:T.tx2,fontSize:12,fontWeight:selectedPortion===pi?600:400,cursor:"pointer",fontFamily:T.font}}>
+            <button key={pi} onClick={()=>{setSelectedPortion(pi);setQtyValue("1");setQtyUnit("servings")}} style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${selectedPortion===pi?T.acc:T.bd}`,background:selectedPortion===pi?T.accM:"transparent",color:selectedPortion===pi?T.acc:T.tx2,fontSize:12,fontWeight:selectedPortion===pi?600:400,cursor:"pointer",fontFamily:T.font}}>
               {pt.label}{pt.gramWeight!==100?` (${pt.gramWeight}g)`:""}
             </button>
           )}
@@ -1150,33 +1185,48 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
 
       {/* Macro display / edit */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,marginBottom:16}}>
-        {[{k:"cal",l:"Calories",v:editNutrition?editNutrition.cal:eff.cal,c:T.acc},{k:"p",l:"Protein",v:editNutrition?editNutrition.p:eff.p,c:T.pro},{k:"c",l:"Carbs",v:editNutrition?editNutrition.c:eff.c,c:T.carb},{k:"f",l:"Fat",v:editNutrition?editNutrition.f:eff.f,c:T.fat}].map(x=>
+        {[{k:"cal",l:"Calories",v:editNutrition?editNutrition.cal:fm.cal,c:T.acc},{k:"p",l:"Protein",v:editNutrition?editNutrition.p:fm.p,c:T.pro},{k:"c",l:"Carbs",v:editNutrition?editNutrition.c:fm.c,c:T.carb},{k:"f",l:"Fat",v:editNutrition?editNutrition.f:fm.f,c:T.fat}].map(x=>
           <div key={x.k} style={{textAlign:"center"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:3,marginBottom:4}}>
               <div style={{width:5,height:5,borderRadius:"50%",background:x.c}}/>
               <span style={{fontSize:9,color:T.txM,fontWeight:600}}>{x.l}</span>
             </div>
-            {editNutrition ? <input value={x.v} onChange={e=>setEditNutrition(p=>({...p,[x.k]:e.target.value}))} type="number" style={{...inputStyle,textAlign:"center",padding:"8px 4px",fontSize:15,fontWeight:700,color:x.c,fontFamily:T.mono}}/> : <p style={{fontSize:18,fontWeight:700,color:x.c,margin:0,fontFamily:T.mono}}>{Math.round(x.v*servings)}</p>}
+            {editNutrition ? <input value={x.v} onChange={e=>setEditNutrition(p=>({...p,[x.k]:e.target.value}))} type="number" style={{...inputStyle,textAlign:"center",padding:"8px 4px",fontSize:15,fontWeight:700,color:x.c,fontFamily:T.mono}}/> : <p style={{fontSize:18,fontWeight:700,color:x.c,margin:0,fontFamily:T.mono}}>{x.v}</p>}
             {!editNutrition && x.k!=="cal" && <span style={{fontSize:9,color:T.txM}}>g</span>}
           </div>
         )}
       </div>
 
-      {/* Servings selector — always counts servings of the chosen portion */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:14,marginBottom:16}}>
-        <Lbl>Servings</Lbl>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <button onClick={()=>setServings(s=>Math.max(0.5,+(s-0.5).toFixed(1)))} style={{width:32,height:32,borderRadius:8,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font}}>−</button>
-          <span style={{fontSize:20,fontWeight:700,color:T.tx,fontFamily:T.mono,minWidth:40,textAlign:"center"}}>{servings}</span>
-          <button onClick={()=>setServings(s=>+(s+0.5).toFixed(1))} style={{width:32,height:32,borderRadius:8,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font}}>+</button>
+      {/* Quantity selector with unit toggle */}
+      <div style={{marginBottom:16}}>
+        <Lbl>Quantity</Lbl>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginTop:6}}>
+          <button onClick={()=>{const v=parseFloat(qtyValue)||0;setQtyValue(String(Math.max(qtyUnit==="g"?1:0.5,qtyUnit==="g"?v-50:qtyUnit==="oz"?+(v-1).toFixed(1):v-1)))}} style={{width:36,height:36,borderRadius:8,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font,flexShrink:0}}>−</button>
+          <input value={qtyValue} onChange={e=>setQtyValue(e.target.value)} type="number" inputMode="decimal" style={{...inputStyle,textAlign:"center",padding:"8px 6px",fontSize:18,fontWeight:700,fontFamily:T.mono,width:70,flexShrink:0}}/>
+          <button onClick={()=>{const v=parseFloat(qtyValue)||0;setQtyValue(String(qtyUnit==="g"?v+50:qtyUnit==="oz"?+(v+1).toFixed(1):v+1))}} style={{width:36,height:36,borderRadius:8,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font,flexShrink:0}}>+</button>
+          <div style={{display:"flex",borderRadius:8,border:`1px solid ${T.bd}`,overflow:"hidden",flexShrink:0}}>
+            {["servings","g","oz"].map(u=>
+              <button key={u} onClick={()=>{
+                if(u===qtyUnit) return;
+                const curQty = parseFloat(qtyValue)||1;
+                const curGrams = qtyUnit==="servings" ? curQty*(ps.grams||100) : qtyUnit==="oz" ? curQty*28.3495 : curQty;
+                if(u==="servings"){setQtyValue(String(Math.round(curGrams/(ps.grams||100)*10)/10));}
+                else if(u==="g"){setQtyValue(String(Math.round(curGrams)));}
+                else{setQtyValue(String(Math.round(curGrams/28.3495*10)/10));}
+                setQtyUnit(u);
+              }} style={{padding:"7px 10px",border:"none",background:qtyUnit===u?T.accM:"transparent",color:qtyUnit===u?T.acc:T.txM,fontSize:11,fontWeight:qtyUnit===u?700:500,cursor:"pointer",fontFamily:T.font,borderRight:u!=="oz"?`1px solid ${T.bd}`:"none"}}>
+                {u==="servings"?"srv":u}
+              </button>
+            )}
+          </div>
         </div>
+        {qtyUnit!=="servings" && ps.grams && <p style={{fontSize:10,color:T.txM,margin:"6px 0 0"}}>1 serving = {ps.grams}g</p>}
       </div>
 
       {(() => {
-        const totalCal = Math.round(eff.cal * servings);
-        const canLog = totalCal > 0;
+        const canLog = fm.cal > 0;
         return <button onClick={logSearchedFood} style={{width:"100%",padding:14,borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font,opacity:canLog?1:0.4,pointerEvents:canLog?"auto":"none"}}>
-          Log It — {totalCal} cal
+          Log It — {fm.cal} cal
         </button>;
       })()}
     </Card>;
