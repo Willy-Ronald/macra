@@ -397,20 +397,53 @@ const Onboarding = ({onComplete}) => {
 };
 
 // ─── DASHBOARD ─────────────────────────────────────────────────
-const Dashboard = ({setTab,profile,todayLog=[],onLogMeal}) => {
+const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,todayPlan=[]}) => {
   const m = profile?.macros || {target:2200,proteinG:180,carbG:240,fatG:70};
   // Calculate consumed from real log data
   const consumed = todayLog.reduce((a,x)=>({cal:a.cal+(x.calories||0),p:a.p+(x.protein||0),c:a.c+(x.carbs||0),f:a.f+(x.fat||0)}),{cal:0,p:0,c:0,f:0});
   const cal={cur:consumed.cal,tgt:m.target};
   const mac=[{k:"Protein",cur:consumed.p,tgt:m.proteinG,c:T.pro},{k:"Carbs",cur:consumed.c,tgt:m.carbG,c:T.carb},{k:"Fat",cur:consumed.f,tgt:m.fatG,c:T.fat}];
-  const meals = todayLog.map(x=>({t:x.logged_at?new Date(x.logged_at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}):"",n:x.name,cal:x.calories,done:true}));
-  const remaining = cal.tgt - cal.cur;
+
+  // Build meals list from today's plan, checking which are logged
+  const loggedNames = new Set(todayLog.map(x=>(x.name||"").toLowerCase()));
+  const defaultPlanMeals = [
+    {type:"BREAKFAST",name:"Egg & Avocado Toast",cal:420,p:22,c:34,f:24,time:"10 min"},
+    {type:"LUNCH",name:"Grilled Chicken Bowl",cal:580,p:48,c:52,f:22,time:"15 min"},
+    {type:"SNACK",name:"Protein Shake + Banana",cal:340,p:35,c:28,f:8,time:"2 min"},
+    {type:"DINNER",name:"Salmon & Sweet Potato",cal:680,p:52,c:48,f:24,time:"30 min"},
+  ];
+  const planMeals = todayPlan.length > 0 ? todayPlan : defaultPlanMeals;
+  const meals = planMeals.map(pm => {
+    const done = loggedNames.has(pm.name.toLowerCase());
+    return { n:pm.name, cal:pm.cal, p:pm.p, c:pm.c, f:pm.f, type:pm.type, done };
+  });
+
+  const remaining = Math.max(0, cal.tgt - cal.cur);
   const proteinLeft = Math.max(0,m.proteinG - consumed.p);
+  const carbsLeft = Math.max(0,m.carbG - consumed.c);
+  const fatLeft = Math.max(0,m.fatG - consumed.f);
+  const mealsLeft = meals.filter(x=>!x.done).length;
+
+  // Dynamic insight based on real data
+  const insightText = consumed.cal === 0
+    ? `Start your day! Your target is ${m.target} calories with ${m.proteinG}g protein.`
+    : proteinLeft > 20 && mealsLeft > 0
+    ? `You need ${proteinLeft}g protein in your remaining ${mealsLeft} meal${mealsLeft>1?"s":""} to hit target.`
+    : proteinLeft <= 20 && consumed.cal < m.target
+    ? `Protein on track! You have ${remaining} cal remaining for the day.`
+    : consumed.cal >= m.target
+    ? `You've reached your ${m.target} cal target for today. Great job!`
+    : `${remaining} calories remaining. Keep it up!`;
+
+  const now = new Date();
+  const dayNames = ["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
+  const monthNames = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+  const dateStr = `${dayNames[now.getDay()]}, ${monthNames[now.getMonth()]} ${now.getDate()}`;
 
   return <div style={{padding:"0 20px 24px"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:28,paddingTop:4}}>
       <div>
-        <p style={{fontSize:11,color:T.txM,fontWeight:500,margin:0,letterSpacing:"0.08em"}}>WEDNESDAY, MAR 18</p>
+        <p style={{fontSize:11,color:T.txM,fontWeight:500,margin:0,letterSpacing:"0.08em"}}>{dateStr}</p>
         <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"6px 0 0",letterSpacing:"-0.02em"}}>
           {profile?.name ? `Hey, ${profile.name}` : "Daily Overview"}
         </h1>
@@ -449,17 +482,19 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal}) => {
       <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>Today's Meals</h2>
       <span onClick={()=>setTab("plan")} style={{fontSize:12,color:T.acc,fontWeight:500,cursor:"pointer"}}>View Plan</span>
     </div>
-    {meals.map((x,i)=><Card key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,border:x.done?`1px solid ${T.bd}`:`1px dashed ${T.bd}`,background:x.done?T.sf:"transparent",cursor:"pointer"}} onClick={()=>!x.done&&setTab("log")}>
+    {meals.map((x,i)=><Card key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,border:x.done?`1px solid ${T.bd}`:`1px dashed ${T.bd}`,background:x.done?T.sf:"transparent",cursor:"pointer"}} onClick={()=>{
+      if(!x.done && onLogMeal) onLogMeal({type:x.type||"meal",name:x.n,cal:x.cal,p:x.p||0,c:x.c||0,f:x.f||0});
+    }}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
         <div style={{width:7,height:7,borderRadius:"50%",background:x.done?T.ok:T.txM,boxShadow:x.done?`0 0 8px ${T.ok}40`:"none"}}/>
-        <div><p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{x.n}</p><p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{x.t}</p></div>
+        <div><p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{x.n}</p><p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{x.type}</p></div>
       </div>
       <span style={{fontSize:13,fontWeight:600,fontFamily:T.mono,color:x.done?T.tx2:T.acc}}>{x.done?x.cal:"Log →"}</span>
     </Card>)}
 
     <Card style={{padding:"14px 16px",marginTop:16,background:T.accG,border:`1px solid ${T.accM}`,display:"flex",alignItems:"flex-start",gap:10}}>
       <span style={{fontSize:14}}>✦</span>
-      <p style={{fontSize:13,color:T.tx2,margin:0,lineHeight:1.5}}>You need <strong style={{color:T.acc,fontWeight:600}}>{proteinLeft}g protein</strong> in your last meal to hit target.</p>
+      <p style={{fontSize:13,color:T.tx2,margin:0,lineHeight:1.5}}>{insightText}</p>
     </Card>
   </div>;
 };
@@ -776,6 +811,7 @@ const MealCreator = ({onSave,onBack}) => {
 
 const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
   const [view,setView]=useState("main"); // main | create
+  const savedRef = useRef(null);
   const recent=[{n:"Grilled Chicken Bowl",cal:580,p:48,c:52,f:22},{n:"Protein Shake + Banana",cal:340,p:35,c:28,f:8},{n:"Egg & Avocado Toast",cal:420,p:22,c:34,f:24},{n:"Turkey & Hummus Wrap",cal:490,p:38,c:42,f:18}];
 
   const quickLog = (item) => {
@@ -792,7 +828,7 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
       <span style={{fontSize:14,color:T.txM}}>Search food or scan barcode...</span>
     </Card>
     <div style={{display:"flex",gap:8,marginBottom:24}}>
-      {[{l:"AI Suggest",i:"✦",h:true},{l:"Scan",i:"⎘",h:false},{l:"Custom",i:"✎",h:false,action:()=>setView("create")},{l:"Saved",i:"♡",h:false}].map(a=>
+      {[{l:"AI Suggest",i:"✦",h:true},{l:"Scan",i:"⎘",h:false},{l:"Custom",i:"✎",h:false,action:()=>setView("create")},{l:"Saved",i:"♡",h:false,action:()=>savedRef.current?.scrollIntoView({behavior:"smooth"})}].map(a=>
         <button key={a.l} onClick={a.action||undefined} style={{flex:1,padding:"14px 4px",borderRadius:T.r,border:a.h?"none":`1px solid ${T.bd}`,background:a.h?T.acc:T.sf,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
           <span style={{fontSize:16,color:a.h?T.bg:T.tx2}}>{a.i}</span>
           <span style={{fontSize:10,fontWeight:600,color:a.h?T.bg:T.tx2}}>{a.l}</span>
@@ -807,7 +843,7 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
         </div>
       </Card>)}
     </div>
-    <div style={{marginTop:20}}>
+    <div ref={savedRef} style={{marginTop:20}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
         <Lbl>My Saved Meals ({savedMeals.length})</Lbl>
         <span onClick={()=>setView("create")} style={{fontSize:11,color:T.acc,fontWeight:500,cursor:"pointer"}}>+ Create New</span>
@@ -1063,6 +1099,7 @@ export default function App() {
   const [savedMeals,setSavedMeals] = useState([]);
   const [isPro,setIsPro] = useState(false);
   const [todayLog,setTodayLog] = useState([]);
+  const [todayPlan,setTodayPlan] = useState([]);
 
   // Check auth state after splash
   const checkAuth = async () => {
@@ -1085,6 +1122,11 @@ export default function App() {
         // Load today's log
         const log = await getTodayLog(u.id);
         setTodayLog(log);
+        // Load today's meal plan
+        const plans = await getWeekPlans(u.id);
+        const todayDow = new Date().getDay();
+        const dowIndex = todayDow === 0 ? 6 : todayDow - 1; // Mon=0..Sun=6
+        if(plans[dowIndex]) setTodayPlan(plans[dowIndex]);
         setPhase("app");
         return;
       }
@@ -1110,6 +1152,10 @@ export default function App() {
       setSavedMeals(meals.map(m=>({id:m.id,name:m.name,ingredients:m.ingredients||[],totals:{cal:m.total_calories,p:m.total_protein,c:m.total_carbs,f:m.total_fat}})));
       const log = await getTodayLog(u.id);
       setTodayLog(log);
+      const plans = await getWeekPlans(u.id);
+      const todayDow = new Date().getDay();
+      const dowIndex = todayDow === 0 ? 6 : todayDow - 1;
+      if(plans[dowIndex]) setTodayPlan(plans[dowIndex]);
       setPhase("app");
     } else {
       setPhase("onboarding");
@@ -1124,7 +1170,7 @@ export default function App() {
 
   const handleSignOut = async () => {
     await signOut();
-    setUser(null);setProfile(null);setSavedMeals([]);setTodayLog([]);
+    setUser(null);setProfile(null);setSavedMeals([]);setTodayLog([]);setTodayPlan([]);
     setTab("home");setPhase("auth");
   };
 
@@ -1145,7 +1191,7 @@ export default function App() {
   if(phase==="onboarding") return <Onboarding onComplete={handleComplete}/>;
 
   const screens = {
-    home:<Dashboard setTab={setTab} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal}/>,
+    home:<Dashboard setTab={setTab} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal} todayPlan={todayPlan}/>,
     plan:<Plan profile={profile} userId={user?.id}/>,
     log:<LogMeal savedMeals={savedMeals} onSaveMeal={handleSaveMeal} todayLog={todayLog} onLogMeal={handleLogMeal}/>,
     grocery:<Grocery isPro={isPro} setIsPro={setIsPro}/>,
