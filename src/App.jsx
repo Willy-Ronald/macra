@@ -404,7 +404,7 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
   const cal={cur:consumed.cal,tgt:m.target};
   const mac=[{k:"Protein",cur:consumed.p,tgt:m.proteinG,c:T.pro},{k:"Carbs",cur:consumed.c,tgt:m.carbG,c:T.carb},{k:"Fat",cur:consumed.f,tgt:m.fatG,c:T.fat}];
 
-  // Build meals list from today's plan, checking which are logged
+  // Build plan meals list, marking which are already logged
   const defaultPlanMeals = [
     {type:"BREAKFAST",name:"Egg & Avocado Toast",cal:420,p:22,c:34,f:24,time:"10 min"},
     {type:"LUNCH",name:"Grilled Chicken Bowl",cal:580,p:48,c:52,f:22,time:"15 min"},
@@ -412,16 +412,12 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
     {type:"DINNER",name:"Salmon & Sweet Potato",cal:680,p:52,c:48,f:24,time:"30 min"},
   ];
   const planMeals = todayPlan.length > 0 ? todayPlan : defaultPlanMeals;
-  const meals = planMeals.map(pm => {
-    const logEntry = todayLog.find(x=>(x.name||"").toLowerCase()===pm.name.toLowerCase());
-    return { n:pm.name, cal:pm.cal, p:pm.p, c:pm.c, f:pm.f, type:pm.type, done:!!logEntry, logId:logEntry?.id };
-  });
+  const loggedNamesLower = new Set(todayLog.map(x=>(x.name||"").toLowerCase()));
+  const unloggedPlan = planMeals.filter(pm => !loggedNamesLower.has(pm.name.toLowerCase()));
 
   const remaining = Math.max(0, cal.tgt - cal.cur);
   const proteinLeft = Math.max(0,m.proteinG - consumed.p);
-  const carbsLeft = Math.max(0,m.carbG - consumed.c);
-  const fatLeft = Math.max(0,m.fatG - consumed.f);
-  const mealsLeft = meals.filter(x=>!x.done).length;
+  const mealsLeft = unloggedPlan.length;
 
   // Dynamic insight based on real data
   const insightText = consumed.cal === 0
@@ -477,22 +473,57 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
       </div>
     </Card>
 
+    {/* ── Section A: Today's Plan ── */}
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"24px 0 14px"}}>
-      <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>Today's Meals</h2>
+      <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>Today's Plan</h2>
       <span onClick={()=>setTab("plan")} style={{fontSize:12,color:T.acc,fontWeight:500,cursor:"pointer"}}>View Plan</span>
     </div>
-    {meals.map((x,i)=><Card key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,border:x.done?`1px solid ${T.bd}`:`1px dashed ${T.bd}`,background:x.done?T.sf:"transparent",cursor:"pointer"}} onClick={()=>{
-      if(x.done && x.logId && onUnlogMeal) {
-        onUnlogMeal(x.logId);
-      } else if(!x.done && onLogMeal) {
-        onLogMeal({type:x.type||"meal",name:x.n,cal:x.cal,p:x.p||0,c:x.c||0,f:x.f||0});
-      }
+    {unloggedPlan.length === 0 && <Card style={{padding:"16px",textAlign:"center",marginBottom:6}}>
+      <p style={{fontSize:13,color:T.txM,margin:0}}>All planned meals logged! Nice work.</p>
+    </Card>}
+    {unloggedPlan.map((pm,i)=><Card key={"plan-"+i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,border:`1px dashed ${T.bd}`,background:"transparent",cursor:"pointer"}} onClick={()=>{
+      if(onLogMeal) onLogMeal({type:pm.type||"meal",name:pm.name,cal:pm.cal,p:pm.p||0,c:pm.c||0,f:pm.f||0});
     }}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
-        <div style={{width:7,height:7,borderRadius:"50%",background:x.done?T.ok:T.txM,boxShadow:x.done?`0 0 8px ${T.ok}40`:"none"}}/>
-        <div><p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{x.n}</p><p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{x.type}</p></div>
+        <div style={{width:7,height:7,borderRadius:"50%",background:T.txM}}/>
+        <div>
+          <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{pm.name}</p>
+          <div style={{display:"flex",gap:8,marginTop:3}}>
+            {[{v:pm.cal,l:"cal",c:T.acc},{v:(pm.p||0)+"g",l:"P",c:T.pro},{v:(pm.c||0)+"g",l:"C",c:T.carb},{v:(pm.f||0)+"g",l:"F",c:T.fat}].map(x=>
+              <span key={x.l} style={{fontSize:10,fontFamily:T.mono,color:x.c}}>{x.v}<span style={{color:T.txM,fontSize:8}}> {x.l}</span></span>
+            )}
+          </div>
+        </div>
       </div>
-      <span style={{fontSize:13,fontWeight:600,fontFamily:T.mono,color:x.done?T.tx2:T.acc}}>{x.done?`${x.cal} ✕`:"Log →"}</span>
+      <span style={{fontSize:13,fontWeight:600,fontFamily:T.mono,color:T.acc}}>Log →</span>
+    </Card>)}
+
+    {/* ── Section B: Eaten Today ── */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"24px 0 14px"}}>
+      <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>Eaten Today</h2>
+      <span style={{fontSize:12,color:T.txM,fontFamily:T.mono}}>{todayLog.length} meal{todayLog.length!==1?"s":""}</span>
+    </div>
+    {todayLog.length === 0 && <Card style={{padding:"16px",textAlign:"center",marginBottom:6}}>
+      <p style={{fontSize:13,color:T.txM,margin:0}}>Nothing logged yet. Tap a meal above or go to the Log tab.</p>
+    </Card>}
+    {todayLog.map((x)=><Card key={x.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,cursor:"pointer"}} onClick={()=>{
+      if(onUnlogMeal && x.id) onUnlogMeal(x.id);
+    }}>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <div style={{width:7,height:7,borderRadius:"50%",background:T.ok,boxShadow:`0 0 8px ${T.ok}40`}}/>
+        <div>
+          <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{x.name}</p>
+          <div style={{display:"flex",gap:8,marginTop:3}}>
+            {[{v:x.protein||0,l:"P",c:T.pro},{v:x.carbs||0,l:"C",c:T.carb},{v:x.fat||0,l:"F",c:T.fat}].map(z=>
+              <span key={z.l} style={{fontSize:10,fontFamily:T.mono,color:z.c}}>{z.v}g<span style={{color:T.txM,fontSize:8}}> {z.l}</span></span>
+            )}
+          </div>
+        </div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <span style={{fontSize:13,fontWeight:600,fontFamily:T.mono,color:T.tx2}}>{x.calories}</span>
+        <span style={{fontSize:11,color:T.txM}}>✕</span>
+      </div>
     </Card>)}
 
     <Card style={{padding:"14px 16px",marginTop:16,background:T.accG,border:`1px solid ${T.accM}`,display:"flex",alignItems:"flex-start",gap:10}}>
@@ -821,9 +852,11 @@ const getMealTypeByTime = () => {
 };
 
 const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
-  const [view,setView]=useState("main"); // main | create
+  const [view,setView]=useState("main"); // main | create | manual
   const savedRef = useRef(null);
-  const [loggedId,setLoggedId]=useState(null); // tracks which item just got logged for feedback
+  const [loggedId,setLoggedId]=useState(null);
+  const [manualForm,setManualForm]=useState({name:"",cal:"",p:"",c:"",f:""});
+  const [manualSuccess,setManualSuccess]=useState(false);
   const recent=[{id:"r0",n:"Grilled Chicken Bowl",cal:580,p:48,c:52,f:22},{id:"r1",n:"Protein Shake + Banana",cal:340,p:35,c:28,f:8},{id:"r2",n:"Egg & Avocado Toast",cal:420,p:22,c:34,f:24},{id:"r3",n:"Turkey & Hummus Wrap",cal:490,p:38,c:42,f:18}];
 
   const quickLog = (item, feedbackId) => {
@@ -834,7 +867,17 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
     setTimeout(()=>setLoggedId(null),1200);
   };
 
+  const handleManualLog = () => {
+    if(!manualForm.name||!manualForm.cal||!onLogMeal) return;
+    const type = getMealTypeByTime();
+    onLogMeal({type,name:manualForm.name,cal:+manualForm.cal||0,p:+manualForm.p||0,c:+manualForm.c||0,f:+manualForm.f||0});
+    setManualSuccess(true);
+    setTimeout(()=>{setManualSuccess(false);setManualForm({name:"",cal:"",p:"",c:"",f:""});setView("main")},1500);
+  };
+
   if(view==="create") return <MealCreator onBack={()=>setView("main")} onSave={(meal)=>{if(onSaveMeal)onSaveMeal(meal);setView("main")}}/>;
+
+  const inputStyle={width:"100%",padding:"12px 14px",borderRadius:10,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:14,fontFamily:T.font,fontWeight:500,outline:"none",boxSizing:"border-box"};
 
   return <div style={{padding:"0 20px 24px"}}>
     <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"4px 0 4px",letterSpacing:"-0.02em"}}>Log Meal</h1>
@@ -844,12 +887,48 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
       <span style={{fontSize:14,color:T.txM}}>Search food or scan barcode...</span>
     </Card>
     <div style={{display:"flex",gap:8,marginBottom:24}}>
-      {[{l:"AI Suggest",i:"✦",h:true},{l:"Scan",i:"⎘",h:false},{l:"Custom",i:"✎",h:false,action:()=>setView("create")},{l:"Saved",i:"♡",h:false,action:()=>savedRef.current?.scrollIntoView({behavior:"smooth"})}].map(a=>
-        <button key={a.l} onClick={a.action||undefined} style={{flex:1,padding:"14px 4px",borderRadius:T.r,border:a.h?"none":`1px solid ${T.bd}`,background:a.h?T.acc:T.sf,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-          <span style={{fontSize:16,color:a.h?T.bg:T.tx2}}>{a.i}</span>
-          <span style={{fontSize:10,fontWeight:600,color:a.h?T.bg:T.tx2}}>{a.l}</span>
+      {[
+        {l:"Manual",i:"✎",h:view==="manual",action:()=>setView(view==="manual"?"main":"manual")},
+        {l:"Custom",i:"✦",h:false,action:()=>setView("create")},
+        {l:"Saved",i:"♡",h:false,action:()=>{setView("main");setTimeout(()=>savedRef.current?.scrollIntoView({behavior:"smooth"}),100)}},
+      ].map(a=>
+        <button key={a.l} onClick={a.action||undefined} style={{flex:1,padding:"14px 4px",borderRadius:T.r,border:a.h?`1.5px solid ${T.acc}`:`1px solid ${T.bd}`,background:a.h?T.accM:T.sf,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+          <span style={{fontSize:16,color:a.h?T.acc:T.tx2}}>{a.i}</span>
+          <span style={{fontSize:10,fontWeight:600,color:a.h?T.acc:T.tx2}}>{a.l}</span>
         </button>)}
     </div>
+
+    {/* Manual Entry Form */}
+    {view==="manual" && <Card style={{padding:18,marginBottom:24,border:`1px solid ${T.acc}30`}}>
+      {manualSuccess ? <div style={{textAlign:"center",padding:"20px 0"}}>
+        <div style={{width:44,height:44,borderRadius:"50%",background:T.ok,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+        </div>
+        <p style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>Meal Logged!</p>
+        <p style={{fontSize:12,color:T.txM,margin:"4px 0 0"}}>Check the Home tab to see your updated macros.</p>
+      </div> : <>
+        <p style={{fontSize:13,fontWeight:600,color:T.acc,margin:"0 0 14px",letterSpacing:"0.04em"}}>Quick Entry</p>
+        <Lbl>Meal Name</Lbl>
+        <input value={manualForm.name} onChange={e=>setManualForm(p=>({...p,name:e.target.value}))} placeholder="e.g. Chicken salad" style={{...inputStyle,marginTop:6,marginBottom:14}}/>
+        <Lbl>Calories</Lbl>
+        <input value={manualForm.cal} onChange={e=>setManualForm(p=>({...p,cal:e.target.value}))} placeholder="e.g. 450" type="number" style={{...inputStyle,marginTop:6,marginBottom:14}}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}}>
+          {[{k:"p",l:"Protein (g)",c:T.pro},{k:"c",l:"Carbs (g)",c:T.carb},{k:"f",l:"Fat (g)",c:T.fat}].map(x=>
+            <div key={x.k}>
+              <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:4}}>
+                <div style={{width:6,height:6,borderRadius:"50%",background:x.c}}/>
+                <span style={{fontSize:9,color:T.txM,fontWeight:600}}>{x.l}</span>
+              </div>
+              <input value={manualForm[x.k]} onChange={e=>setManualForm(p=>({...p,[x.k]:e.target.value}))} placeholder="0" type="number" style={{...inputStyle,textAlign:"center",padding:"10px 8px"}}/>
+            </div>
+          )}
+        </div>
+        <p style={{fontSize:11,color:T.txM,margin:"0 0 14px"}}>Type: <span style={{color:T.acc,fontWeight:600}}>{getMealTypeByTime()}</span> (based on current time)</p>
+        <button onClick={handleManualLog} style={{width:"100%",padding:14,borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font,opacity:(manualForm.name&&manualForm.cal)?1:0.4,pointerEvents:(manualForm.name&&manualForm.cal)?"auto":"none"}}>
+          Log It
+        </button>
+      </>}
+    </Card>}
     <Lbl>Frequently Logged</Lbl>
     <div style={{marginTop:10}}>
       {recent.map((m)=>{
