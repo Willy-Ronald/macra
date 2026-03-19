@@ -6,7 +6,7 @@ const Landing = () => {
   const [authChecked, setAuthChecked] = useState(false);
   const [vis, setVis] = useState(false);
   const [scrollY, setScrollY] = useState(0);
-  const [featVis, setFeatVis] = useState([false,false,false,false,false]);
+  // featVis removed — steps use CSS animation instead of JS IntersectionObserver
   const [activeScreen, setActiveScreen] = useState(0);
   const carouselRef = useRef(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -26,15 +26,8 @@ const Landing = () => {
     window.addEventListener("resize", r);
     return () => { window.removeEventListener("scroll", h); window.removeEventListener("resize", r); };
   }, [authChecked]);
-  useEffect(() => {
-    const obs = new IntersectionObserver(
-      (entries) => entries.forEach((e) => {
-        if (e.isIntersecting) { const i = Number(e.target.dataset.idx); setFeatVis((p) => { const n=[...p]; n[i]=true; return n; }); }
-      }), { threshold: 0.15 }
-    );
-    document.querySelectorAll("[data-feat]").forEach((el) => obs.observe(el));
-    return () => obs.disconnect();
-  }, []);
+  // IntersectionObserver removed — it ran before authChecked rendered the content,
+  // so elements were never found. Steps animate in via CSS keyframes instead.
   useEffect(() => {
     const el = carouselRef.current;
     if (!el || !isMobile) return;
@@ -239,7 +232,7 @@ const Landing = () => {
           <div style={{width:24,height:40,borderRadius:12,border:"1.5px solid "+txM,display:"flex",justifyContent:"center",paddingTop:8,margin:"0 auto"}}>
             <div style={{width:3,height:8,borderRadius:2,background:txM,animation:"scrollP 2s ease infinite"}}/>
           </div>
-          <style>{"@keyframes scrollP{0%,100%{opacity:.3;transform:translateY(0)}50%{opacity:1;transform:translateY(4px)}}"}</style>
+          <style>{"@keyframes scrollP{0%,100%{opacity:.3;transform:translateY(0)}50%{opacity:1;transform:translateY(4px)}} @keyframes featIn{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}"}</style>
         </div>
       </section>
       <section style={{padding:"40px 24px",textAlign:"center",borderTop:"1px solid "+bd,borderBottom:"1px solid "+bd}}>
@@ -264,7 +257,7 @@ const Landing = () => {
           {num:"04",title:"Auto-generate your grocery list",desc:"Your meal plan turns into a smart shopping list, organized by aisle with exact quantities. Share it with your partner before hitting the store.",detail:"A Pro feature that saves hours every week. No more forgotten ingredients.",isPro:true},
           {num:"05",title:"Track together as a household",desc:"Sync with your partner and manage nutrition for the whole household from one app. Different goals, different macros, one shared meal plan.",detail:"Coming in Pro — built for couples and families who eat together.",isPro:true},
         ].map((f,i)=>
-          <div key={i} data-feat data-idx={i} style={{display:"flex",gap:isMobile?16:32,marginBottom:isMobile?40:56,alignItems:"flex-start",opacity:featVis[i]?1:0,transform:featVis[i]?"translateY(0)":"translateY(24px)",transition:"all 0.7s cubic-bezier(0.22,1,0.36,1) "+(i*0.05)+"s"}}>
+          <div key={i} style={{display:"flex",gap:isMobile?16:32,marginBottom:isMobile?40:56,alignItems:"flex-start",animation:`featIn 0.6s cubic-bezier(0.22,1,0.36,1) ${i*0.1}s both`}}>
             <span style={{fontSize:isMobile?32:48,fontWeight:900,color:bd,fontFamily:"'DM Mono',monospace",lineHeight:1,flexShrink:0,minWidth:isMobile?44:70}}>{f.num}</span>
             <div>
               <h3 style={{fontSize:isMobile?18:22,fontWeight:700,margin:"0 0 10px",letterSpacing:"-0.01em"}}>{f.title}
