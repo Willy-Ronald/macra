@@ -3,7 +3,7 @@ import {
   supabase, signUp, signIn, signOut, getUser,
   saveProfile, getProfile,
   saveMeal, getSavedMeals,
-  logMeal, getTodayLog,
+  logMeal, getTodayLog, deleteMealLog,
   saveMealPlan, getWeekPlans,
 } from "./lib/supabase";
 
@@ -397,7 +397,7 @@ const Onboarding = ({onComplete}) => {
 };
 
 // ─── DASHBOARD ─────────────────────────────────────────────────
-const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,todayPlan=[]}) => {
+const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[]}) => {
   const m = profile?.macros || {target:2200,proteinG:180,carbG:240,fatG:70};
   // Calculate consumed from real log data
   const consumed = todayLog.reduce((a,x)=>({cal:a.cal+(x.calories||0),p:a.p+(x.protein||0),c:a.c+(x.carbs||0),f:a.f+(x.fat||0)}),{cal:0,p:0,c:0,f:0});
@@ -405,7 +405,6 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,todayPlan=[]}) => {
   const mac=[{k:"Protein",cur:consumed.p,tgt:m.proteinG,c:T.pro},{k:"Carbs",cur:consumed.c,tgt:m.carbG,c:T.carb},{k:"Fat",cur:consumed.f,tgt:m.fatG,c:T.fat}];
 
   // Build meals list from today's plan, checking which are logged
-  const loggedNames = new Set(todayLog.map(x=>(x.name||"").toLowerCase()));
   const defaultPlanMeals = [
     {type:"BREAKFAST",name:"Egg & Avocado Toast",cal:420,p:22,c:34,f:24,time:"10 min"},
     {type:"LUNCH",name:"Grilled Chicken Bowl",cal:580,p:48,c:52,f:22,time:"15 min"},
@@ -414,8 +413,8 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,todayPlan=[]}) => {
   ];
   const planMeals = todayPlan.length > 0 ? todayPlan : defaultPlanMeals;
   const meals = planMeals.map(pm => {
-    const done = loggedNames.has(pm.name.toLowerCase());
-    return { n:pm.name, cal:pm.cal, p:pm.p, c:pm.c, f:pm.f, type:pm.type, done };
+    const logEntry = todayLog.find(x=>(x.name||"").toLowerCase()===pm.name.toLowerCase());
+    return { n:pm.name, cal:pm.cal, p:pm.p, c:pm.c, f:pm.f, type:pm.type, done:!!logEntry, logId:logEntry?.id };
   });
 
   const remaining = Math.max(0, cal.tgt - cal.cur);
@@ -483,13 +482,17 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,todayPlan=[]}) => {
       <span onClick={()=>setTab("plan")} style={{fontSize:12,color:T.acc,fontWeight:500,cursor:"pointer"}}>View Plan</span>
     </div>
     {meals.map((x,i)=><Card key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,border:x.done?`1px solid ${T.bd}`:`1px dashed ${T.bd}`,background:x.done?T.sf:"transparent",cursor:"pointer"}} onClick={()=>{
-      if(!x.done && onLogMeal) onLogMeal({type:x.type||"meal",name:x.n,cal:x.cal,p:x.p||0,c:x.c||0,f:x.f||0});
+      if(x.done && x.logId && onUnlogMeal) {
+        onUnlogMeal(x.logId);
+      } else if(!x.done && onLogMeal) {
+        onLogMeal({type:x.type||"meal",name:x.n,cal:x.cal,p:x.p||0,c:x.c||0,f:x.f||0});
+      }
     }}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
         <div style={{width:7,height:7,borderRadius:"50%",background:x.done?T.ok:T.txM,boxShadow:x.done?`0 0 8px ${T.ok}40`:"none"}}/>
         <div><p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{x.n}</p><p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{x.type}</p></div>
       </div>
-      <span style={{fontSize:13,fontWeight:600,fontFamily:T.mono,color:x.done?T.tx2:T.acc}}>{x.done?x.cal:"Log →"}</span>
+      <span style={{fontSize:13,fontWeight:600,fontFamily:T.mono,color:x.done?T.tx2:T.acc}}>{x.done?`${x.cal} ✕`:"Log →"}</span>
     </Card>)}
 
     <Card style={{padding:"14px 16px",marginTop:16,background:T.accG,border:`1px solid ${T.accM}`,display:"flex",alignItems:"flex-start",gap:10}}>
@@ -809,13 +812,26 @@ const MealCreator = ({onSave,onBack}) => {
   </div>;
 };
 
+const getMealTypeByTime = () => {
+  const h = new Date().getHours();
+  if(h < 11) return "breakfast";
+  if(h < 14) return "lunch";
+  if(h < 17) return "snack";
+  return "dinner";
+};
+
 const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
   const [view,setView]=useState("main"); // main | create
   const savedRef = useRef(null);
-  const recent=[{n:"Grilled Chicken Bowl",cal:580,p:48,c:52,f:22},{n:"Protein Shake + Banana",cal:340,p:35,c:28,f:8},{n:"Egg & Avocado Toast",cal:420,p:22,c:34,f:24},{n:"Turkey & Hummus Wrap",cal:490,p:38,c:42,f:18}];
+  const [loggedId,setLoggedId]=useState(null); // tracks which item just got logged for feedback
+  const recent=[{id:"r0",n:"Grilled Chicken Bowl",cal:580,p:48,c:52,f:22},{id:"r1",n:"Protein Shake + Banana",cal:340,p:35,c:28,f:8},{id:"r2",n:"Egg & Avocado Toast",cal:420,p:22,c:34,f:24},{id:"r3",n:"Turkey & Hummus Wrap",cal:490,p:38,c:42,f:18}];
 
-  const quickLog = (item) => {
-    if(onLogMeal) onLogMeal({type:"meal",name:item.n,cal:item.cal,p:item.p||0,c:item.c||0,f:item.f||0});
+  const quickLog = (item, feedbackId) => {
+    if(!onLogMeal) return;
+    const type = getMealTypeByTime();
+    onLogMeal({type,name:item.n||item.name,cal:item.cal||item.totals?.cal||0,p:item.p||item.totals?.p||0,c:item.c||item.totals?.c||0,f:item.f||item.totals?.f||0});
+    setLoggedId(feedbackId);
+    setTimeout(()=>setLoggedId(null),1200);
   };
 
   if(view==="create") return <MealCreator onBack={()=>setView("main")} onSave={(meal)=>{if(onSaveMeal)onSaveMeal(meal);setView("main")}}/>;
@@ -836,32 +852,43 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
     </div>
     <Lbl>Frequently Logged</Lbl>
     <div style={{marginTop:10}}>
-      {recent.map((m,i)=><Card key={i} onClick={()=>quickLog(m)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,cursor:"pointer"}}>
-        <div><p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{m.n}</p><p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{m.cal} cal</p></div>
-        <div style={{width:30,height:30,borderRadius:"50%",background:T.accM,display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-        </div>
-      </Card>)}
+      {recent.map((m)=>{
+        const isLogged = loggedId===m.id;
+        return <Card key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,cursor:"pointer"}}>
+          <div><p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{m.n}</p><p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{m.cal} cal</p></div>
+          <div onClick={(e)=>{e.stopPropagation();quickLog(m,m.id)}} style={{width:30,height:30,borderRadius:"50%",background:isLogged?T.ok:T.accM,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.3s ease",cursor:"pointer"}}>
+            {isLogged
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>}
+          </div>
+        </Card>;
+      })}
     </div>
     <div ref={savedRef} style={{marginTop:20}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
         <Lbl>My Saved Meals ({savedMeals.length})</Lbl>
         <span onClick={()=>setView("create")} style={{fontSize:11,color:T.acc,fontWeight:500,cursor:"pointer"}}>+ Create New</span>
       </div>
-      {savedMeals.map((m,i)=><Card key={i} onClick={()=>{if(onLogMeal)onLogMeal({type:"meal",name:m.name,cal:m.totals.cal,p:m.totals.p,c:m.totals.c,f:m.totals.f})}} style={{padding:"14px 16px",marginBottom:6,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div>
-          <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{m.name}</p>
-          <div style={{display:"flex",gap:10,marginTop:4}}>
-            {[{v:m.totals.cal,l:"cal",c:T.acc},{v:m.totals.p+"g",l:"P",c:T.pro},{v:m.totals.c+"g",l:"C",c:T.carb},{v:m.totals.f+"g",l:"F",c:T.fat}].map(x=>
-              <span key={x.l} style={{fontSize:11,fontFamily:T.mono,color:x.c}}>{x.v}<span style={{color:T.txM,fontSize:9}}> {x.l}</span></span>
-            )}
+      {savedMeals.map((m,i)=>{
+        const feedbackKey = "saved-"+i;
+        const isLogged = loggedId===feedbackKey;
+        return <Card key={i} style={{padding:"14px 16px",marginBottom:6,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{m.name}</p>
+            <div style={{display:"flex",gap:10,marginTop:4}}>
+              {[{v:m.totals.cal,l:"cal",c:T.acc},{v:m.totals.p+"g",l:"P",c:T.pro},{v:m.totals.c+"g",l:"C",c:T.carb},{v:m.totals.f+"g",l:"F",c:T.fat}].map(x=>
+                <span key={x.l} style={{fontSize:11,fontFamily:T.mono,color:x.c}}>{x.v}<span style={{color:T.txM,fontSize:9}}> {x.l}</span></span>
+              )}
+            </div>
+            <p style={{fontSize:10,color:T.txM,margin:"4px 0 0"}}>{m.ingredients.length} ingredient{m.ingredients.length!==1?"s":""}</p>
           </div>
-          <p style={{fontSize:10,color:T.txM,margin:"4px 0 0"}}>{m.ingredients.length} ingredient{m.ingredients.length!==1?"s":""}</p>
-        </div>
-        <div style={{width:30,height:30,borderRadius:"50%",background:T.accM,display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-        </div>
-      </Card>)}
+          <div onClick={(e)=>{e.stopPropagation();quickLog({n:m.name,cal:m.totals.cal,p:m.totals.p,c:m.totals.c,f:m.totals.f},feedbackKey)}} style={{width:30,height:30,borderRadius:"50%",background:isLogged?T.ok:T.accM,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.3s ease",cursor:"pointer"}}>
+            {isLogged
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>}
+          </div>
+        </Card>;
+      })}
       {savedMeals.length===0 && <Card style={{padding:"20px 16px",textAlign:"center"}}>
         <p style={{fontSize:13,color:T.txM,margin:0}}>No saved meals yet. Create your first custom meal to log it quickly later.</p>
       </Card>}
@@ -1174,10 +1201,18 @@ export default function App() {
     setTab("home");setPhase("auth");
   };
 
+  const refreshTodayLog = async () => {
+    if(user) { const log = await getTodayLog(user.id); setTodayLog(log); }
+  };
+
   const handleLogMeal = async (meal) => {
     if(user) await logMeal(user.id, meal);
-    const log = user ? await getTodayLog(user.id) : [];
-    setTodayLog(log);
+    await refreshTodayLog();
+  };
+
+  const handleUnlogMeal = async (logId) => {
+    if(user) await deleteMealLog(logId);
+    await refreshTodayLog();
   };
 
   const handleSaveMeal = async (meal) => {
@@ -1186,12 +1221,17 @@ export default function App() {
     setSavedMeals(meals.map(m=>({id:m.id,name:m.name,ingredients:m.ingredients||[],totals:{cal:m.total_calories,p:m.total_protein,c:m.total_carbs,f:m.total_fat}})));
   };
 
+  const switchTab = (t) => {
+    if(t==="home") refreshTodayLog();
+    setTab(t);
+  };
+
   if(phase==="splash") return <Splash onFinish={checkAuth}/>;
   if(phase==="auth") return <AuthScreen onAuth={handleAuth}/>;
   if(phase==="onboarding") return <Onboarding onComplete={handleComplete}/>;
 
   const screens = {
-    home:<Dashboard setTab={setTab} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal} todayPlan={todayPlan}/>,
+    home:<Dashboard setTab={switchTab} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal} onUnlogMeal={handleUnlogMeal} todayPlan={todayPlan}/>,
     plan:<Plan profile={profile} userId={user?.id}/>,
     log:<LogMeal savedMeals={savedMeals} onSaveMeal={handleSaveMeal} todayLog={todayLog} onLogMeal={handleLogMeal}/>,
     grocery:<Grocery isPro={isPro} setIsPro={setIsPro}/>,
@@ -1209,14 +1249,14 @@ export default function App() {
     </div>
     <div style={{paddingBottom:88,overflowY:"auto"}}>{screens[tab]}</div>
 
-    {tab==="home"&&<button onClick={()=>setTab("log")} style={{position:"fixed",bottom:86,right:"calc(50% - 195px)",width:52,height:52,borderRadius:"50%",background:T.acc,border:"none",cursor:"pointer",boxShadow:`0 4px 20px ${T.accM}`,display:"flex",alignItems:"center",justifyContent:"center",zIndex:20}}>
+    {tab==="home"&&<button onClick={()=>switchTab("log")} style={{position:"fixed",bottom:86,right:"calc(50% - 195px)",width:52,height:52,borderRadius:"50%",background:T.acc,border:"none",cursor:"pointer",boxShadow:`0 4px 20px ${T.accM}`,display:"flex",alignItems:"center",justifyContent:"center",zIndex:20}}>
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={T.bg} strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
     </button>}
 
     <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:"rgba(9,9,11,0.95)",backdropFilter:"blur(24px)",borderTop:`1px solid ${T.bd}`,display:"flex",justifyContent:"space-around",padding:"6px 0 22px",zIndex:10}}>
       {navTabs.map(t=>{
         const a=tab===t.id;
-        return <button key={t.id} onClick={()=>setTab(t.id)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"4px 12px",transition:"all 0.2s"}}>
+        return <button key={t.id} onClick={()=>switchTab(t.id)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"4px 12px",transition:"all 0.2s"}}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?T.acc:"#8E8E93"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             {t.d.split("|").map((p,i)=><path key={i} d={p}/>)}
           </svg>

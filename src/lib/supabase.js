@@ -131,6 +131,12 @@ export async function getTodayLog(userId) {
   return data || [];
 }
 
+export async function deleteMealLog(logId) {
+  if (!supabase) return;
+  const { error } = await supabase.from("meal_log").delete().eq("id", logId);
+  return { error };
+}
+
 // ── MEAL PLANS ─────────────────────────────────────────────────
 
 export async function saveMealPlan(userId, dayOfWeek, meals) {
