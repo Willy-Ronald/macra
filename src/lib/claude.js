@@ -7,9 +7,10 @@
  */
 
 /**
- * Generate a full 7-day meal plan based on user profile
+ * Generate an A/B day meal plan based on user profile.
+ * Day A runs Mon/Wed/Fri/Sun, Day B runs Tue/Thu/Sat.
  * @param {Object} profile - User profile with macros, diet, goal
- * @returns {Object} Object with keys 0-6 (Mon-Sun), each an array of 4 meals
+ * @returns {{ A: Meal[], B: Meal[] }} Object with Day A and Day B meal arrays
  */
 export async function generateMealPlan(profile) {
   const response = await fetch("/api/generate-plan", {
@@ -18,32 +19,11 @@ export async function generateMealPlan(profile) {
     body: JSON.stringify({ profile }),
   });
 
+  const data = await response.json().catch(() => ({}));
+
   if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error || "Failed to generate meal plan");
+    throw new Error(data.error || "Failed to generate meal plan");
   }
 
-  const data = await response.json();
-  return data.weekPlan;
-}
-
-/**
- * Validate that generated meals are within acceptable macro range
- * @param {Array} meals - Array of meal objects
- * @param {Object} targets - Target macros { target, proteinG, carbG, fatG }
- * @returns {boolean}
- */
-export function validateMealPlan(meals, targets) {
-  const totals = meals.reduce(
-    (acc, m) => ({
-      cal: acc.cal + m.cal,
-      p: acc.p + m.p,
-      c: acc.c + m.c,
-      f: acc.f + m.f,
-    }),
-    { cal: 0, p: 0, c: 0, f: 0 }
-  );
-
-  const calTolerance = targets.target * 0.1; // 10% tolerance
-  return Math.abs(totals.cal - targets.target) <= calTolerance;
+  return data.abPlan;
 }

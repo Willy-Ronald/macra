@@ -5,6 +5,7 @@ import {
   saveMeal, getSavedMeals,
   logMeal, getTodayLog, getLogByDate, deleteMealLog,
   saveMealPlan, getWeekPlans,
+  getCustomGroceryList, saveCustomGroceryList,
 } from "./lib/supabase";
 import { generateMealPlan } from "./lib/claude";
 
@@ -401,6 +402,7 @@ const Onboarding = ({onComplete}) => {
 const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[],weekPlans={},userId}) => {
   const [viewDate,setViewDate]=useState(()=>new Date());
   const [historyLog,setHistoryLog]=useState(null); // null = showing today
+  const [loggingId,setLoggingId]=useState(null);
   const m = profile?.macros || {target:2200,proteinG:180,carbG:240,fatG:70};
 
   const todayStr = new Date().toISOString().split("T")[0];
@@ -416,23 +418,22 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
     (async()=>{const log = await getLogByDate(userId,viewStr);setHistoryLog(log);})();
   },[viewStr,isToday,userId]);
 
+  const refreshHistoryLog = async () => {
+    if(userId && !isToday){const log = await getLogByDate(userId,viewStr);setHistoryLog(log);}
+  };
+
   const consumed = displayLog.reduce((a,x)=>({cal:a.cal+(x.calories||0),p:a.p+(x.protein||0),c:a.c+(x.carbs||0),f:a.f+(x.fat||0)}),{cal:0,p:0,c:0,f:0});
   const cal={cur:consumed.cal,tgt:m.target};
   const mac=[{k:"Protein",cur:consumed.p,tgt:m.proteinG,c:T.pro},{k:"Carbs",cur:consumed.c,tgt:m.carbG,c:T.carb},{k:"Fat",cur:consumed.f,tgt:m.fatG,c:T.fat}];
 
-  // Get plan meals for the viewed day
+  // A/B plan lookup: A days = Mon/Wed/Fri/Sun (dowIndex even), B days = Tue/Thu/Sat (dowIndex odd)
   const viewDow = viewDate.getDay();
   const dowIndex = viewDow === 0 ? 6 : viewDow - 1; // Mon=0..Sun=6
-  const dayPlanMeals = isToday && todayPlan.length>0 ? todayPlan : (weekPlans[dowIndex]||[]);
-  const defaultPlanMeals = [
-    {type:"BREAKFAST",name:"Egg & Avocado Toast",cal:420,p:22,c:34,f:24,time:"10 min"},
-    {type:"LUNCH",name:"Grilled Chicken Bowl",cal:580,p:48,c:52,f:22,time:"15 min"},
-    {type:"SNACK",name:"Protein Shake + Banana",cal:340,p:35,c:28,f:8,time:"2 min"},
-    {type:"DINNER",name:"Salmon & Sweet Potato",cal:680,p:52,c:48,f:24,time:"30 min"},
-  ];
-  const planMeals = dayPlanMeals.length > 0 ? dayPlanMeals : defaultPlanMeals;
+  const abKey = dowIndex % 2 === 0 ? 0 : 1; // 0=Day A, 1=Day B
+  const dayPlanMeals = isToday && todayPlan.length>0 ? todayPlan : (weekPlans[abKey]||[]);
+  const planLabel = abKey === 0 ? "Day A Plan" : "Day B Plan";
   const loggedNamesLower = new Set(displayLog.map(x=>(x.name||"").toLowerCase()));
-  const unloggedPlan = planMeals.filter(pm => !loggedNamesLower.has(pm.name.toLowerCase()));
+  const unloggedPlan = dayPlanMeals.filter(pm => !loggedNamesLower.has(pm.name.toLowerCase()));
 
   const remaining = Math.max(0, cal.tgt - cal.cur);
   const proteinLeft = Math.max(0,m.proteinG - consumed.p);
@@ -457,6 +458,28 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
     d.setDate(d.getDate()+delta);
     if(d > new Date()) return; // can't go to future
     setViewDate(d);
+  };
+
+  // Log a meal — handles both today and past days
+  const handleLogForDate = async (meal) => {
+    setLoggingId(meal.name);
+    if(isToday){
+      if(onLogMeal) await onLogMeal(meal);
+    } else {
+      await logMeal(userId, meal, viewStr);
+      await refreshHistoryLog();
+    }
+    setTimeout(()=>setLoggingId(null),800);
+  };
+
+  // Unlog a meal — handles both today and past days
+  const handleUnlogForDate = async (logId) => {
+    await deleteMealLog(logId);
+    if(isToday){
+      if(onUnlogMeal) await onUnlogMeal(logId);
+    } else {
+      await refreshHistoryLog();
+    }
   };
 
   return <div style={{padding:"0 20px 24px"}}>
@@ -515,44 +538,46 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
       </div>
     </Card>
 
-    {/* ── Section A: Day's Plan (only for today) ── */}
-    {isToday && <>
+    {/* ── Day's Plan ── */}
+    {dayPlanMeals.length > 0 && <>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"24px 0 14px"}}>
-        <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>Today's Plan</h2>
+        <div>
+          <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>{isToday?"Today's Plan":"Day's Plan"}</h2>
+          <span style={{fontSize:10,color:T.txM,fontWeight:500}}>{planLabel}</span>
+        </div>
         <span onClick={()=>setTab("plan")} style={{fontSize:12,color:T.acc,fontWeight:500,cursor:"pointer"}}>View Plan</span>
       </div>
       {unloggedPlan.length === 0 && <Card style={{padding:"16px",textAlign:"center",marginBottom:6}}>
         <p style={{fontSize:13,color:T.txM,margin:0}}>All planned meals logged! Nice work.</p>
       </Card>}
-      {unloggedPlan.map((pm,i)=><Card key={"plan-"+i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,border:`1px dashed ${T.bd}`,background:"transparent",cursor:"pointer"}} onClick={()=>{
-        if(onLogMeal) onLogMeal({type:pm.type||"meal",name:pm.name,cal:pm.cal,p:pm.p||0,c:pm.c||0,f:pm.f||0});
-      }}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:7,height:7,borderRadius:"50%",background:T.txM}}/>
-          <div>
-            <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{pm.name}</p>
-            <div style={{display:"flex",gap:8,marginTop:3}}>
-              {[{v:pm.cal,l:"cal",c:T.acc},{v:(pm.p||0)+"g",l:"P",c:T.pro},{v:(pm.c||0)+"g",l:"C",c:T.carb},{v:(pm.f||0)+"g",l:"F",c:T.fat}].map(x=>
-                <span key={x.l} style={{fontSize:10,fontFamily:T.mono,color:x.c}}>{x.v}<span style={{color:T.txM,fontSize:8}}> {x.l}</span></span>
-              )}
+      {unloggedPlan.map((pm,i)=>{
+        const isLogging = loggingId === pm.name;
+        return <Card key={"plan-"+i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,border:`1px dashed ${T.bd}`,background:"transparent",cursor:"pointer"}} onClick={()=>handleLogForDate({type:pm.type||"meal",name:pm.name,cal:pm.cal,p:pm.p||0,c:pm.c||0,f:pm.f||0})}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:7,height:7,borderRadius:"50%",background:T.txM}}/>
+            <div>
+              <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{pm.name}</p>
+              <div style={{display:"flex",gap:8,marginTop:3}}>
+                {[{v:pm.cal,l:"cal",c:T.acc},{v:(pm.p||0)+"g",l:"P",c:T.pro},{v:(pm.c||0)+"g",l:"C",c:T.carb},{v:(pm.f||0)+"g",l:"F",c:T.fat}].map(x=>
+                  <span key={x.l} style={{fontSize:10,fontFamily:T.mono,color:x.c}}>{x.v}<span style={{color:T.txM,fontSize:8}}> {x.l}</span></span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-        <span style={{fontSize:13,fontWeight:600,fontFamily:T.mono,color:T.acc}}>Log →</span>
-      </Card>)}
+          <span style={{fontSize:13,fontWeight:600,fontFamily:T.mono,color:isLogging?T.ok:T.acc}}>{isLogging?"✓":"Log →"}</span>
+        </Card>;
+      })}
     </>}
 
-    {/* ── Section B: Eaten / Meals Logged ── */}
+    {/* ── Eaten / Meals Logged ── */}
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"24px 0 14px"}}>
       <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>{isToday?"Eaten Today":"Meals Logged"}</h2>
       <span style={{fontSize:12,color:T.txM,fontFamily:T.mono}}>{displayLog.length} meal{displayLog.length!==1?"s":""}</span>
     </div>
     {displayLog.length === 0 && <Card style={{padding:"16px",textAlign:"center",marginBottom:6}}>
-      <p style={{fontSize:13,color:T.txM,margin:0}}>{isToday?"Nothing logged yet. Tap a meal above or go to the Log tab.":"No meals logged on this day."}</p>
+      <p style={{fontSize:13,color:T.txM,margin:0}}>{isToday?"Nothing logged yet. Tap a meal above or go to the Log tab.":"No meals logged on this day. Tap any planned meal above to log it."}</p>
     </Card>}
-    {displayLog.map((x)=><Card key={x.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,cursor:isToday?"pointer":"default"}} onClick={()=>{
-      if(isToday && onUnlogMeal && x.id) onUnlogMeal(x.id);
-    }}>
+    {displayLog.map((x)=><Card key={x.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,cursor:"pointer"}} onClick={()=>handleUnlogForDate(x.id)}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
         <div style={{width:7,height:7,borderRadius:"50%",background:T.ok,boxShadow:`0 0 8px ${T.ok}40`}}/>
         <div>
@@ -564,9 +589,7 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
           </div>
         </div>
       </div>
-      {isToday && <div style={{display:"flex",alignItems:"center",gap:4}}>
-        <span style={{fontSize:11,color:T.txM}}>✕</span>
-      </div>}
+      <span style={{fontSize:11,color:T.txM}}>✕</span>
     </Card>)}
 
     {isToday && <Card style={{padding:"14px 16px",marginTop:16,background:T.accG,border:`1px solid ${T.accM}`,display:"flex",alignItems:"flex-start",gap:10}}>
@@ -578,76 +601,87 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
 
 // ─── PLAN (AI-POWERED) ─────────────────────────────────────────
 const Plan = ({profile,userId,onWeekPlanUpdate}) => {
-  const days=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-  const todayDow = new Date().getDay();
-  const [sel,setSel]=useState(todayDow===0?6:todayDow-1);
+  const [sel,setSel]=useState("A"); // "A" | "B"
   const [loading,setLoading]=useState(false);
   const [loadMsg,setLoadMsg]=useState("");
-  const [weekPlan,setWeekPlan]=useState({});
+  const [genError,setGenError]=useState("");
+  const [abPlan,setAbPlan]=useState({}); // { A: meals[], B: meals[] }
   const [genCount,setGenCount]=useState(0);
   const [plansLoaded,setPlansLoaded]=useState(false);
 
-  // Load saved plans from Supabase on mount
+  // Load saved plans from Supabase on mount (key 0=A, key 1=B)
   useEffect(()=>{
     if(!userId||plansLoaded) return;
     (async()=>{
       const plans = await getWeekPlans(userId);
-      if(Object.keys(plans).length>0) setWeekPlan(plans);
+      const loaded={};
+      if(plans[0]) loaded.A=plans[0];
+      if(plans[1]) loaded.B=plans[1];
+      if(Object.keys(loaded).length>0) setAbPlan(loaded);
       setPlansLoaded(true);
     })();
   },[userId,plansLoaded]);
 
   const defaultMeals=[
-    {type:"BREAKFAST",name:"Greek Yogurt Parfait",desc:"Greek yogurt, granola, berries, honey",cal:380,p:28,c:45,f:12,time:"10 min"},
-    {type:"LUNCH",name:"Southwest Chicken Wrap",desc:"Grilled chicken, black beans, corn, avocado",cal:620,p:48,c:52,f:22,time:"15 min"},
-    {type:"SNACK",name:"Protein Shake + Almonds",desc:"Whey isolate, almond milk, raw almonds",cal:310,p:35,c:12,f:14,time:"2 min"},
-    {type:"DINNER",name:"Herb-Crusted Salmon",desc:"Wild salmon, sweet potato, broccoli",cal:680,p:52,c:48,f:24,time:"30 min"},
+    {type:"BREAKFAST",name:"Greek Yogurt Parfait",desc:"Greek yogurt, granola, berries, honey",cal:380,p:28,c:45,f:12,time:"10 min",ingredients:[{name:"Greek yogurt",qty:1,unit:"cup"},{name:"granola",qty:0.5,unit:"cup"},{name:"mixed berries",qty:0.5,unit:"cup"},{name:"honey",qty:1,unit:"tbsp"}]},
+    {type:"LUNCH",name:"Southwest Chicken Wrap",desc:"Grilled chicken, black beans, corn, avocado",cal:620,p:48,c:52,f:22,time:"15 min",ingredients:[{name:"chicken breast",qty:6,unit:"oz"},{name:"black beans",qty:0.5,unit:"cup"},{name:"corn",qty:0.5,unit:"cup"},{name:"avocado",qty:0.5,unit:"piece"},{name:"whole wheat tortilla",qty:1,unit:"piece"}]},
+    {type:"SNACK",name:"Protein Shake + Almonds",desc:"Whey isolate, almond milk, raw almonds",cal:310,p:35,c:12,f:14,time:"2 min",ingredients:[{name:"whey protein",qty:1,unit:"serving"},{name:"almond milk",qty:1,unit:"cup"},{name:"raw almonds",qty:1,unit:"oz"}]},
+    {type:"DINNER",name:"Herb-Crusted Salmon",desc:"Wild salmon, sweet potato, broccoli",cal:680,p:52,c:48,f:24,time:"30 min",ingredients:[{name:"salmon fillet",qty:6,unit:"oz"},{name:"sweet potato",qty:1,unit:"piece"},{name:"broccoli",qty:2,unit:"cup"}]},
   ];
 
   const generatePlan = async () => {
     setLoading(true);
+    setGenError("");
     const messages = [
       "Analyzing your macro targets...",
-      "Building meals around your preferences...",
-      "Generating 7-day meal plan...",
+      "Building Day A meals...",
+      "Building Day B meals...",
+      "Calculating ingredients...",
       "Balancing protein distribution...",
-      "Optimizing meal variety...",
-      "Finalizing your plan..."
+      "Finalizing your A/B plan..."
     ];
     let i=0;
     setLoadMsg(messages[0]);
-    const interval = setInterval(()=>{i++;if(i<messages.length)setLoadMsg(messages[i])},1500);
+    const interval = setInterval(()=>{i++;if(i<messages.length)setLoadMsg(messages[i]);},1500);
 
     try {
-      const plan = await generateMealPlan(profile);
+      const plan = await generateMealPlan(profile); // returns { A: [...], B: [...] }
       clearInterval(interval);
-      setWeekPlan(plan);
+      setAbPlan(plan);
       setGenCount(c=>c+1);
       setLoading(false);
-      // Save all 7 days to Supabase
+      // Save: Day A → day_of_week 0, Day B → day_of_week 1
       if(userId){
-        for(let d=0;d<7;d++){
-          if(plan[d]) await saveMealPlan(userId, d, plan[d]);
-        }
+        if(plan.A) await saveMealPlan(userId, 0, plan.A);
+        if(plan.B) await saveMealPlan(userId, 1, plan.B);
       }
-      // Update parent state so Dashboard gets the new plans
-      if(onWeekPlanUpdate) onWeekPlanUpdate(plan);
+      // Update parent: { 0: A meals, 1: B meals }
+      if(onWeekPlanUpdate) onWeekPlanUpdate({0:plan.A, 1:plan.B});
     } catch(err) {
       clearInterval(interval);
       setLoading(false);
-      setLoadMsg("Generation failed — try again");
+      setGenError(err.message || "Generation failed — please try again");
       console.error("AI generation failed:", err);
     }
   };
 
-  const meals = weekPlan[sel] || defaultMeals;
+  const meals = abPlan[sel] || defaultMeals;
   const dayTotals = meals.reduce((a,m)=>({cal:a.cal+m.cal,p:a.p+m.p,c:a.c+m.c,f:a.f+m.f}),{cal:0,p:0,c:0,f:0});
 
   return <div style={{padding:"0 20px 24px"}}>
-    <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"4px 0 20px",letterSpacing:"-0.02em"}}>Meal Plan</h1>
-    <Card style={{display:"flex",padding:4,marginBottom:20}}>
-      {days.map((d,i)=><button key={d} onClick={()=>setSel(i)} style={{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:sel===i?T.acc:"transparent",color:sel===i?T.bg:T.txM,fontSize:12,fontWeight:600,cursor:"pointer",transition:"all 0.2s ease"}}>{d}</button>)}
+    <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
+    <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"4px 0 16px",letterSpacing:"-0.02em"}}>Meal Plan</h1>
+
+    {/* A/B Day tabs */}
+    <Card style={{display:"flex",padding:4,marginBottom:8}}>
+      {[{k:"A",days:"Mon · Wed · Fri · Sun"},{k:"B",days:"Tue · Thu · Sat"}].map(d=>(
+        <button key={d.k} onClick={()=>setSel(d.k)} style={{flex:1,padding:"10px 0",borderRadius:8,border:"none",background:sel===d.k?T.acc:"transparent",color:sel===d.k?T.bg:T.txM,fontSize:14,fontWeight:700,cursor:"pointer",transition:"all 0.2s ease"}}>Day {d.k}</button>
+      ))}
     </Card>
+    <p style={{fontSize:11,color:T.txM,textAlign:"center",margin:"0 0 16px",letterSpacing:"0.04em"}}>
+      {sel==="A"?"Mon · Wed · Fri · Sun":"Tue · Thu · Sat"}
+    </p>
+
     <div style={{display:"flex",justifyContent:"space-between",padding:"0 4px",marginBottom:18}}>
       {[{l:"Calories",v:dayTotals.cal.toLocaleString(),c:T.acc},{l:"Protein",v:dayTotals.p+"g",c:T.pro},{l:"Carbs",v:dayTotals.c+"g",c:T.carb},{l:"Fat",v:dayTotals.f+"g",c:T.fat}].map(s=>
         <div key={s.l} style={{textAlign:"center"}}><p style={{fontSize:17,fontWeight:700,color:s.c,margin:0,fontFamily:T.mono}}>{s.v}</p><Lbl>{s.l}</Lbl></div>
@@ -658,37 +692,48 @@ const Plan = ({profile,userId,onWeekPlanUpdate}) => {
     {loading && <Card style={{padding:"40px 20px",textAlign:"center",marginBottom:12}}>
       <div style={{marginBottom:16}}>
         <div style={{width:40,height:40,margin:"0 auto",borderRadius:"50%",border:`3px solid ${T.bd}`,borderTopColor:T.acc,animation:"spin 1s linear infinite"}}/>
-        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       </div>
       <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:"0 0 4px"}}>{loadMsg}</p>
-      <p style={{fontSize:12,color:T.txM,margin:0}}>Powered by AI</p>
+      <p style={{fontSize:12,color:T.txM,margin:0}}>Powered by Claude AI</p>
+    </Card>}
+
+    {/* Error State */}
+    {!loading && genError && <Card style={{padding:"16px 18px",marginBottom:12,border:`1px solid rgba(239,68,68,0.3)`,background:"rgba(239,68,68,0.06)"}}>
+      <p style={{fontSize:13,fontWeight:600,color:"#EF4444",margin:"0 0 4px"}}>Generation failed</p>
+      <p style={{fontSize:12,color:T.tx2,margin:"0 0 12px",lineHeight:1.5}}>{genError}</p>
+      <button onClick={generatePlan} style={{padding:"10px 20px",borderRadius:10,border:"none",background:T.acc,color:T.bg,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:T.font}}>↺ Retry</button>
     </Card>}
 
     {/* Meal Cards */}
     {!loading && meals.map((m,i)=><Card key={i+"-"+sel+"-"+genCount} style={{padding:18,marginBottom:8,animation:"fadeUp 0.4s ease both",animationDelay:`${i*0.08}s`}}>
-      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
         <span style={{fontSize:10,fontWeight:600,color:T.acc,letterSpacing:"0.14em"}}>{m.type}</span>
         <span style={{fontSize:11,color:T.txM}}>{m.time}</span>
       </div>
       <h3 style={{fontSize:16,fontWeight:600,color:T.tx,margin:"0 0 4px"}}>{m.name}</h3>
-      <p style={{fontSize:12,color:T.txM,margin:"0 0 14px"}}>{m.desc}</p>
-      <div style={{display:"flex",gap:16}}>
+      <p style={{fontSize:12,color:T.txM,margin:"0 0 12px"}}>{m.desc}</p>
+      <div style={{display:"flex",gap:16,marginBottom:m.ingredients?.length>0?12:0}}>
         {[{l:"cal",v:m.cal,c:T.acc},{l:"P",v:m.p+"g",c:T.pro},{l:"C",v:m.c+"g",c:T.carb},{l:"F",v:m.f+"g",c:T.fat}].map(x=>
           <span key={x.l} style={{fontSize:12,fontFamily:T.mono,color:T.tx}}><span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:x.c,marginRight:4,verticalAlign:"middle"}}/>{x.v} <span style={{color:T.txM,fontSize:10}}>{x.l}</span></span>
         )}
       </div>
+      {m.ingredients?.length>0 && <div style={{borderTop:`1px solid ${T.bd}`,paddingTop:10}}>
+        <span style={{fontSize:10,fontWeight:600,color:T.txM,letterSpacing:"0.08em",textTransform:"uppercase"}}>Ingredients</span>
+        <div style={{display:"flex",flexWrap:"wrap",gap:"4px 10px",marginTop:6}}>
+          {m.ingredients.map((ing,ii)=><span key={ii} style={{fontSize:11,color:T.tx2}}>{ing.qty} {ing.unit} {ing.name}</span>)}
+        </div>
+      </div>}
     </Card>)}
 
     {!loading && <>
-      {weekPlan[sel] && <Card style={{padding:"10px 14px",marginBottom:10,background:T.accG,border:`1px solid ${T.accM}`,display:"flex",alignItems:"center",gap:8}}>
+      {abPlan[sel] && <Card style={{padding:"10px 14px",marginBottom:10,background:T.accG,border:`1px solid ${T.accM}`,display:"flex",alignItems:"center",gap:8}}>
         <span style={{fontSize:13}}>✦</span>
-        <p style={{fontSize:12,color:T.tx2,margin:0}}>AI-generated plan · Tap regenerate for new options</p>
+        <p style={{fontSize:12,color:T.tx2,margin:0}}>AI-generated A/B plan · Grocery list auto-populates from ingredients</p>
       </Card>}
       <button onClick={generatePlan} style={{width:"100%",padding:15,borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",marginTop:4,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-        <span>✦</span> {weekPlan[sel] ? "Regenerate Plan" : "Generate AI Plan"}
+        <span>✦</span> {abPlan.A||abPlan.B ? "Regenerate Plan" : "Generate AI Plan"}
       </button>
-      {genCount===0 && <p style={{fontSize:11,color:T.txM,textAlign:"center",margin:"10px 0 0"}}>Macra Free: 1 AI plan per week · Go Pro for unlimited</p>}
+      {genCount===0 && <p style={{fontSize:11,color:T.txM,textAlign:"center",margin:"10px 0 0"}}>Macra Free: 1 AI plan · Go Pro for unlimited</p>}
     </>}
   </div>;
 };
@@ -1349,174 +1394,285 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
 };
 
 // ─── GROCERY ───────────────────────────────────────────────────
-const Grocery = ({isPro,setIsPro}) => {
-  const [checked,setChecked]=useState({});
-  const toggle=(id)=>setChecked(p=>({...p,[id]:!p[id]}));
+const Grocery = ({isPro,setIsPro,weekPlans={},userId}) => {
+  const [activeTab,setActiveTab]=useState("mylist"); // "planlist" | "mylist"
 
-  const categories=[
-    {name:"Protein & Meat",items:[
-      {id:"g1",name:"Chicken breast, boneless skinless",qty:"2 lbs",aisle:"Meat"},
-      {id:"g2",name:"Wild salmon fillets",qty:"1 lb",aisle:"Seafood"},
-      {id:"g3",name:"Flank steak",qty:"1 lb",aisle:"Meat"},
-      {id:"g4",name:"Large eggs",qty:"1 dozen",aisle:"Dairy"},
-      {id:"g5",name:"Deli turkey slices",qty:"8 oz",aisle:"Deli"},
-      {id:"g6",name:"Jumbo shrimp, peeled",qty:"1 lb",aisle:"Seafood"},
-    ]},
-    {name:"Dairy & Eggs",items:[
-      {id:"g7",name:"Greek yogurt, plain",qty:"32 oz",aisle:"Dairy"},
-      {id:"g8",name:"Feta cheese, crumbled",qty:"6 oz",aisle:"Dairy"},
-      {id:"g9",name:"Cottage cheese, full-fat",qty:"16 oz",aisle:"Dairy"},
-      {id:"g10",name:"Parmesan, shredded",qty:"4 oz",aisle:"Dairy"},
-      {id:"g11",name:"Cream cheese",qty:"8 oz",aisle:"Dairy"},
-      {id:"g12",name:"Sour cream",qty:"8 oz",aisle:"Dairy"},
-    ]},
-    {name:"Produce",items:[
-      {id:"g13",name:"Fresh spinach",qty:"5 oz bag",aisle:"Produce"},
-      {id:"g14",name:"Sweet potatoes",qty:"3 medium",aisle:"Produce"},
-      {id:"g15",name:"Broccoli crowns",qty:"2 heads",aisle:"Produce"},
-      {id:"g16",name:"Bell peppers, mixed",qty:"3 count",aisle:"Produce"},
-      {id:"g17",name:"Avocados",qty:"4 count",aisle:"Produce"},
-      {id:"g18",name:"Cherry tomatoes",qty:"1 pint",aisle:"Produce"},
-      {id:"g19",name:"Mixed berries",qty:"12 oz",aisle:"Produce"},
-      {id:"g20",name:"Bananas",qty:"1 bunch",aisle:"Produce"},
-      {id:"g21",name:"Lemons",qty:"3 count",aisle:"Produce"},
-      {id:"g22",name:"Green beans",qty:"12 oz",aisle:"Produce"},
-      {id:"g23",name:"Yellow onions",qty:"2 count",aisle:"Produce"},
-      {id:"g24",name:"Fresh dill & cilantro",qty:"1 bunch each",aisle:"Produce"},
-    ]},
-    {name:"Grains & Pantry",items:[
-      {id:"g25",name:"Brown rice",qty:"1 lb",aisle:"Grains"},
-      {id:"g26",name:"Whole wheat linguine",qty:"1 box",aisle:"Pasta"},
-      {id:"g27",name:"Rolled oats",qty:"18 oz",aisle:"Cereal"},
-      {id:"g28",name:"Corn tortillas",qty:"1 pack",aisle:"Bread"},
-      {id:"g29",name:"Sourdough bread",qty:"1 loaf",aisle:"Bakery"},
-      {id:"g30",name:"Granola",qty:"12 oz",aisle:"Cereal"},
-      {id:"g31",name:"Quinoa",qty:"12 oz",aisle:"Grains"},
-      {id:"g32",name:"Black beans, canned",qty:"2 cans",aisle:"Canned"},
-    ]},
-    {name:"Oils, Sauces & Condiments",items:[
-      {id:"g33",name:"Almond butter",qty:"12 oz",aisle:"Spreads"},
-      {id:"g34",name:"Hummus",qty:"10 oz",aisle:"Deli"},
-      {id:"g35",name:"Chipotle sauce",qty:"1 bottle",aisle:"Condiments"},
-      {id:"g36",name:"Peanut sauce",qty:"1 jar",aisle:"International"},
-      {id:"g37",name:"Honey",qty:"12 oz",aisle:"Baking"},
-      {id:"g38",name:"Capers",qty:"1 jar",aisle:"Condiments"},
-    ]},
-    {name:"Supplements & Snacks",items:[
-      {id:"g39",name:"Whey protein isolate",qty:"check supply",aisle:"Supplements"},
-      {id:"g40",name:"Raw almonds",qty:"8 oz",aisle:"Snacks"},
-      {id:"g41",name:"Chia seeds",qty:"6 oz",aisle:"Baking"},
-      {id:"g42",name:"Almond milk, unsweetened",qty:"½ gallon",aisle:"Dairy Alt"},
-      {id:"g43",name:"Coconut water",qty:"4-pack",aisle:"Beverages"},
-    ]},
-  ];
+  // ── My List state (FREE) ──
+  const [myItems,setMyItems]=useState([]);
+  const [myListLoaded,setMyListLoaded]=useState(false);
+  const [addForm,setAddForm]=useState({name:"",qty:"1",unit:"lbs"});
+  const [showAdd,setShowAdd]=useState(false);
+  const [editingId,setEditingId]=useState(null);
+  const [editForm,setEditForm]=useState({name:"",qty:"",unit:""});
 
-  const totalItems = categories.reduce((a,c)=>a+c.items.length,0);
-  const checkedCount = Object.values(checked).filter(Boolean).length;
+  // ── Plan List state (PRO) ──
+  const [planChecked,setPlanChecked]=useState({});
 
-  // Locked state (free tier)
-  if(!isPro) return <div style={{padding:"0 20px 24px"}}>
-    <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"4px 0 4px",letterSpacing:"-0.02em"}}>Grocery List</h1>
-    <p style={{fontSize:13,color:T.txM,margin:"0 0 20px"}}>Based on this week's meal plan</p>
-    <Card style={{padding:28,background:T.accG,border:`1px solid ${T.accM}`,textAlign:"center",marginBottom:20}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginBottom:12}}>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="1.5" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-        <span style={{fontSize:10,fontWeight:700,color:T.acc,letterSpacing:"0.12em"}}>PRO FEATURE</span>
-      </div>
-      <h3 style={{fontSize:20,fontWeight:700,color:T.tx,margin:"0 0 8px"}}>Smart Grocery Lists</h3>
-      <p style={{fontSize:13,color:T.tx2,margin:"0 0 6px",lineHeight:1.5}}>Auto-generated weekly lists organized by store aisle, with quantity optimization and one-tap sharing.</p>
-      <p style={{fontSize:12,color:T.txM,margin:"0 0 20px"}}>{totalItems} items from your current meal plan</p>
-      <button onClick={()=>setIsPro(true)} style={{padding:"14px 36px",borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",marginBottom:8}}>
-        Upgrade to Macra Pro — $4.99/mo
-      </button>
-      <p style={{fontSize:11,color:T.txM,margin:"8px 0 0"}}>Tap to preview (simulated for prototype)</p>
-    </Card>
-    <div style={{opacity:0.2,filter:"blur(3px)",pointerEvents:"none"}}>
-      {categories.slice(0,3).map(c=><div key={c.name} style={{marginBottom:14}}>
-        <span style={{fontSize:11,fontWeight:600,color:T.acc,letterSpacing:"0.1em"}}>{c.name}</span>
-        {c.items.slice(0,3).map(it=><div key={it.id} style={{padding:"11px 14px",marginTop:5,background:T.sf,borderRadius:10,border:`1px solid ${T.bd}`,display:"flex",justifyContent:"space-between"}}>
-          <div style={{height:13,width:`${50+Math.random()*30}%`,background:T.bd,borderRadius:3}}/>
-          <div style={{height:13,width:40,background:T.bd,borderRadius:3}}/>
-        </div>)}
-      </div>)}
-    </div>
-  </div>;
+  const myListUnits=["lbs","oz","dozen","gallon","liter","box","package","bunch","bag","can","jar","count"];
+  const inputStyle={width:"100%",padding:"10px 12px",borderRadius:10,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:14,fontFamily:T.font,fontWeight:500,outline:"none",boxSizing:"border-box"};
 
-  // Unlocked state (Pro)
-  return <div style={{padding:"0 20px 24px"}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:4,paddingTop:4}}>
-      <div>
-        <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"0 0 4px",letterSpacing:"-0.02em"}}>Grocery List</h1>
-        <p style={{fontSize:13,color:T.txM,margin:0}}>Generated from your weekly meal plan</p>
-      </div>
-      <div style={{display:"flex",alignItems:"center",gap:4}}>
-        <span style={{fontSize:8,fontWeight:700,color:T.bg,background:T.acc,padding:"3px 7px",borderRadius:4}}>PRO</span>
-      </div>
-    </div>
+  // Load custom list from Supabase
+  useEffect(()=>{
+    if(!userId||myListLoaded) return;
+    (async()=>{
+      const items = await getCustomGroceryList(userId);
+      setMyItems(items||[]);
+      setMyListLoaded(true);
+    })();
+  },[userId,myListLoaded]);
 
-    {/* Progress bar */}
-    <Card style={{padding:"14px 16px",marginTop:16,marginBottom:16,display:"flex",alignItems:"center",gap:12}}>
-      <div style={{flex:1}}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-          <span style={{fontSize:12,color:T.tx2,fontWeight:500}}>{checkedCount} of {totalItems} items</span>
-          <span style={{fontSize:12,color:T.acc,fontFamily:T.mono,fontWeight:600}}>{totalItems>0?Math.round((checkedCount/totalItems)*100):0}%</span>
-        </div>
-        <div style={{height:4,borderRadius:2,background:T.bd}}>
-          <div style={{height:"100%",borderRadius:2,background:T.acc,width:`${totalItems>0?(checkedCount/totalItems)*100:0}%`,transition:"width 0.3s ease"}}/>
-        </div>
-      </div>
-    </Card>
+  const persistMyList = async (items) => {
+    setMyItems(items);
+    if(userId) await saveCustomGroceryList(userId, items);
+  };
 
-    {/* Share button */}
-    <button style={{width:"100%",padding:12,borderRadius:T.r,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx2,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:T.font,marginBottom:20,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={T.tx2} strokeWidth="1.5" strokeLinecap="round"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-      Share List
+  const addMyItem = async () => {
+    if(!addForm.name.trim()) return;
+    const newItems = [...myItems, {id:Date.now().toString(),name:addForm.name.trim(),qty:addForm.qty,unit:addForm.unit,checked:false}];
+    await persistMyList(newItems);
+    setAddForm({name:"",qty:"1",unit:"lbs"});
+    setShowAdd(false);
+  };
+
+  const deleteMyItem = async (id) => {
+    await persistMyList(myItems.filter(x=>x.id!==id));
+  };
+
+  const toggleMyItem = async (id) => {
+    await persistMyList(myItems.map(x=>x.id===id?{...x,checked:!x.checked}:x));
+  };
+
+  const startEdit = (item) => {
+    setEditingId(item.id);
+    setEditForm({name:item.name,qty:item.qty,unit:item.unit});
+  };
+
+  const saveEdit = async () => {
+    if(!editForm.name.trim()) return;
+    await persistMyList(myItems.map(x=>x.id===editingId?{...x,name:editForm.name.trim(),qty:editForm.qty,unit:editForm.unit}:x));
+    setEditingId(null);
+  };
+
+  // ── Parse plan ingredients for Meal Plan List ──
+  const categorize = (name) => {
+    const n = name.toLowerCase();
+    if(/chicken|beef|turkey|salmon|tuna|shrimp|pork|steak|cod|tilapia|ground|egg|tofu|tempeh|whey|protein powder|bison|lamb|crab|lobster/.test(n)) return "Protein & Meat";
+    if(/spinach|kale|lettuce|tomato|pepper|broccoli|onion|garlic|potato|avocado|banana|apple|berr|lemon|lime|cucumber|zucchini|mushroom|carrot|celery|herb|cilantro|parsley|dill|ginger|mango|peach|pear|grape|orange|asparagus|cauliflower|arugula/.test(n)) return "Produce";
+    if(/milk|yogurt|cheese|butter|cream|cottage|feta|mozzarella|parmesan|sour cream|ricotta|cheddar/.test(n)) return "Dairy";
+    if(/rice|oat|bread|pasta|quinoa|flour|tortilla|granola|cereal|wrap|bagel|bean|lentil|chickpea|almond butter|peanut butter|oil|sauce|vinegar|soy|honey|maple|nut|seed|chia|flax|walnuts|almonds/.test(n)) return "Grains & Pantry";
+    return "Other";
+  };
+
+  const parsePlanItems = () => {
+    const dayA = weekPlans[0] || []; // A: Mon/Wed/Fri/Sun = 4×
+    const dayB = weekPlans[1] || []; // B: Tue/Thu/Sat = 3×
+    const combined = {};
+
+    const absorb = (meals, mult) => {
+      meals.forEach(meal => {
+        (meal.ingredients||[]).forEach(ing => {
+          const key = ing.name.toLowerCase().trim()+"|"+ing.unit.toLowerCase().trim();
+          if(combined[key]){
+            combined[key].qty += (parseFloat(ing.qty)||0)*mult;
+          } else {
+            combined[key] = {
+              id: key,
+              name: ing.name,
+              qty: (parseFloat(ing.qty)||0)*mult,
+              unit: ing.unit,
+              category: categorize(ing.name),
+            };
+          }
+        });
+      });
+    };
+
+    absorb(dayA, 4);
+    absorb(dayB, 3);
+
+    // Group by category
+    const catOrder = ["Protein & Meat","Produce","Dairy","Grains & Pantry","Other"];
+    const groups = {};
+    Object.values(combined).forEach(it=>{
+      if(!groups[it.category]) groups[it.category]=[];
+      groups[it.category].push(it);
+    });
+
+    return catOrder.filter(c=>groups[c]?.length>0).map(c=>({name:c,items:groups[c]}));
+  };
+
+  const hasPlan = (weekPlans[0]?.length>0)||(weekPlans[1]?.length>0);
+  const planCategories = hasPlan ? parsePlanItems() : [];
+  const allPlanItems = planCategories.flatMap(c=>c.items);
+  const planCheckedCount = Object.values(planChecked).filter(Boolean).length;
+
+  const TabBtn = ({k,label,badge}) => (
+    <button onClick={()=>setActiveTab(k)} style={{flex:1,padding:"10px 8px",borderRadius:8,border:"none",background:activeTab===k?T.acc:"transparent",color:activeTab===k?T.bg:T.txM,fontSize:13,fontWeight:700,cursor:"pointer",transition:"all 0.2s",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
+      {label}
+      {badge && <span style={{fontSize:8,fontWeight:700,color:activeTab===k?T.bg:T.acc,background:activeTab===k?"rgba(0,0,0,0.15)":T.accM,padding:"2px 5px",borderRadius:4}}>{badge}</span>}
     </button>
+  );
 
-    {/* Categories */}
-    {categories.map(cat=>{
-      const catChecked = cat.items.filter(it=>checked[it.id]).length;
-      const allDone = catChecked === cat.items.length;
-      return <div key={cat.name} style={{marginBottom:20}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:11,fontWeight:600,color:allDone?T.ok:T.acc,letterSpacing:"0.1em",textTransform:"uppercase"}}>{cat.name}</span>
-            {allDone && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.ok} strokeWidth="2" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
+  const CheckRow = ({id,name,qty,unit,done,onToggle,onEdit,onDelete,fmtQty}) => (
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",marginBottom:4,background:done?"transparent":T.sf,borderRadius:10,border:`1px solid ${done?"transparent":T.bd}`,transition:"all 0.2s",opacity:done?0.5:1}}>
+      <div onClick={onToggle} style={{width:20,height:20,borderRadius:6,flexShrink:0,border:done?`1.5px solid ${T.ok}`:`1.5px solid ${T.bd}`,background:done?T.ok:"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s",cursor:"pointer"}}>
+        {done&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={T.bg} strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
+      </div>
+      <p style={{flex:1,fontSize:14,fontWeight:500,color:T.tx,margin:0,textDecoration:done?"line-through":"none"}}>{name}</p>
+      <span style={{fontSize:12,color:T.txM,fontFamily:T.mono,flexShrink:0}}>{fmtQty||`${qty} ${unit}`}</span>
+      {onEdit && <button onClick={onEdit} style={{background:"none",border:"none",color:T.txM,cursor:"pointer",padding:"2px 4px",fontSize:13}}>✎</button>}
+      {onDelete && <button onClick={onDelete} style={{background:"none",border:"none",color:"rgba(239,68,68,0.6)",cursor:"pointer",padding:"2px 4px",fontSize:14}}>×</button>}
+    </div>
+  );
+
+  return <div style={{padding:"0 20px 24px"}}>
+    <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"4px 0 16px",letterSpacing:"-0.02em"}}>List</h1>
+
+    {/* Tabs */}
+    <Card style={{display:"flex",padding:4,marginBottom:20}}>
+      <TabBtn k="planlist" label="Meal Plan List" badge="PRO"/>
+      <TabBtn k="mylist" label="My List"/>
+    </Card>
+
+    {/* ── MEAL PLAN LIST (PRO) ── */}
+    {activeTab==="planlist" && <>
+      {!isPro ? (
+        <div>
+          <Card style={{padding:28,background:T.accG,border:`1px solid ${T.accM}`,textAlign:"center",marginBottom:20}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginBottom:12}}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="1.5" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+              <span style={{fontSize:10,fontWeight:700,color:T.acc,letterSpacing:"0.12em"}}>PRO FEATURE</span>
+            </div>
+            <h3 style={{fontSize:20,fontWeight:700,color:T.tx,margin:"0 0 8px"}}>Smart Meal Plan List</h3>
+            <p style={{fontSize:13,color:T.tx2,margin:"0 0 6px",lineHeight:1.5}}>Auto-generated from your A/B meal plan. Ingredients are multiplied by days used and organized by category.</p>
+            <p style={{fontSize:12,color:T.txM,margin:"0 0 20px"}}>Day A × 4 days · Day B × 3 days · All deduplicated</p>
+            <button onClick={()=>setIsPro(true)} style={{padding:"14px 36px",borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font,marginBottom:8}}>
+              Upgrade to Macra Pro — $4.99/mo
+            </button>
+          </Card>
+          <div style={{opacity:0.18,filter:"blur(4px)",pointerEvents:"none"}}>
+            {["Protein & Meat","Produce","Grains & Pantry"].map(c=><div key={c} style={{marginBottom:14}}>
+              <span style={{fontSize:11,fontWeight:600,color:T.acc,letterSpacing:"0.1em"}}>{c.toUpperCase()}</span>
+              {[1,2,3].map(i=><div key={i} style={{padding:"11px 14px",marginTop:5,background:T.sf,borderRadius:10,border:`1px solid ${T.bd}`,display:"flex",justifyContent:"space-between",gap:12}}>
+                <div style={{height:13,width:"60%",background:T.bd,borderRadius:3}}/>
+                <div style={{height:13,width:50,background:T.bd,borderRadius:3}}/>
+              </div>)}
+            </div>)}
           </div>
-          <span style={{fontSize:11,color:T.txM,fontFamily:T.mono}}>{catChecked}/{cat.items.length}</span>
         </div>
-        {cat.items.map(it=>{
-          const done=checked[it.id];
-          return <div key={it.id} onClick={()=>toggle(it.id)} style={{
-            display:"flex",alignItems:"center",gap:12,
-            padding:"12px 14px",marginBottom:4,
-            background:done?"transparent":T.sf,
-            borderRadius:10,border:`1px solid ${done?"transparent":T.bd}`,
-            cursor:"pointer",transition:"all 0.2s",
-            opacity:done?0.45:1
-          }}>
-            <div style={{
-              width:20,height:20,borderRadius:6,flexShrink:0,
-              border:done?`1.5px solid ${T.ok}`:`1.5px solid ${T.bd}`,
-              background:done?T.ok:"transparent",
-              display:"flex",alignItems:"center",justifyContent:"center",
-              transition:"all 0.2s"
-            }}>
-              {done&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.bg} strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
+      ) : !hasPlan ? (
+        <Card style={{padding:"32px 20px",textAlign:"center"}}>
+          <span style={{fontSize:32,display:"block",marginBottom:12}}>📋</span>
+          <h3 style={{fontSize:16,fontWeight:600,color:T.tx,margin:"0 0 8px"}}>No meal plan yet</h3>
+          <p style={{fontSize:13,color:T.txM,margin:0,lineHeight:1.5}}>Generate your AI meal plan first, then your weekly grocery list will appear here automatically.</p>
+        </Card>
+      ) : (
+        <>
+          <Card style={{padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:12}}>
+            <div style={{flex:1}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                <span style={{fontSize:12,color:T.tx2,fontWeight:500}}>{planCheckedCount} of {allPlanItems.length} items</span>
+                <span style={{fontSize:12,color:T.acc,fontFamily:T.mono,fontWeight:600}}>{allPlanItems.length>0?Math.round((planCheckedCount/allPlanItems.length)*100):0}%</span>
+              </div>
+              <div style={{height:4,borderRadius:2,background:T.bd}}>
+                <div style={{height:"100%",borderRadius:2,background:T.acc,width:`${allPlanItems.length>0?(planCheckedCount/allPlanItems.length)*100:0}%`,transition:"width 0.3s"}}/>
+              </div>
+            </div>
+          </Card>
+          <Card style={{padding:"8px 14px",marginBottom:16,background:T.accG,border:`1px solid ${T.accM}`}}>
+            <p style={{fontSize:11,color:T.tx2,margin:0}}>✦ Day A × 4 days + Day B × 3 days · quantities combined and deduplicated</p>
+          </Card>
+          {planCategories.map(cat=>{
+            const catDone = cat.items.filter(it=>planChecked[it.id]).length;
+            return <div key={cat.name} style={{marginBottom:20}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                <span style={{fontSize:11,fontWeight:600,color:catDone===cat.items.length?T.ok:T.acc,letterSpacing:"0.1em",textTransform:"uppercase"}}>{cat.name}</span>
+                <span style={{fontSize:11,color:T.txM,fontFamily:T.mono}}>{catDone}/{cat.items.length}</span>
+              </div>
+              {cat.items.map(it=>{
+                const done=!!planChecked[it.id];
+                const dispQty = Number.isInteger(it.qty) ? it.qty : Math.round(it.qty*10)/10;
+                return <CheckRow key={it.id} id={it.id} name={it.name} fmtQty={`${dispQty} ${it.unit}`} done={done}
+                  onToggle={()=>setPlanChecked(p=>({...p,[it.id]:!p[it.id]}))}
+                />;
+              })}
+            </div>;
+          })}
+          <button onClick={()=>setIsPro(false)} style={{width:"100%",padding:10,borderRadius:T.r,border:`1px dashed ${T.bd}`,background:"transparent",color:T.txM,fontSize:11,cursor:"pointer",fontFamily:T.font,marginTop:4}}>
+            ↩ Switch to Free tier (dev toggle)
+          </button>
+        </>
+      )}
+    </>}
+
+    {/* ── MY LIST (FREE) ── */}
+    {activeTab==="mylist" && <>
+      {/* Add item form */}
+      {!showAdd ? (
+        <button onClick={()=>setShowAdd(true)} style={{width:"100%",padding:14,borderRadius:T.r,border:`1px dashed ${T.bd}`,background:"transparent",color:T.acc,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:T.font,marginBottom:20,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Add Item
+        </button>
+      ) : (
+        <Card style={{padding:"16px",marginBottom:20,border:`1px solid ${T.acc}30`}}>
+          <p style={{fontSize:13,fontWeight:600,color:T.acc,margin:"0 0 12px"}}>New Item</p>
+          <Lbl>Item Name</Lbl>
+          <input value={addForm.name} onChange={e=>setAddForm(p=>({...p,name:e.target.value}))} placeholder="e.g. Chicken breast" style={{...inputStyle,marginTop:6,marginBottom:12}} onKeyDown={e=>e.key==="Enter"&&addMyItem()}/>
+          <div style={{display:"flex",gap:8,marginBottom:14}}>
+            <div style={{flex:"0 0 80px"}}>
+              <Lbl>Qty</Lbl>
+              <input value={addForm.qty} onChange={e=>setAddForm(p=>({...p,qty:e.target.value}))} type="number" style={{...inputStyle,marginTop:6,textAlign:"center"}}/>
             </div>
             <div style={{flex:1}}>
-              <p style={{fontSize:14,fontWeight:500,color:T.tx,margin:0,textDecoration:done?"line-through":"none"}}>{it.name}</p>
+              <Lbl>Unit</Lbl>
+              <select value={addForm.unit} onChange={e=>setAddForm(p=>({...p,unit:e.target.value}))} style={{...inputStyle,marginTop:6,appearance:"none"}}>
+                {myListUnits.map(u=><option key={u} value={u}>{u}</option>)}
+              </select>
             </div>
-            <span style={{fontSize:12,color:T.txM,fontFamily:T.mono,flexShrink:0}}>{it.qty}</span>
-          </div>;
-        })}
-      </div>;
-    })}
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>{setShowAdd(false);setAddForm({name:"",qty:"1",unit:"lbs"})}} style={{flex:1,padding:11,borderRadius:10,border:`1px solid ${T.bd}`,background:"transparent",color:T.tx2,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:T.font}}>Cancel</button>
+            <button onClick={addMyItem} style={{flex:1,padding:11,borderRadius:10,border:"none",background:T.acc,color:T.bg,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:T.font,opacity:addForm.name?1:0.4,pointerEvents:addForm.name?"auto":"none"}}>Add</button>
+          </div>
+        </Card>
+      )}
 
-    {/* Switch back to free for testing */}
-    <button onClick={()=>setIsPro(false)} style={{width:"100%",padding:10,borderRadius:T.r,border:`1px dashed ${T.bd}`,background:"transparent",color:T.txM,fontSize:11,cursor:"pointer",fontFamily:T.font,marginTop:8}}>
-      ↩ Switch to Free tier (prototype toggle)
-    </button>
+      {/* My items list */}
+      {myItems.length === 0 && !showAdd && <Card style={{padding:"32px 20px",textAlign:"center"}}>
+        <span style={{fontSize:32,display:"block",marginBottom:12}}>🛒</span>
+        <h3 style={{fontSize:16,fontWeight:600,color:T.tx,margin:"0 0 8px"}}>Your list is empty</h3>
+        <p style={{fontSize:13,color:T.txM,margin:0}}>Tap "Add Item" above to start building your grocery list.</p>
+      </Card>}
+
+      {/* Summary */}
+      {myItems.length > 0 && <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <Lbl>My Items ({myItems.length})</Lbl>
+        {myItems.some(x=>x.checked) && <button onClick={async()=>await persistMyList(myItems.filter(x=>!x.checked))} style={{background:"none",border:"none",color:"rgba(239,68,68,0.7)",fontSize:12,cursor:"pointer",fontFamily:T.font,fontWeight:500}}>Clear checked</button>}
+      </div>}
+
+      {myItems.map(item=>{
+        if(editingId===item.id) return (
+          <Card key={item.id} style={{padding:"14px",marginBottom:6,border:`1px solid ${T.acc}40`}}>
+            <div style={{display:"flex",gap:8,marginBottom:10}}>
+              <input value={editForm.name} onChange={e=>setEditForm(p=>({...p,name:e.target.value}))} style={{...inputStyle,flex:2}} onKeyDown={e=>e.key==="Enter"&&saveEdit()}/>
+              <input value={editForm.qty} onChange={e=>setEditForm(p=>({...p,qty:e.target.value}))} type="number" style={{...inputStyle,flex:"0 0 60px",textAlign:"center"}}/>
+              <select value={editForm.unit} onChange={e=>setEditForm(p=>({...p,unit:e.target.value}))} style={{...inputStyle,flex:"0 0 80px",appearance:"none"}}>
+                {myListUnits.map(u=><option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setEditingId(null)} style={{flex:1,padding:9,borderRadius:8,border:`1px solid ${T.bd}`,background:"transparent",color:T.tx2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:T.font}}>Cancel</button>
+              <button onClick={saveEdit} style={{flex:1,padding:9,borderRadius:8,border:"none",background:T.acc,color:T.bg,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:T.font}}>Save</button>
+            </div>
+          </Card>
+        );
+        return <CheckRow key={item.id} id={item.id} name={item.name} qty={item.qty} unit={item.unit} done={!!item.checked}
+          onToggle={()=>toggleMyItem(item.id)}
+          onEdit={()=>startEdit(item)}
+          onDelete={()=>deleteMyItem(item.id)}
+        />;
+      })}
+    </>}
   </div>;
 };
 
@@ -1602,12 +1758,13 @@ export default function App() {
         // Load today's log
         const log = await getTodayLog(u.id);
         setTodayLog(log);
-        // Load meal plans
+        // Load meal plans (A/B format: key 0=Day A, key 1=Day B)
         const plans = await getWeekPlans(u.id);
         setWeekPlans(plans);
         const todayDow = new Date().getDay();
         const dowIndex = todayDow === 0 ? 6 : todayDow - 1; // Mon=0..Sun=6
-        if(plans[dowIndex]) setTodayPlan(plans[dowIndex]);
+        const abKey = dowIndex % 2 === 0 ? 0 : 1;
+        if(plans[abKey]) setTodayPlan(plans[abKey]);
         setPhase("app");
         return;
       }
@@ -1637,7 +1794,8 @@ export default function App() {
       setWeekPlans(plans);
       const todayDow = new Date().getDay();
       const dowIndex = todayDow === 0 ? 6 : todayDow - 1;
-      if(plans[dowIndex]) setTodayPlan(plans[dowIndex]);
+      const abKey = dowIndex % 2 === 0 ? 0 : 1;
+      if(plans[abKey]) setTodayPlan(plans[abKey]);
       setPhase("app");
     } else {
       setPhase("onboarding");
@@ -1687,9 +1845,16 @@ export default function App() {
 
   const screens = {
     home:<Dashboard setTab={switchTab} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal} onUnlogMeal={handleUnlogMeal} todayPlan={todayPlan} weekPlans={weekPlans} userId={user?.id}/>,
-    plan:<Plan profile={profile} userId={user?.id} onWeekPlanUpdate={(plans)=>{setWeekPlans(plans);const dow=new Date().getDay();const idx=dow===0?6:dow-1;if(plans[idx])setTodayPlan(plans[idx]);}}/>,
+    plan:<Plan profile={profile} userId={user?.id} onWeekPlanUpdate={(plans)=>{
+      // plans = { 0: dayA[], 1: dayB[] }
+      setWeekPlans(plans);
+      const dow=new Date().getDay();
+      const idx=dow===0?6:dow-1;
+      const abKey=idx%2===0?0:1;
+      if(plans[abKey]) setTodayPlan(plans[abKey]);
+    }}/>,
     log:<LogMeal savedMeals={savedMeals} onSaveMeal={handleSaveMeal} todayLog={todayLog} onLogMeal={handleLogMeal}/>,
-    grocery:<Grocery isPro={isPro} setIsPro={setIsPro}/>,
+    grocery:<Grocery isPro={isPro} setIsPro={setIsPro} weekPlans={weekPlans} userId={user?.id}/>,
     profile:<ProfileScreen profile={profile} onSignOut={handleSignOut}/>
   };
 

@@ -105,9 +105,9 @@ export async function getSavedMeals(userId) {
 
 // ── MEAL LOG ───────────────────────────────────────────────────
 
-export async function logMeal(userId, meal) {
+export async function logMeal(userId, meal, dateStr = null) {
   if (!supabase) return;
-  const { error } = await supabase.from("meal_log").insert({
+  const row = {
     user_id: userId,
     meal_type: meal.type?.toLowerCase(),
     name: meal.name,
@@ -115,7 +115,9 @@ export async function logMeal(userId, meal) {
     protein: meal.p,
     carbs: meal.c,
     fat: meal.f,
-  });
+  };
+  if (dateStr) row.date = dateStr;
+  const { error } = await supabase.from("meal_log").insert(row);
   return { error };
 }
 
@@ -171,11 +173,33 @@ export async function getWeekPlans(userId) {
     .from("meal_plans")
     .select("*")
     .eq("user_id", userId);
-  
+
   // Convert to { dayOfWeek: meals } map
+  // With A/B format: key 0 = Day A, key 1 = Day B
   const plans = {};
   (data || []).forEach((row) => {
     plans[row.day_of_week] = row.meals;
   });
   return plans;
+}
+
+// ── CUSTOM GROCERY LIST ─────────────────────────────────────────
+
+export async function getCustomGroceryList(userId) {
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from("custom_grocery_lists")
+    .select("items")
+    .eq("user_id", userId)
+    .single();
+  return data?.items || [];
+}
+
+export async function saveCustomGroceryList(userId, items) {
+  if (!supabase) return;
+  const { error } = await supabase.from("custom_grocery_lists").upsert(
+    { user_id: userId, items: items, updated_at: new Date().toISOString() },
+    { onConflict: "user_id" }
+  );
+  return { error };
 }
