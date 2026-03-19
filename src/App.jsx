@@ -1,4 +1,11 @@
 import { useState, useEffect, useRef } from "react";
+import {
+  supabase, signUp, signIn, signOut, getUser,
+  saveProfile, getProfile,
+  saveMeal, getSavedMeals,
+  logMeal, getTodayLog,
+  saveMealPlan, getWeekPlans,
+} from "./lib/supabase";
 
 const T = {
   bg:"#09090B",sf:"#121215",bd:"#1E1E22",acc:"#C8B88A",
@@ -21,6 +28,72 @@ const Ring=({pct,r,stroke,w,children})=>{
         transform={`rotate(-90 ${s/2} ${s/2})`} style={{transition:"stroke-dashoffset 1s ease"}}/>
     </svg>
     <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>{children}</div>
+  </div>;
+};
+
+// ─── AUTH SCREEN ────────────────────────────────────────────────
+const AuthScreen = ({onAuth}) => {
+  const [mode,setMode]=useState("login"); // login | signup
+  const [email,setEmail]=useState("");
+  const [password,setPassword]=useState("");
+  const [error,setError]=useState("");
+  const [loading,setLoading]=useState(false);
+
+  const handleSubmit = async () => {
+    setError("");
+    if(!email||!password){setError("Please fill in all fields.");return;}
+    setLoading(true);
+    try {
+      if(mode==="signup"){
+        const {data,error:err}=await signUp(email,password);
+        if(err){setError(typeof err==="string"?err:err.message||"Sign up failed");setLoading(false);return;}
+        onAuth(data.user);
+      } else {
+        const {data,error:err}=await signIn(email,password);
+        if(err){setError(typeof err==="string"?err:err.message||"Login failed");setLoading(false);return;}
+        onAuth(data.user);
+      }
+    } catch(e){setError(e.message||"Something went wrong");}
+    setLoading(false);
+  };
+
+  const inputStyle={width:"100%",padding:"14px 16px",borderRadius:T.r,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,fontFamily:T.font,fontWeight:500,outline:"none",boxSizing:"border-box"};
+
+  return <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:T.bg,fontFamily:T.font,display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 20px"}}>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+    <div style={{textAlign:"center",marginBottom:40}}>
+      <div style={{width:64,height:64,borderRadius:16,background:`linear-gradient(135deg, ${T.acc}, #A89560)`,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:16,boxShadow:`0 8px 32px rgba(200,184,138,0.2)`}}>
+        <span style={{fontSize:28,fontWeight:800,color:T.bg,fontFamily:T.font}}>M</span>
+      </div>
+      <h1 style={{fontSize:32,fontWeight:800,color:T.tx,margin:"0 0 6px",letterSpacing:"-0.03em"}}>Macra</h1>
+      <p style={{fontSize:14,color:T.tx2,margin:0}}>{mode==="login"?"Welcome back.":"Create your account."}</p>
+    </div>
+
+    <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:20}}>
+      <div>
+        <Lbl>Email</Lbl>
+        <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" style={{...inputStyle,marginTop:6}}/>
+      </div>
+      <div>
+        <Lbl>Password</Lbl>
+        <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" style={{...inputStyle,marginTop:6}} onKeyDown={e=>e.key==="Enter"&&handleSubmit()}/>
+      </div>
+    </div>
+
+    {error&&<div style={{padding:"10px 14px",borderRadius:10,background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.2)",marginBottom:16}}>
+      <p style={{fontSize:13,color:"#EF4444",margin:0}}>{error}</p>
+    </div>}
+
+    <button onClick={handleSubmit} disabled={loading} style={{width:"100%",padding:16,borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:15,fontWeight:700,cursor:loading?"wait":"pointer",fontFamily:T.font,opacity:loading?0.6:1,marginBottom:16}}>
+      {loading?"Please wait...":(mode==="login"?"Sign In":"Create Account")}
+    </button>
+
+    <p style={{textAlign:"center",fontSize:13,color:T.tx2,margin:0}}>
+      {mode==="login"?"Don't have an account? ":"Already have an account? "}
+      <span onClick={()=>{setMode(mode==="login"?"signup":"login");setError("")}} style={{color:T.acc,fontWeight:600,cursor:"pointer"}}>
+        {mode==="login"?"Sign Up":"Sign In"}
+      </span>
+    </p>
   </div>;
 };
 
@@ -324,18 +397,15 @@ const Onboarding = ({onComplete}) => {
 };
 
 // ─── DASHBOARD ─────────────────────────────────────────────────
-const Dashboard = ({setTab,profile}) => {
+const Dashboard = ({setTab,profile,todayLog=[],onLogMeal}) => {
   const m = profile?.macros || {target:2200,proteinG:180,carbG:240,fatG:70};
-  const cal={cur:1340,tgt:m.target};
-  const mac=[{k:"Protein",cur:95,tgt:m.proteinG,c:T.pro},{k:"Carbs",cur:120,tgt:m.carbG,c:T.carb},{k:"Fat",cur:42,tgt:m.fatG,c:T.fat}];
-  const meals=[
-    {t:"8:30 AM",n:"Egg & Avocado Toast",cal:420,done:true},
-    {t:"12:15 PM",n:"Grilled Chicken Bowl",cal:580,done:true},
-    {t:"3:00 PM",n:"Protein Shake + Banana",cal:340,done:true},
-    {t:"6:30 PM",n:"Salmon & Sweet Potato",cal:null,done:false},
-  ];
+  // Calculate consumed from real log data
+  const consumed = todayLog.reduce((a,x)=>({cal:a.cal+(x.calories||0),p:a.p+(x.protein||0),c:a.c+(x.carbs||0),f:a.f+(x.fat||0)}),{cal:0,p:0,c:0,f:0});
+  const cal={cur:consumed.cal,tgt:m.target};
+  const mac=[{k:"Protein",cur:consumed.p,tgt:m.proteinG,c:T.pro},{k:"Carbs",cur:consumed.c,tgt:m.carbG,c:T.carb},{k:"Fat",cur:consumed.f,tgt:m.fatG,c:T.fat}];
+  const meals = todayLog.map(x=>({t:x.logged_at?new Date(x.logged_at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}):"",n:x.name,cal:x.calories,done:true}));
   const remaining = cal.tgt - cal.cur;
-  const proteinLeft = m.proteinG - 95;
+  const proteinLeft = Math.max(0,m.proteinG - consumed.p);
 
   return <div style={{padding:"0 20px 24px"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:28,paddingTop:4}}>
@@ -395,13 +465,24 @@ const Dashboard = ({setTab,profile}) => {
 };
 
 // ─── PLAN (AI-POWERED) ─────────────────────────────────────────
-const Plan = ({profile}) => {
+const Plan = ({profile,userId}) => {
   const days=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
   const [sel,setSel]=useState(2);
   const [loading,setLoading]=useState(false);
   const [loadMsg,setLoadMsg]=useState("");
   const [weekPlan,setWeekPlan]=useState({});
   const [genCount,setGenCount]=useState(0);
+  const [plansLoaded,setPlansLoaded]=useState(false);
+
+  // Load saved plans from Supabase on mount
+  useEffect(()=>{
+    if(!userId||plansLoaded) return;
+    (async()=>{
+      const plans = await getWeekPlans(userId);
+      if(Object.keys(plans).length>0) setWeekPlan(plans);
+      setPlansLoaded(true);
+    })();
+  },[userId,plansLoaded]);
 
   const defaultMeals=[
     {type:"BREAKFAST",name:"Greek Yogurt Parfait",desc:"Greek yogurt, granola, berries, honey",cal:380,p:28,c:45,f:12,time:"10 min"},
@@ -486,6 +567,8 @@ Types must be: BREAKFAST, LUNCH, SNACK, DINNER. Macros must sum close to targets
     setWeekPlan(prev=>({...prev,[sel]:plan}));
     setGenCount(c=>c+1);
     setLoading(false);
+    // Save to Supabase
+    if(userId) saveMealPlan(userId, sel, plan);
   };
 
   const meals = weekPlan[sel] || defaultMeals;
@@ -691,11 +774,15 @@ const MealCreator = ({onSave,onBack}) => {
   </div>;
 };
 
-const LogMeal = ({savedMeals,setSavedMeals}) => {
+const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
   const [view,setView]=useState("main"); // main | create
-  const recent=[{n:"Grilled Chicken Bowl",cal:580,f:"12x"},{n:"Protein Shake + Banana",cal:340,f:"28x"},{n:"Egg & Avocado Toast",cal:420,f:"9x"},{n:"Turkey & Hummus Wrap",cal:490,f:"6x"}];
+  const recent=[{n:"Grilled Chicken Bowl",cal:580,p:48,c:52,f:22},{n:"Protein Shake + Banana",cal:340,p:35,c:28,f:8},{n:"Egg & Avocado Toast",cal:420,p:22,c:34,f:24},{n:"Turkey & Hummus Wrap",cal:490,p:38,c:42,f:18}];
 
-  if(view==="create") return <MealCreator onBack={()=>setView("main")} onSave={(meal)=>{setSavedMeals(prev=>[meal,...prev]);setView("main")}}/>;
+  const quickLog = (item) => {
+    if(onLogMeal) onLogMeal({type:"meal",name:item.n,cal:item.cal,p:item.p||0,c:item.c||0,f:item.f||0});
+  };
+
+  if(view==="create") return <MealCreator onBack={()=>setView("main")} onSave={(meal)=>{if(onSaveMeal)onSaveMeal(meal);setView("main")}}/>;
 
   return <div style={{padding:"0 20px 24px"}}>
     <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"4px 0 4px",letterSpacing:"-0.02em"}}>Log Meal</h1>
@@ -713,8 +800,8 @@ const LogMeal = ({savedMeals,setSavedMeals}) => {
     </div>
     <Lbl>Frequently Logged</Lbl>
     <div style={{marginTop:10}}>
-      {recent.map((m,i)=><Card key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,cursor:"pointer"}}>
-        <div><p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{m.n}</p><p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{m.cal} cal · {m.f}</p></div>
+      {recent.map((m,i)=><Card key={i} onClick={()=>quickLog(m)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,cursor:"pointer"}}>
+        <div><p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{m.n}</p><p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{m.cal} cal</p></div>
         <div style={{width:30,height:30,borderRadius:"50%",background:T.accM,display:"flex",alignItems:"center",justifyContent:"center"}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
         </div>
@@ -725,7 +812,7 @@ const LogMeal = ({savedMeals,setSavedMeals}) => {
         <Lbl>My Saved Meals ({savedMeals.length})</Lbl>
         <span onClick={()=>setView("create")} style={{fontSize:11,color:T.acc,fontWeight:500,cursor:"pointer"}}>+ Create New</span>
       </div>
-      {savedMeals.map((m,i)=><Card key={i} style={{padding:"14px 16px",marginBottom:6,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      {savedMeals.map((m,i)=><Card key={i} onClick={()=>{if(onLogMeal)onLogMeal({type:"meal",name:m.name,cal:m.totals.cal,p:m.totals.p,c:m.totals.c,f:m.totals.f})}} style={{padding:"14px 16px",marginBottom:6,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div>
           <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{m.name}</p>
           <div style={{display:"flex",gap:10,marginTop:4}}>
@@ -919,7 +1006,7 @@ const Grocery = ({isPro,setIsPro}) => {
 };
 
 // ─── PROFILE ───────────────────────────────────────────────────
-const ProfileScreen = ({profile}) => {
+const ProfileScreen = ({profile,onSignOut}) => {
   const m = profile?.macros;
   const stats=[{l:"Goal",v:(profile?.goal||"lean bulk").replace("_"," ")},{l:"Weight",v:`${profile?.weightLbs||185} lbs`},{l:"Height",v:`${profile?.heightFt||5}'${profile?.heightIn||11}"`},{l:"Activity",v:(profile?.activity||"active").replace("_"," ")}];
   const items=[{l:"Personal Stats",d:"Age, weight, height, activity"},{l:"Dietary Preferences",d:(profile?.diet||[]).join(", ")||"None set"},{l:"Household Mode",d:"Add partner's profile",pro:true},{l:"Notifications",d:"Meal reminders, reports"},{l:"Subscription",d:"Macra Free"}];
@@ -953,6 +1040,9 @@ const ProfileScreen = ({profile}) => {
       </div>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="1.5" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
     </Card>)}
+    {onSignOut && <button onClick={onSignOut} style={{width:"100%",padding:14,borderRadius:T.r,border:`1px solid rgba(239,68,68,0.3)`,background:"rgba(239,68,68,0.08)",color:"#EF4444",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:T.font,marginTop:20}}>
+      Sign Out
+    </button>}
   </div>;
 };
 
@@ -966,23 +1056,100 @@ const navTabs=[
 ];
 
 export default function App() {
-  const [phase,setPhase] = useState("splash"); // splash | onboarding | app
+  const [phase,setPhase] = useState("splash"); // splash | auth | onboarding | app
+  const [user,setUser] = useState(null);
   const [profile,setProfile] = useState(null);
   const [tab,setTab] = useState("home");
   const [savedMeals,setSavedMeals] = useState([]);
   const [isPro,setIsPro] = useState(false);
+  const [todayLog,setTodayLog] = useState([]);
 
-  const handleComplete = (p) => { setProfile(p); setPhase("app"); };
+  // Check auth state after splash
+  const checkAuth = async () => {
+    const u = await getUser();
+    if(u){
+      setUser(u);
+      // Load profile from Supabase
+      const {data} = await getProfile(u.id);
+      if(data){
+        const p = {
+          name:data.name, sex:data.sex, age:data.age,
+          weightLbs:data.weight_lbs, heightFt:data.height_ft, heightIn:data.height_in,
+          activity:data.activity, goal:data.goal, diet:data.diet||[],
+          macros:{target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat}
+        };
+        setProfile(p);
+        // Load saved meals
+        const meals = await getSavedMeals(u.id);
+        setSavedMeals(meals.map(m=>({id:m.id,name:m.name,ingredients:m.ingredients||[],totals:{cal:m.total_calories,p:m.total_protein,c:m.total_carbs,f:m.total_fat}})));
+        // Load today's log
+        const log = await getTodayLog(u.id);
+        setTodayLog(log);
+        setPhase("app");
+        return;
+      }
+      // User exists but no profile — needs onboarding
+      setPhase("onboarding");
+      return;
+    }
+    setPhase("auth");
+  };
 
-  if(phase==="splash") return <Splash onFinish={()=>setPhase("onboarding")}/>;
+  const handleAuth = async (u) => {
+    setUser(u);
+    const {data} = await getProfile(u.id);
+    if(data){
+      const p = {
+        name:data.name, sex:data.sex, age:data.age,
+        weightLbs:data.weight_lbs, heightFt:data.height_ft, heightIn:data.height_in,
+        activity:data.activity, goal:data.goal, diet:data.diet||[],
+        macros:{target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat}
+      };
+      setProfile(p);
+      const meals = await getSavedMeals(u.id);
+      setSavedMeals(meals.map(m=>({id:m.id,name:m.name,ingredients:m.ingredients||[],totals:{cal:m.total_calories,p:m.total_protein,c:m.total_carbs,f:m.total_fat}})));
+      const log = await getTodayLog(u.id);
+      setTodayLog(log);
+      setPhase("app");
+    } else {
+      setPhase("onboarding");
+    }
+  };
+
+  const handleComplete = async (p) => {
+    setProfile(p);
+    if(user) await saveProfile(user.id, p);
+    setPhase("app");
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    setUser(null);setProfile(null);setSavedMeals([]);setTodayLog([]);
+    setTab("home");setPhase("auth");
+  };
+
+  const handleLogMeal = async (meal) => {
+    if(user) await logMeal(user.id, meal);
+    const log = user ? await getTodayLog(user.id) : [];
+    setTodayLog(log);
+  };
+
+  const handleSaveMeal = async (meal) => {
+    if(user) await saveMeal(user.id, meal);
+    const meals = user ? await getSavedMeals(user.id) : [];
+    setSavedMeals(meals.map(m=>({id:m.id,name:m.name,ingredients:m.ingredients||[],totals:{cal:m.total_calories,p:m.total_protein,c:m.total_carbs,f:m.total_fat}})));
+  };
+
+  if(phase==="splash") return <Splash onFinish={checkAuth}/>;
+  if(phase==="auth") return <AuthScreen onAuth={handleAuth}/>;
   if(phase==="onboarding") return <Onboarding onComplete={handleComplete}/>;
 
   const screens = {
-    home:<Dashboard setTab={setTab} profile={profile}/>,
-    plan:<Plan profile={profile}/>,
-    log:<LogMeal savedMeals={savedMeals} setSavedMeals={setSavedMeals}/>,
+    home:<Dashboard setTab={setTab} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal}/>,
+    plan:<Plan profile={profile} userId={user?.id}/>,
+    log:<LogMeal savedMeals={savedMeals} onSaveMeal={handleSaveMeal} todayLog={todayLog} onLogMeal={handleLogMeal}/>,
     grocery:<Grocery isPro={isPro} setIsPro={setIsPro}/>,
-    profile:<ProfileScreen profile={profile}/>
+    profile:<ProfileScreen profile={profile} onSignOut={handleSignOut}/>
   };
 
   return <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:T.bg,fontFamily:T.font,position:"relative"}}>
