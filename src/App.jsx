@@ -514,14 +514,13 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
         <div>
           <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{x.name}</p>
           <div style={{display:"flex",gap:8,marginTop:3}}>
-            {[{v:x.protein||0,l:"P",c:T.pro},{v:x.carbs||0,l:"C",c:T.carb},{v:x.fat||0,l:"F",c:T.fat}].map(z=>
-              <span key={z.l} style={{fontSize:10,fontFamily:T.mono,color:z.c}}>{z.v}g<span style={{color:T.txM,fontSize:8}}> {z.l}</span></span>
+            {[{v:x.calories||0,l:"cal",c:T.acc},{v:x.protein||0,l:"P",c:T.pro,u:"g"},{v:x.carbs||0,l:"C",c:T.carb,u:"g"},{v:x.fat||0,l:"F",c:T.fat,u:"g"}].map(z=>
+              <span key={z.l} style={{fontSize:10,fontFamily:T.mono,color:z.c}}>{z.v}{z.u||""}<span style={{color:T.txM,fontSize:8}}> {z.l}</span></span>
             )}
           </div>
         </div>
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:8}}>
-        <span style={{fontSize:13,fontWeight:600,fontFamily:T.mono,color:T.tx2}}>{x.calories}</span>
+      <div style={{display:"flex",alignItems:"center",gap:4}}>
         <span style={{fontSize:11,color:T.txM}}>✕</span>
       </div>
     </Card>)}
@@ -922,7 +921,7 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
     // 3. OpenFoodFacts (with 5s timeout)
     const offFetch = async () => {
       try {
-        const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=8`;
+        const url = `https://us.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=8&lc=en&cc=us`;
         const res = await fetch(url, {signal, timeout: 5000});
         if(signal.aborted) return;
         if(!res.ok) throw new Error();
@@ -1181,7 +1180,13 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal}) => {
       {recent.map((m)=>{
         const isLogged = loggedId===m.id;
         return <Card key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,cursor:"pointer"}}>
-          <div><p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{m.n}</p><p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{m.cal} cal</p></div>
+          <div><p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{m.n}</p>
+            <div style={{display:"flex",gap:8,marginTop:3}}>
+              {[{v:m.cal,l:"cal",c:T.acc},{v:(m.p||0)+"g",l:"P",c:T.pro},{v:(m.c||0)+"g",l:"C",c:T.carb},{v:(m.f||0)+"g",l:"F",c:T.fat}].map(x=>
+                <span key={x.l} style={{fontSize:10,fontFamily:T.mono,color:x.c}}>{x.v}<span style={{color:T.txM,fontSize:8}}> {x.l}</span></span>
+              )}
+            </div>
+          </div>
           <div onClick={(e)=>{e.stopPropagation();quickLog(m,m.id)}} style={{width:30,height:30,borderRadius:"50%",background:isLogged?T.ok:T.accM,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.3s ease",cursor:"pointer"}}>
             {isLogged
               ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
