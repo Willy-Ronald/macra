@@ -202,14 +202,23 @@ const Onboarding = ({onComplete}) => {
 
   const NumInput = ({label,value,onChange,min,max,unit}) => (
     <div style={{flex:1}}>
-      <Lbl>{label}</Lbl>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}>
-        <button onClick={()=>onChange(Math.max(min,value-1))} style={{width:40,height:40,borderRadius:10,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font}}>−</button>
-        <div style={{flex:1,textAlign:"center"}}>
-          <span style={{fontSize:28,fontWeight:700,color:T.tx,fontFamily:T.mono}}>{value}</span>
-          {unit && <span style={{fontSize:13,color:T.txM,marginLeft:4}}>{unit}</span>}
+      {label?<Lbl>{label}</Lbl>:null}
+      <div style={{display:"flex",alignItems:"center",gap:8,marginTop:label?8:0}}>
+        <button onClick={()=>onChange(Math.max(min,value-1))} style={{width:40,height:40,borderRadius:10,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font,flexShrink:0}}>−</button>
+        <div style={{flex:1,display:"flex",alignItems:"baseline",justifyContent:"center",gap:4}}>
+          {/* FIX 4: tap-to-type number input, keep +/- for fine-tuning */}
+          <input
+            type="number"
+            inputMode="numeric"
+            value={value}
+            min={min}
+            max={max}
+            onChange={e=>{const v=parseInt(e.target.value,10);if(!isNaN(v))onChange(Math.min(max,Math.max(min,v)));}}
+            style={{width:68,textAlign:"center",fontSize:28,fontWeight:700,color:T.tx,fontFamily:T.mono,background:"transparent",border:"none",outline:"none",appearance:"textfield",WebkitAppearance:"none",MozAppearance:"textfield",padding:0,margin:0}}
+          />
+          {unit&&<span style={{fontSize:13,color:T.txM}}>{unit}</span>}
         </div>
-        <button onClick={()=>onChange(Math.min(max,value+1))} style={{width:40,height:40,borderRadius:10,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font}}>+</button>
+        <button onClick={()=>onChange(Math.min(max,value+1))} style={{width:40,height:40,borderRadius:10,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font,flexShrink:0}}>+</button>
       </div>
     </div>
   );
@@ -718,7 +727,13 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate}) => {
   };
 
   const meals=abPlan[sel]||defaultMeals;
-  const dayTotals=meals.reduce((a,m)=>({cal:a.cal+m.cal,p:a.p+m.p,c:a.c+m.c,f:a.f+m.f}),{cal:0,p:0,c:0,f:0});
+  // FIX 1: use Number() to guard against string fields and never touch ingredients array
+  const dayTotals=(Array.isArray(meals)?meals:[]).reduce((a,m)=>({
+    cal:a.cal+(Number(m.cal)||0),
+    p:  a.p  +(Number(m.p)  ||0),
+    c:  a.c  +(Number(m.c)  ||0),
+    f:  a.f  +(Number(m.f)  ||0),
+  }),{cal:0,p:0,c:0,f:0});
 
   // ── Build the usage text shown below the button ──
   // Always returns a string (never null) when remaining is set, so the
@@ -1792,8 +1807,12 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId}) => {
 };
 
 // ─── PROFILE ───────────────────────────────────────────────────
-const CUISINE_LIST = ["Mediterranean","Japanese","Mexican","Indian","Middle Eastern","American Southern","Thai","Korean","Greek","West African"];
-const DIET_OPTIONS = ["None","Vegan","Vegetarian","Keto","Carnivore","Gluten-Free","Dairy-Free","Halal","Kosher","Paleo"];
+const CUISINE_LIST = [
+  "Mediterranean","Japanese","Mexican","Indian","Middle Eastern","American Southern",
+  "Thai","Korean","Greek","West African","German","Italian","French","Brazilian",
+  "Caribbean","Ethiopian","Vietnamese","Chinese","Spanish","American BBQ",
+];
+const DIET_OPTIONS = ["None","Vegan","Vegetarian","Keto","Carnivore","Gluten-Free","Dairy-Free","Halal","Kosher","Paleo","High Protein","High Fiber"];
 
 const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
   const m = profile?.macros;
@@ -1824,7 +1843,7 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
   };
 
   const dietLabel = () => {
-    const d = (profile?.diet||[]).filter(x=>x!=="No Restrictions");
+    const d = (profile?.diet||[]).filter(x=>x!=="No Restrictions"&&x!=="None");
     return d.length > 0 ? d.join(", ") : "No restrictions";
   };
 
@@ -1834,21 +1853,29 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
 
   // ── Diet sub-view ──
   if(view==="diet"){
-    const cur = draftDiet.filter(x=>x!=="No Restrictions")[0] || "None";
+    const toggleDiet = (d) => {
+      if(d==="None"){ setDraftDiet([]); return; }
+      const already = draftDiet.includes(d);
+      if(already){ setDraftDiet(draftDiet.filter(x=>x!==d)); }
+      else if(draftDiet.length < 3){ setDraftDiet([...draftDiet, d]); }
+    };
     return <div style={{padding:"0 20px 24px"}}>
       <BackBtn onBack={()=>setView(null)}/>
-      <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 6px",letterSpacing:"-0.02em"}}>Dietary Preference</h1>
-      <p style={{fontSize:13,color:T.txM,margin:"0 0 24px"}}>Select one. The AI follows this as a hard rule for every plan.</p>
+      <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 6px",letterSpacing:"-0.02em"}}>Dietary Preferences</h1>
+      <p style={{fontSize:13,color:T.txM,margin:"0 0 6px"}}>Select up to 3. The AI enforces all as hard rules.</p>
+      <p style={{fontSize:11,color:T.txM,margin:"0 0 20px"}}>{draftDiet.length===0?"None selected":`${draftDiet.length} selected`}{draftDiet.length===3?" (max)":""}</p>
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {DIET_OPTIONS.map(d=>{
-          const sel=cur===d;
-          return <button key={d} onClick={()=>setDraftDiet(d==="None"?[]:[d])} style={{padding:"14px 16px",borderRadius:T.r,border:`1.5px solid ${sel?T.acc:T.bd}`,background:sel?T.accM:"transparent",color:sel?T.acc:T.tx,fontSize:14,fontWeight:sel?600:500,cursor:"pointer",fontFamily:T.font,textAlign:"left",display:"flex",alignItems:"center",justifyContent:"space-between",transition:"all 0.15s"}}>
+          const isNone = d==="None";
+          const sel = isNone ? draftDiet.length===0 : draftDiet.includes(d);
+          const disabled = !sel && !isNone && draftDiet.length>=3;
+          return <button key={d} onClick={()=>toggleDiet(d)} disabled={disabled} style={{padding:"14px 16px",borderRadius:T.r,border:`1.5px solid ${sel?T.acc:T.bd}`,background:sel?T.accM:"transparent",color:disabled?T.txM:sel?T.acc:T.tx,fontSize:14,fontWeight:sel?600:500,cursor:disabled?"default":"pointer",fontFamily:T.font,textAlign:"left",display:"flex",alignItems:"center",justifyContent:"space-between",transition:"all 0.15s",opacity:disabled?0.4:1}}>
             {d}
-            {sel&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
+            {sel&&!isNone&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
           </button>;
         })}
       </div>
-      <SaveBtn onClick={()=>saveField({diet:draftDiet})} label="Save Preference"/>
+      <SaveBtn onClick={()=>saveField({diet:draftDiet})} label="Save Preferences"/>
     </div>;
   }
 

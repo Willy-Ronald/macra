@@ -164,29 +164,70 @@ export default async function handler(req, res) {
     const macros = profile.macros || { target: 2200, proteinG: 180, carbG: 240, fatG: 70 };
     const goal = (profile.goal || "lean_bulk").replace("_", " ");
 
-    // Part 1: seeded randomization — avoids warm-instance repeat patterns
-    const ALL_CUISINES = ["Mediterranean","Japanese","Mexican","Indian","Middle Eastern","American Southern","Thai","Korean","Greek","West African"];
-    // Combine Date.now() with a hash of userId so each user+moment gets a unique index
+    // FIX 2: expanded 20-cuisine list, per-meal assignment, no day-level theme
+    const ALL_CUISINES = [
+      "Mediterranean","Japanese","Mexican","Indian","Middle Eastern","American Southern",
+      "Thai","Korean","Greek","West African","German","Italian","French","Brazilian",
+      "Caribbean","Ethiopian","Vietnamese","Chinese","Spanish","American BBQ",
+    ];
+
+    // Seeded LCG picker — picks n unique items from arr without replacement
+    const pickUnique = (arr, n, s) => {
+      const src = [...arr]; const out = []; let seed = Math.abs(s) >>> 0;
+      for (let i = 0; i < Math.min(n, src.length); i++) {
+        seed = (seed * 1664525 + 1013904223) >>> 0;
+        out.push(...src.splice(seed % src.length, 1));
+      }
+      return out;
+    };
+
     const userHash = (userId || "").split("").reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
     const seed = Math.abs((Date.now() ^ userHash) >>> 0);
-    // Merge explicit excludedCuisines param with user's profile dislikedCuisines
+
     const dislikedCuisines = profile.dislikedCuisines || [];
     const excluded = [...new Set([...excludedCuisines, ...dislikedCuisines])];
-    const cuisinePool = ALL_CUISINES.filter(c => !excluded.includes(c));
-    const pool = cuisinePool.length > 0 ? cuisinePool : ALL_CUISINES;
-    const cuisineTheme = pool[seed % pool.length];
+    const pool = ALL_CUISINES.filter(c => !excluded.includes(c));
+    const availPool = pool.length >= 4 ? pool : ALL_CUISINES; // need at least 4 unique
 
-    // Part 3 + Bug 4: hard dietary restrictions built from profile
+    const MEAL_TYPES = ["BREAKFAST", "LUNCH", "SNACK", "DINNER"];
+    const dayCuisinesA = pickUnique(availPool, 4, seed);
+    const dayCuisinesB = pickUnique(availPool, 4, seed + 99991);
+
+    const cuisineAssignmentLines =
+      `Day A — ${MEAL_TYPES.map((t, i) => `${t}: ${dayCuisinesA[i]}`).join(" | ")}\n` +
+      `Day B — ${MEAL_TYPES.map((t, i) => `${t}: ${dayCuisinesB[i]}`).join(" | ")}`;
+
+    console.log(`[prompt] Cuisine assignments: ${cuisineAssignmentLines.replace(/\n/g, " | ")}`);
+
+    // FIX 3: full hard constraints block with per-preference rules
     const dietList = profile.diet || [];
-    const hardDietLine = dietList.length > 0
-      ? `HARD DIETARY RESTRICTIONS — these are non-negotiable and must be followed without exception: ${dietList.join(", ")}. If the user is vegan, no meat, fish, dairy, or eggs. If vegetarian, no meat or fish. If keto, under 30g net carbs total. If gluten-free, no wheat, barley, or rye in any ingredient.`
-      : "No dietary restrictions apply.";
-
-    // Part 3: disliked foods — absolute ingredient ban
     const dislikedFoods = profile.dislikedFoods || [];
-    const foodsBanLine = dislikedFoods.length > 0
-      ? `FOODS NEVER TO USE — do not include these ingredients in any meal under any circumstances: ${dislikedFoods.join(", ")}.`
-      : "";
+
+    const DIET_RULES = {
+      "Vegan":        "absolutely no meat, fish, dairy, eggs, or animal products of any kind",
+      "Vegetarian":   "no meat or fish — dairy and eggs are allowed",
+      "Keto":         "total carbs across all meals must stay under 30g net carbs for the entire day",
+      "Gluten-Free":  "no wheat, barley, rye, or any gluten-containing ingredients",
+      "Dairy-Free":   "no milk, cheese, butter, cream, yogurt, or any dairy products",
+      "Carnivore":    "meals centered exclusively on animal proteins and fats — no grains, legumes, or vegetables",
+      "Paleo":        "no grains, legumes, dairy, or processed foods",
+      "Halal":        "no pork or alcohol in any ingredient",
+      "Kosher":       "no pork or shellfish, and never mix meat and dairy in the same meal",
+      "High Protein": "every meal must prioritize lean protein sources — minimum 35g protein per meal",
+      "High Fiber":   "include high-fiber foods in every meal (legumes, vegetables, whole grains, seeds)",
+    };
+
+    const dietConstraintLines = dietList.length > 0
+      ? dietList.filter(d => DIET_RULES[d]).map(d => `  - ${d}: ${DIET_RULES[d]}`).join("\n")
+      : "  - No dietary restrictions";
+
+    const hardConstraints = [
+      "HARD CONSTRAINTS — follow all of these without exception:",
+      "DIETARY RULES:",
+      dietConstraintLines,
+      dislikedFoods.length   > 0 ? `FOODS NEVER TO USE: ${dislikedFoods.join(", ")}` : "",
+      dislikedCuisines.length > 0 ? `CUISINES TO NEVER USE: ${dislikedCuisines.join(", ")}` : "",
+    ].filter(Boolean).join("\n");
 
     const prompt = `Generate an A/B day meal plan that matches these daily macro targets:
 - Calories: ${macros.target} (within 3%)
@@ -195,15 +236,20 @@ export default async function handler(req, res) {
 - Fat: ${macros.fatG}g (within 3%)
 - Goal: ${goal}
 
-${hardDietLine}
-${foodsBanLine ? "\n" + foodsBanLine : ""}
-Cuisine theme for this generation: ${cuisineTheme}. All meals should feel cohesive with this cuisine's flavor profile, ingredients, and cooking methods. Make them feel premium and authentic, not generic.
+${hardConstraints}
 
-Every generation must be meaningfully different from a typical Western diet meal plan. Vary proteins, cooking methods, and flavor profiles. Never suggest the same meal twice across generations.
+Cuisine assignment for this generation — each meal slot has its own unique style:
+${cuisineAssignmentLines}
+
+Each meal must reflect its assigned cuisine style in ingredients, seasoning, and preparation. The goal is a realistic mixed day of eating — the way people actually eat — not a single-cuisine day. Breakfast might be American, lunch Mexican, snack Mediterranean, dinner Japanese. Make each meal feel authentic to its assigned style.
+
+Across Day A and Day B, use overlapping base ingredients where practical (same protein prepared differently, same vegetables used in different ways) so the weekly grocery list stays efficient and affordable to shop for.
+
+Never repeat the exact same meal across generations. Even if the cuisine style repeats, the specific dish must be different.
 
 Rules:
-- Day A and Day B must have completely different meals
-- Each day has exactly 4 meals: BREAKFAST, LUNCH, SNACK, DINNER
+- Day A and Day B must have completely different meals from each other
+- Each day has exactly 4 meals: BREAKFAST, LUNCH, SNACK, DINNER — in that order
 - Use realistic grocery store ingredients
 - Each meal needs an ingredients array
 
@@ -212,16 +258,16 @@ Return ONLY valid JSON. No markdown, no code blocks, no backticks, no explanatio
 The JSON must follow this exact structure:
 {
   "A": [
-    {"type":"BREAKFAST","name":"Meal name","desc":"Short ingredient list","cal":400,"p":30,"c":45,"f":12,"time":"10 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"cup"}]},
-    {"type":"LUNCH","name":"Meal name","desc":"Short ingredient list","cal":600,"p":50,"c":55,"f":18,"time":"20 min","ingredients":[{"name":"ingredient name","qty":"6","unit":"oz"}]},
-    {"type":"SNACK","name":"Meal name","desc":"Short ingredient list","cal":300,"p":25,"c":20,"f":10,"time":"5 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"serving"}]},
-    {"type":"DINNER","name":"Meal name","desc":"Short ingredient list","cal":700,"p":55,"c":50,"f":22,"time":"30 min","ingredients":[{"name":"ingredient name","qty":"8","unit":"oz"}]}
+    {"type":"BREAKFAST","name":"Meal name","desc":"Short description","cal":400,"p":30,"c":45,"f":12,"time":"10 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"cup"}]},
+    {"type":"LUNCH","name":"Meal name","desc":"Short description","cal":600,"p":50,"c":55,"f":18,"time":"20 min","ingredients":[{"name":"ingredient name","qty":"6","unit":"oz"}]},
+    {"type":"SNACK","name":"Meal name","desc":"Short description","cal":300,"p":25,"c":20,"f":10,"time":"5 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"serving"}]},
+    {"type":"DINNER","name":"Meal name","desc":"Short description","cal":700,"p":55,"c":50,"f":22,"time":"30 min","ingredients":[{"name":"ingredient name","qty":"8","unit":"oz"}]}
   ],
   "B": [
-    {"type":"BREAKFAST","name":"Different meal","desc":"Short ingredient list","cal":400,"p":30,"c":45,"f":12,"time":"10 min","ingredients":[{"name":"ingredient name","qty":"2","unit":"piece"}]},
-    {"type":"LUNCH","name":"Different meal","desc":"Short ingredient list","cal":600,"p":50,"c":55,"f":18,"time":"20 min","ingredients":[{"name":"ingredient name","qty":"0.5","unit":"cup"}]},
-    {"type":"SNACK","name":"Different meal","desc":"Short ingredient list","cal":300,"p":25,"c":20,"f":10,"time":"5 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"oz"}]},
-    {"type":"DINNER","name":"Different meal","desc":"Short ingredient list","cal":700,"p":55,"c":50,"f":22,"time":"30 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"lbs"}]}
+    {"type":"BREAKFAST","name":"Different meal","desc":"Short description","cal":400,"p":30,"c":45,"f":12,"time":"10 min","ingredients":[{"name":"ingredient name","qty":"2","unit":"piece"}]},
+    {"type":"LUNCH","name":"Different meal","desc":"Short description","cal":600,"p":50,"c":55,"f":18,"time":"20 min","ingredients":[{"name":"ingredient name","qty":"0.5","unit":"cup"}]},
+    {"type":"SNACK","name":"Different meal","desc":"Short description","cal":300,"p":25,"c":20,"f":10,"time":"5 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"oz"}]},
+    {"type":"DINNER","name":"Different meal","desc":"Short description","cal":700,"p":55,"c":50,"f":22,"time":"30 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"lbs"}]}
   ]
 }`;
 
