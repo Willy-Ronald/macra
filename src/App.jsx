@@ -674,12 +674,6 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate}) => {
     })();
   },[userId,plansLoaded,isPro]);
 
-  const defaultMeals=[
-    {type:"BREAKFAST",name:"Greek Yogurt Parfait",desc:"Greek yogurt, granola, berries, honey",cal:380,p:28,c:45,f:12,time:"10 min",ingredients:[{name:"Greek yogurt",qty:1,unit:"cup"},{name:"granola",qty:0.5,unit:"cup"},{name:"mixed berries",qty:0.5,unit:"cup"},{name:"honey",qty:1,unit:"tbsp"}]},
-    {type:"LUNCH",name:"Southwest Chicken Wrap",desc:"Grilled chicken, black beans, corn, avocado",cal:620,p:48,c:52,f:22,time:"15 min",ingredients:[{name:"chicken breast",qty:6,unit:"oz"},{name:"black beans",qty:0.5,unit:"cup"},{name:"corn",qty:0.5,unit:"cup"},{name:"avocado",qty:0.5,unit:"piece"},{name:"whole wheat tortilla",qty:1,unit:"piece"}]},
-    {type:"SNACK",name:"Protein Shake + Almonds",desc:"Whey isolate, almond milk, raw almonds",cal:310,p:35,c:12,f:14,time:"2 min",ingredients:[{name:"whey protein",qty:1,unit:"serving"},{name:"almond milk",qty:1,unit:"cup"},{name:"raw almonds",qty:1,unit:"oz"}]},
-    {type:"DINNER",name:"Herb-Crusted Salmon",desc:"Wild salmon, sweet potato, broccoli",cal:680,p:52,c:48,f:24,time:"30 min",ingredients:[{name:"salmon fillet",qty:6,unit:"oz"},{name:"sweet potato",qty:1,unit:"piece"},{name:"broccoli",qty:2,unit:"cup"}]},
-  ];
 
   const generatePlan = async () => {
     setLoading(true);
@@ -690,7 +684,9 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate}) => {
     const interval=setInterval(()=>{i++;if(i<msgs.length)setLoadMsg(msgs[i]);},1500);
 
     try {
+      console.log("[generate] calling generateMealPlan", { userId, isPro, macros: profile?.macros, diet: profile?.diet });
       const result = await generateMealPlan(profile,userId,isPro); // {abPlan,remaining}
+      console.log("[generate] success", { dayA: result.abPlan?.A?.length, dayB: result.abPlan?.B?.length, remaining: result.remaining });
       clearInterval(interval);
       const plan=result.abPlan;
       setAbPlan(plan);
@@ -722,11 +718,11 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate}) => {
       } else {
         setGenError(err.message||"Generation failed — please try again");
       }
-      console.error("AI generation failed:",err);
+      console.error("[generate] failed:", err.message, { limitReached: err.limitReached, remaining: err.remaining });
     }
   };
 
-  const meals=abPlan[sel]||defaultMeals;
+  const meals=abPlan[sel]||[];
   // FIX 1: use Number() to guard against string fields and never touch ingredients array
   const dayTotals=(Array.isArray(meals)?meals:[]).reduce((a,m)=>({
     cal:a.cal+(Number(m.cal)||0),
@@ -794,6 +790,13 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate}) => {
       <p style={{fontSize:13,fontWeight:600,color:"#EF4444",margin:"0 0 4px"}}>Generation failed</p>
       <p style={{fontSize:12,color:T.tx2,margin:"0 0 12px",lineHeight:1.5}}>{genError}</p>
       <button onClick={generatePlan} style={{padding:"10px 20px",borderRadius:10,border:"none",background:T.acc,color:T.bg,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:T.font}}>↺ Retry</button>
+    </Card>}
+
+    {/* Empty state — no plan yet */}
+    {!loading && meals.length===0 && <Card style={{padding:"32px 20px",marginBottom:12,textAlign:"center"}}>
+      <p style={{fontSize:32,margin:"0 0 12px"}}>✦</p>
+      <p style={{fontSize:15,fontWeight:600,color:T.tx,margin:"0 0 6px"}}>No plan yet</p>
+      <p style={{fontSize:13,color:T.txM,margin:0}}>Tap Generate AI Plan to build your Day {sel} meals.</p>
     </Card>}
 
     {/* Meal cards */}
@@ -2005,40 +2008,47 @@ export default function App() {
   const [weekPlans,setWeekPlans] = useState({});
 
   // Check auth state after splash
+  // Uses getSession() (reads local storage — no network round-trip, reliable on Safari ITP)
+  // instead of getUser() (makes API call that can fail on expired/missing tokens)
   const checkAuth = async () => {
-    const u = await getUser();
-    if(u){
-      setUser(u);
-      // Load profile from Supabase
-      const {data} = await getProfile(u.id);
-      if(data){
-        const p = {
-          name:data.name, sex:data.sex, age:data.age,
-          weightLbs:data.weight_lbs, heightFt:data.height_ft, heightIn:data.height_in,
-          activity:data.activity, goal:data.goal, diet:data.diet||[],
-          dislikedFoods:data.disliked_foods||[], dislikedCuisines:data.disliked_cuisines||[],
-          macros:{target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat}
-        };
-        setProfile(p);
-        // Load saved meals
-        const meals = await getSavedMeals(u.id);
-        setSavedMeals(meals.map(m=>({id:m.id,name:m.name,ingredients:m.ingredients||[],totals:{cal:m.total_calories,p:m.total_protein,c:m.total_carbs,f:m.total_fat}})));
-        // Load today's log
-        const log = await getTodayLog(u.id);
-        setTodayLog(log);
-        // Load meal plans (A/B format: key 0=Day A, key 1=Day B)
-        const plans = await getWeekPlans(u.id);
-        setWeekPlans(plans);
-        const todayDow = new Date().getDay();
-        const dowIndex = todayDow === 0 ? 6 : todayDow - 1; // Mon=0..Sun=6
-        const abKey = dowIndex % 2 === 0 ? 0 : 1;
-        if(plans[abKey]) setTodayPlan(plans[abKey]);
-        setPhase("app");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const u = session?.user ?? null;
+      if(u){
+        setUser(u);
+        // Load profile from Supabase
+        const {data} = await getProfile(u.id);
+        if(data){
+          const p = {
+            name:data.name, sex:data.sex, age:data.age,
+            weightLbs:data.weight_lbs, heightFt:data.height_ft, heightIn:data.height_in,
+            activity:data.activity, goal:data.goal, diet:data.diet||[],
+            dislikedFoods:data.disliked_foods||[], dislikedCuisines:data.disliked_cuisines||[],
+            macros:{target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat}
+          };
+          setProfile(p);
+          // Load saved meals
+          const meals = await getSavedMeals(u.id);
+          setSavedMeals(meals.map(m=>({id:m.id,name:m.name,ingredients:m.ingredients||[],totals:{cal:m.total_calories,p:m.total_protein,c:m.total_carbs,f:m.total_fat}})));
+          // Load today's log
+          const log = await getTodayLog(u.id);
+          setTodayLog(log);
+          // Load meal plans (A/B format: key 0=Day A, key 1=Day B)
+          const plans = await getWeekPlans(u.id);
+          setWeekPlans(plans);
+          const todayDow = new Date().getDay();
+          const dowIndex = todayDow === 0 ? 6 : todayDow - 1; // Mon=0..Sun=6
+          const abKey = dowIndex % 2 === 0 ? 0 : 1;
+          if(plans[abKey]) setTodayPlan(plans[abKey]);
+          setPhase("app");
+          return;
+        }
+        // User exists but no profile — needs onboarding
+        setPhase("onboarding");
         return;
       }
-      // User exists but no profile — needs onboarding
-      setPhase("onboarding");
-      return;
+    } catch(e) {
+      console.error("[checkAuth] session check failed:", e);
     }
     setPhase("auth");
   };
@@ -2051,6 +2061,7 @@ export default function App() {
         name:data.name, sex:data.sex, age:data.age,
         weightLbs:data.weight_lbs, heightFt:data.height_ft, heightIn:data.height_in,
         activity:data.activity, goal:data.goal, diet:data.diet||[],
+        dislikedFoods:data.disliked_foods||[], dislikedCuisines:data.disliked_cuisines||[],
         macros:{target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat}
       };
       setProfile(p);
