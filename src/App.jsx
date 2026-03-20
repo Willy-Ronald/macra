@@ -619,6 +619,12 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate}) => {
   // Load saved plans + current usage on mount
   useEffect(()=>{
     if(!userId||plansLoaded) return;
+    // Bug 1: load from localStorage immediately so there's no flash of defaults
+    const cacheKey = `macra_abplan_${userId}`;
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if(cached) { const p=JSON.parse(cached); if(p.A||p.B) setAbPlan(p); }
+    } catch {}
     (async()=>{
       const [plans,usage] = await Promise.all([
         getWeekPlans(userId),
@@ -627,7 +633,11 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate}) => {
       const loaded={};
       if(plans[0]) loaded.A=plans[0];
       if(plans[1]) loaded.B=plans[1];
-      if(Object.keys(loaded).length>0) setAbPlan(loaded);
+      // Supabase is source of truth — update both state and cache
+      if(Object.keys(loaded).length>0){
+        setAbPlan(loaded);
+        try { localStorage.setItem(cacheKey, JSON.stringify(loaded)); } catch {}
+      }
       setPlansLoaded(true);
 
       // Derive remaining from live usage
@@ -671,7 +681,9 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate}) => {
       if(result.remaining) setRemaining(result.remaining);
       setGenCount(c=>c+1);
       setLoading(false);
+      // Bug 1: persist to localStorage (instant on remount) and Supabase (cross-device)
       if(userId){
+        try { localStorage.setItem(`macra_abplan_${userId}`, JSON.stringify(plan)); } catch {}
         if(plan.A) await saveMealPlan(userId,0,plan.A);
         if(plan.B) await saveMealPlan(userId,1,plan.B);
       }
@@ -694,16 +706,17 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate}) => {
   const dayTotals=meals.reduce((a,m)=>({cal:a.cal+m.cal,p:a.p+m.p,c:a.c+m.c,f:a.f+m.f}),{cal:0,p:0,c:0,f:0});
 
   // ── Build the usage text shown below the button ──
+  // Always returns a string (never null) when remaining is set, so the
+  // counter stays visible even at 0 and alongside the limit-hit banner.
   const usageLine = () => {
     if(!remaining) return null;
     if(!isPro){
-      return remaining.weekly>0
-        ? `${remaining.weekly} of ${FREE_WEEKLY} free plan remaining this week`
-        : null; // limit hit — shown separately
+      const w = remaining.weekly ?? 0;
+      return `${w} of ${FREE_WEEKLY} free plan${w===1?"":"s"} remaining this week`;
     }
     // Pro
-    const dayTxt   = `${remaining.daily} of ${PRO_DAILY} left today`;
-    const monthTxt = `${remaining.monthly} of ${PRO_MONTHLY} left this month`;
+    const dayTxt   = `${remaining.daily ?? 0} of ${PRO_DAILY} left today`;
+    const monthTxt = `${remaining.monthly ?? 0} of ${PRO_MONTHLY} left this month`;
     return `${dayTxt} · ${monthTxt}`;
   };
 

@@ -119,21 +119,35 @@ export default async function handler(req, res) {
 
     // ── Build Claude prompt ──
     const macros = profile.macros || { target: 2200, proteinG: 180, carbG: 240, fatG: 70 };
-    const diet = (profile.diet || []).join(", ") || "no restrictions";
     const goal = (profile.goal || "lean_bulk").replace("_", " ");
+
+    // Bug 3: random cuisine theme forces variation between generations
+    const cuisines = ["Mediterranean","Japanese","Mexican","Indian","Middle Eastern","American Southern","Thai","Korean","Greek","West African"];
+    const cuisineTheme = cuisines[Math.floor(Math.random() * cuisines.length)];
+
+    // Bug 4: hard dietary restrictions built from profile.diet array
+    const dietList = profile.diet || [];
+    const hardDietLine = dietList.length > 0
+      ? `HARD DIETARY RESTRICTIONS — these are non-negotiable and must be followed without exception: ${dietList.join(", ")}. If the user is vegan, no meat, fish, dairy, or eggs. If vegetarian, no meat or fish. If keto, under 30g net carbs total. If gluten-free, no wheat, barley, or rye in any ingredient.`
+      : "No dietary restrictions apply.";
 
     const prompt = `Generate an A/B day meal plan that matches these daily macro targets:
 - Calories: ${macros.target} (within 3%)
 - Protein: ${macros.proteinG}g (within 3%)
 - Carbs: ${macros.carbG}g (within 3%)
 - Fat: ${macros.fatG}g (within 3%)
-- Dietary preferences: ${diet}
 - Goal: ${goal}
+
+${hardDietLine}
+
+Cuisine theme for this generation: ${cuisineTheme}. All meals should feel cohesive with this cuisine's flavor profile, ingredients, and cooking methods. Make them feel premium and authentic, not generic.
+
+Every generation must be meaningfully different from a typical Western diet meal plan. Vary proteins, cooking methods, and flavor profiles. Never suggest the same meal twice across generations.
 
 Rules:
 - Day A and Day B must have completely different meals
 - Each day has exactly 4 meals: BREAKFAST, LUNCH, SNACK, DINNER
-- Use varied cuisines and realistic grocery store ingredients
+- Use realistic grocery store ingredients
 - Each meal needs an ingredients array
 
 Return ONLY valid JSON. No markdown, no code blocks, no backticks, no explanation. Just the raw JSON object starting with { and ending with }.
