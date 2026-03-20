@@ -16,6 +16,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { randomBytes } from "crypto";
 
 // ── Rate limit constants ────────────────────────────────────────
 const FREE_DAILY_LIMIT   = 1;   // Free: per calendar day
@@ -34,7 +35,10 @@ const startOfMonth = (d = new Date()) =>
 const sevenDaysAgo = () =>
   new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-// ── Count helper — logs and returns 0 on error instead of silently skipping ──
+// ── Count helper — returns 0 on error so DB issues don't silently block all generations ──
+// IMPORTANT: if this returns 0 due to error, rate limiting is effectively disabled.
+// That is intentional — a DB misconfiguration should surface as a generation that
+// works but doesn't log, NOT as a silent block that looks like a bug.
 async function countLogs(sb, userId, since, label) {
   const { count, error } = await sb
     .from("generation_log")
@@ -43,10 +47,12 @@ async function countLogs(sb, userId, since, label) {
     .gte("generated_at", since);
 
   if (error) {
-    console.error(`[rate-limit] SELECT ${label} FAILED — error:`, JSON.stringify(error));
-    // Return a high number so generation is blocked when the DB can't be read.
-    // This prevents the silent-failure bypass where count stays 0.
-    return 999;
+    console.error(`[rate-limit] SELECT ${label} FAILED — rate limiting bypassed for this window`);
+    console.error(`[rate-limit] Error code: ${error.code} | message: ${error.message} | hint: ${error.hint}`);
+    console.error(`[rate-limit] LIKELY CAUSE: generation_log table missing or RLS blocking service role`);
+    // Return 0 so Claude is still called — a DB error should not silently block users.
+    // The insert below will also fail and log, making the real issue visible.
+    return 0;
   }
 
   const n = count ?? 0;
@@ -181,8 +187,8 @@ export default async function handler(req, res) {
       return out;
     };
 
-    const userHash = (userId || "").split("").reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
-    const seed = Math.abs((Date.now() ^ userHash) >>> 0);
+    // Truly random seed on every invocation — no warm-instance repeat risk
+    const seed = randomBytes(4).readUInt32BE(0);
 
     const dislikedCuisines = profile.dislikedCuisines || [];
     const excluded = [...new Set([...excludedCuisines, ...dislikedCuisines])];
@@ -272,8 +278,7 @@ The JSON must follow this exact structure:
 }`;
 
     // ── Call Claude API ──
-    // Prefill the assistant turn with "{" to guarantee the response starts
-    // as a JSON object — the most reliable way to get pure JSON from Claude.
+    console.log("CALLING CLAUDE API", { model: "claude-sonnet-4-20250514", userId, timestamp: new Date().toISOString() });
     const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -291,15 +296,18 @@ The JSON must follow this exact structure:
       }),
     });
 
+    console.log("CLAUDE RESPONSE STATUS:", claudeRes.status, claudeRes.statusText);
+
     if (!claudeRes.ok) {
       const errText = await claudeRes.text();
-      console.error("Claude API error:", errText);
+      console.error("CLAUDE API ERROR — full response:", errText);
       let errMsg = "AI generation failed";
       try { errMsg = JSON.parse(errText)?.error?.message || errMsg; } catch {}
       return res.status(claudeRes.status).json({ error: errMsg });
     }
 
     const claudeData = await claudeRes.json();
+    console.log("CLAUDE RESPONSE OK — stop_reason:", claudeData.stop_reason, "| usage:", JSON.stringify(claudeData.usage));
     // Claude's reply is the continuation after the prefill "{", so prepend it back.
     const continuation = claudeData.content.map((b) => b.text || "").join("");
     const rawText = "{" + continuation;
