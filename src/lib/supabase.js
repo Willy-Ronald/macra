@@ -62,6 +62,8 @@ export async function saveProfile(userId, profile) {
     target_protein: profile.macros?.proteinG,
     target_carbs: profile.macros?.carbG,
     target_fat: profile.macros?.fatG,
+    disliked_foods: profile.dislikedFoods || [],
+    disliked_cuisines: profile.dislikedCuisines || [],
     updated_at: new Date().toISOString(),
   });
   return { error };

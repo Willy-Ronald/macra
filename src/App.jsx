@@ -1773,11 +1773,120 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId}) => {
 };
 
 // ─── PROFILE ───────────────────────────────────────────────────
-const ProfileScreen = ({profile,onSignOut}) => {
+const CUISINE_LIST = ["Mediterranean","Japanese","Mexican","Indian","Middle Eastern","American Southern","Thai","Korean","Greek","West African"];
+const DIET_OPTIONS = ["None","Vegan","Vegetarian","Keto","Carnivore","Gluten-Free","Dairy-Free","Halal","Kosher","Paleo"];
+
+const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
   const m = profile?.macros;
-  const stats=[{l:"Goal",v:(profile?.goal||"lean bulk").replace("_"," ")},{l:"Weight",v:`${profile?.weightLbs||185} lbs`},{l:"Height",v:`${profile?.heightFt||5}'${profile?.heightIn||11}"`},{l:"Activity",v:(profile?.activity||"active").replace("_"," ")}];
-  const items=[{l:"Personal Stats",d:"Age, weight, height, activity"},{l:"Dietary Preferences",d:(profile?.diet||[]).join(", ")||"None set"},{l:"Household Mode",d:"Add partner's profile",pro:true},{l:"Notifications",d:"Meal reminders, reports"},{l:"Subscription",d:"Macra Free"}];
+  const [view, setView] = useState(null); // null | "diet" | "foods" | "cuisines"
+  const [savedToast, setSavedToast] = useState(false);
+  const [draftDiet, setDraftDiet] = useState([]);
+  const [draftFoods, setDraftFoods] = useState([]);
+  const [draftCuisines, setDraftCuisines] = useState([]);
+  const [foodInput, setFoodInput] = useState("");
+
+  const stats = [{l:"Goal",v:(profile?.goal||"lean bulk").replace("_"," ")},{l:"Weight",v:`${profile?.weightLbs||185} lbs`},{l:"Height",v:`${profile?.heightFt||5}'${profile?.heightIn||11}"`},{l:"Activity",v:(profile?.activity||"active").replace("_"," ")}];
+
+  const showSaved = () => { setSavedToast(true); setTimeout(()=>setSavedToast(false),2000); };
+
+  const saveField = async (updates) => {
+    const updated = {...profile, ...updates};
+    onProfileUpdate(updated);
+    if(userId) await saveProfile(userId, updated);
+    showSaved();
+    setView(null);
+  };
+
+  const enterView = (v) => {
+    if(v==="diet") setDraftDiet(profile?.diet||[]);
+    if(v==="foods"){ setDraftFoods(profile?.dislikedFoods||[]); setFoodInput(""); }
+    if(v==="cuisines") setDraftCuisines(profile?.dislikedCuisines||[]);
+    setView(v);
+  };
+
+  const dietLabel = () => {
+    const d = (profile?.diet||[]).filter(x=>x!=="No Restrictions");
+    return d.length > 0 ? d.join(", ") : "No restrictions";
+  };
+
+  const Chevron = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="1.5" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>;
+  const BackBtn = ({onBack}) => <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:0,color:T.acc,fontSize:14,fontWeight:600,fontFamily:T.font,marginBottom:20}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>Back</button>;
+  const SaveBtn = ({onClick,label="Save"}) => <button onClick={onClick} style={{width:"100%",padding:14,borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font,marginTop:24}}>{label}</button>;
+
+  // ── Diet sub-view ──
+  if(view==="diet"){
+    const cur = draftDiet.filter(x=>x!=="No Restrictions")[0] || "None";
+    return <div style={{padding:"0 20px 24px"}}>
+      <BackBtn onBack={()=>setView(null)}/>
+      <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 6px",letterSpacing:"-0.02em"}}>Dietary Preference</h1>
+      <p style={{fontSize:13,color:T.txM,margin:"0 0 24px"}}>Select one. The AI follows this as a hard rule for every plan.</p>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {DIET_OPTIONS.map(d=>{
+          const sel=cur===d;
+          return <button key={d} onClick={()=>setDraftDiet(d==="None"?[]:[d])} style={{padding:"14px 16px",borderRadius:T.r,border:`1.5px solid ${sel?T.acc:T.bd}`,background:sel?T.accM:"transparent",color:sel?T.acc:T.tx,fontSize:14,fontWeight:sel?600:500,cursor:"pointer",fontFamily:T.font,textAlign:"left",display:"flex",alignItems:"center",justifyContent:"space-between",transition:"all 0.15s"}}>
+            {d}
+            {sel&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
+          </button>;
+        })}
+      </div>
+      <SaveBtn onClick={()=>saveField({diet:draftDiet})} label="Save Preference"/>
+    </div>;
+  }
+
+  // ── Foods sub-view ──
+  if(view==="foods"){
+    const addFood = () => {
+      const t=foodInput.trim();
+      if(!t||draftFoods.includes(t.toLowerCase())) return;
+      setDraftFoods(p=>[...p,t]);
+      setFoodInput("");
+    };
+    return <div style={{padding:"0 20px 24px"}}>
+      <BackBtn onBack={()=>setView(null)}/>
+      <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 6px",letterSpacing:"-0.02em"}}>Foods I Don't Eat</h1>
+      <p style={{fontSize:13,color:T.txM,margin:"0 0 20px"}}>The AI will never use these as ingredients in any meal.</p>
+      <div style={{display:"flex",gap:8,marginBottom:16}}>
+        <input value={foodInput} onChange={e=>setFoodInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")addFood();}} placeholder="e.g. mushrooms, cilantro…" style={{flex:1,padding:"12px 14px",borderRadius:T.r,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:14,fontFamily:T.font,outline:"none"}}/>
+        <button onClick={addFood} style={{padding:"12px 20px",borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font}}>Add</button>
+      </div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8,minHeight:40,marginBottom:24}}>
+        {draftFoods.length===0 && <p style={{fontSize:13,color:T.txM,margin:0}}>No foods excluded yet.</p>}
+        {draftFoods.map(f=><div key={f} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:20,background:T.sf,border:`1px solid ${T.bd}`}}>
+          <span style={{fontSize:13,color:T.tx}}>{f}</span>
+          <button onClick={()=>setDraftFoods(p=>p.filter(x=>x!==f))} style={{background:"none",border:"none",cursor:"pointer",color:T.txM,fontSize:15,lineHeight:1,padding:0,marginLeft:2}}>✕</button>
+        </div>)}
+      </div>
+      <SaveBtn onClick={()=>saveField({dislikedFoods:draftFoods})}/>
+    </div>;
+  }
+
+  // ── Cuisines sub-view ──
+  if(view==="cuisines"){
+    return <div style={{padding:"0 20px 24px"}}>
+      <BackBtn onBack={()=>setView(null)}/>
+      <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 6px",letterSpacing:"-0.02em"}}>Cuisines I Don't Want</h1>
+      <p style={{fontSize:13,color:T.txM,margin:"0 0 20px"}}>Tapped cuisines are excluded. The AI will skip them when picking a theme.</p>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+        {CUISINE_LIST.map(c=>{
+          const excl=draftCuisines.includes(c);
+          return <button key={c} onClick={()=>setDraftCuisines(p=>excl?p.filter(x=>x!==c):[...p,c])} style={{padding:"14px 10px",borderRadius:T.r,border:`1.5px solid ${excl?"rgba(239,68,68,0.5)":T.bd}`,background:excl?"rgba(239,68,68,0.08)":"transparent",color:excl?"#EF4444":T.tx2,fontSize:13,fontWeight:excl?600:500,cursor:"pointer",fontFamily:T.font,textAlign:"center",transition:"all 0.15s"}}>
+            {excl?"✕ ":""}{c}
+          </button>;
+        })}
+      </div>
+      <p style={{fontSize:11,color:T.txM,textAlign:"center",margin:"0 0 4px"}}>{draftCuisines.length===0?"All cuisines enabled":`${draftCuisines.length} cuisine${draftCuisines.length!==1?"s":""} excluded`}</p>
+      <SaveBtn onClick={()=>saveField({dislikedCuisines:draftCuisines})}/>
+    </div>;
+  }
+
+  // ── Main profile view ──
+  const foodsCount = (profile?.dislikedFoods||[]).length;
+  const cuisinesCount = (profile?.dislikedCuisines||[]).length;
+
   return <div style={{padding:"0 20px 24px"}}>
+    {savedToast&&<div style={{position:"fixed",top:60,left:"50%",transform:"translateX(-50%)",background:T.ok,color:T.bg,padding:"8px 22px",borderRadius:20,fontSize:13,fontWeight:700,zIndex:200,display:"flex",alignItems:"center",gap:6,boxShadow:"0 4px 20px rgba(0,0,0,0.3)"}}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.bg} strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg> Saved
+    </div>}
     <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"4px 0 20px",letterSpacing:"-0.02em"}}>Profile</h1>
     <Card style={{padding:20,marginBottom:20,display:"flex",alignItems:"center",gap:16}}>
       <div style={{width:52,height:52,borderRadius:"50%",background:T.acc,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:700,color:T.bg}}>{(profile?.name||"U")[0]}</div>
@@ -1797,19 +1906,35 @@ const ProfileScreen = ({profile,onSignOut}) => {
         )}
       </div>
     </Card>}
-    {items.map((s,i)=><Card key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,cursor:"pointer"}}>
-      <div>
-        <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{s.l}</p>
-          {s.pro&&<span style={{fontSize:8,fontWeight:700,color:T.bg,background:T.acc,padding:"2px 6px",borderRadius:4}}>PRO</span>}
+
+    <Lbl>Food Preferences</Lbl>
+    <Card onClick={()=>enterView("diet")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginTop:8,marginBottom:6,cursor:"pointer"}}>
+      <div><p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>Dietary Preference</p><p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{dietLabel()}</p></div>
+      <Chevron/>
+    </Card>
+    <Card onClick={()=>enterView("foods")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,cursor:"pointer"}}>
+      <div><p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>Foods I Don't Eat</p><p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{foodsCount>0?`${foodsCount} item${foodsCount!==1?"s":""} excluded`:"None added"}</p></div>
+      <Chevron/>
+    </Card>
+    <Card onClick={()=>enterView("cuisines")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:20,cursor:"pointer"}}>
+      <div><p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>Cuisines I Don't Want</p><p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{cuisinesCount>0?`${cuisinesCount} cuisine${cuisinesCount!==1?"s":""} excluded`:"All cuisines enabled"}</p></div>
+      <Chevron/>
+    </Card>
+
+    <Lbl>App Settings</Lbl>
+    {[{l:"Personal Stats",d:"Age, weight, height, activity"},{l:"Household Mode",d:"Add partner's profile",pro:true},{l:"Notifications",d:"Meal reminders, reports"},{l:"Subscription",d:"Macra Free"}].map((s,i)=>(
+      <Card key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginTop:8,marginBottom:6,cursor:"pointer"}}>
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{s.l}</p>
+            {s.pro&&<span style={{fontSize:8,fontWeight:700,color:T.bg,background:T.acc,padding:"2px 6px",borderRadius:4}}>PRO</span>}
+          </div>
+          <p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{s.d}</p>
         </div>
-        <p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{s.d}</p>
-      </div>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="1.5" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
-    </Card>)}
-    {onSignOut && <button onClick={onSignOut} style={{width:"100%",padding:14,borderRadius:T.r,border:`1px solid rgba(239,68,68,0.3)`,background:"rgba(239,68,68,0.08)",color:"#EF4444",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:T.font,marginTop:20}}>
-      Sign Out
-    </button>}
+        <Chevron/>
+      </Card>
+    ))}
+    {onSignOut&&<button onClick={onSignOut} style={{width:"100%",padding:14,borderRadius:T.r,border:`1px solid rgba(239,68,68,0.3)`,background:"rgba(239,68,68,0.08)",color:"#EF4444",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:T.font,marginTop:20}}>Sign Out</button>}
   </div>;
 };
 
@@ -1845,6 +1970,7 @@ export default function App() {
           name:data.name, sex:data.sex, age:data.age,
           weightLbs:data.weight_lbs, heightFt:data.height_ft, heightIn:data.height_in,
           activity:data.activity, goal:data.goal, diet:data.diet||[],
+          dislikedFoods:data.disliked_foods||[], dislikedCuisines:data.disliked_cuisines||[],
           macros:{target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat}
         };
         setProfile(p);
@@ -1951,7 +2077,7 @@ export default function App() {
     }}/>,
     log:<LogMeal savedMeals={savedMeals} onSaveMeal={handleSaveMeal} todayLog={todayLog} onLogMeal={handleLogMeal}/>,
     grocery:<Grocery isPro={isPro} setIsPro={setIsPro} weekPlans={weekPlans} userId={user?.id}/>,
-    profile:<ProfileScreen profile={profile} onSignOut={handleSignOut}/>
+    profile:<ProfileScreen profile={profile} userId={user?.id} onProfileUpdate={p=>setProfile(p)} onSignOut={handleSignOut}/>
   };
 
   return <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:T.bg,fontFamily:T.font,position:"relative"}}>

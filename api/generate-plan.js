@@ -43,7 +43,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { profile, userId, isPro } = req.body;
+    const { profile, userId, isPro, excludedCuisines = [] } = req.body;
     if (!profile) {
       return res.status(400).json({ error: "Missing profile data" });
     }
@@ -121,15 +121,29 @@ export default async function handler(req, res) {
     const macros = profile.macros || { target: 2200, proteinG: 180, carbG: 240, fatG: 70 };
     const goal = (profile.goal || "lean_bulk").replace("_", " ");
 
-    // Bug 3: random cuisine theme forces variation between generations
-    const cuisines = ["Mediterranean","Japanese","Mexican","Indian","Middle Eastern","American Southern","Thai","Korean","Greek","West African"];
-    const cuisineTheme = cuisines[Math.floor(Math.random() * cuisines.length)];
+    // Part 1: seeded randomization — avoids warm-instance repeat patterns
+    const ALL_CUISINES = ["Mediterranean","Japanese","Mexican","Indian","Middle Eastern","American Southern","Thai","Korean","Greek","West African"];
+    // Combine Date.now() with a hash of userId so each user+moment gets a unique index
+    const userHash = (userId || "").split("").reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
+    const seed = Math.abs((Date.now() ^ userHash) >>> 0);
+    // Merge explicit excludedCuisines param with user's profile dislikedCuisines
+    const dislikedCuisines = profile.dislikedCuisines || [];
+    const excluded = [...new Set([...excludedCuisines, ...dislikedCuisines])];
+    const cuisinePool = ALL_CUISINES.filter(c => !excluded.includes(c));
+    const pool = cuisinePool.length > 0 ? cuisinePool : ALL_CUISINES;
+    const cuisineTheme = pool[seed % pool.length];
 
-    // Bug 4: hard dietary restrictions built from profile.diet array
+    // Part 3 + Bug 4: hard dietary restrictions built from profile
     const dietList = profile.diet || [];
     const hardDietLine = dietList.length > 0
       ? `HARD DIETARY RESTRICTIONS — these are non-negotiable and must be followed without exception: ${dietList.join(", ")}. If the user is vegan, no meat, fish, dairy, or eggs. If vegetarian, no meat or fish. If keto, under 30g net carbs total. If gluten-free, no wheat, barley, or rye in any ingredient.`
       : "No dietary restrictions apply.";
+
+    // Part 3: disliked foods — absolute ingredient ban
+    const dislikedFoods = profile.dislikedFoods || [];
+    const foodsBanLine = dislikedFoods.length > 0
+      ? `FOODS NEVER TO USE — do not include these ingredients in any meal under any circumstances: ${dislikedFoods.join(", ")}.`
+      : "";
 
     const prompt = `Generate an A/B day meal plan that matches these daily macro targets:
 - Calories: ${macros.target} (within 3%)
@@ -139,7 +153,7 @@ export default async function handler(req, res) {
 - Goal: ${goal}
 
 ${hardDietLine}
-
+${foodsBanLine ? "\n" + foodsBanLine : ""}
 Cuisine theme for this generation: ${cuisineTheme}. All meals should feel cohesive with this cuisine's flavor profile, ingredients, and cooking methods. Make them feel premium and authentic, not generic.
 
 Every generation must be meaningfully different from a typical Western diet meal plan. Vary proteins, cooking methods, and flavor profiles. Never suggest the same meal twice across generations.
