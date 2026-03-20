@@ -7,8 +7,8 @@
  * Generates an A/B day meal plan via Claude API with per-user rate limiting.
  *
  * Rate limits:
- *   Free  → 1 generation per 7 days
- *   Pro   → 3 per day, 20 per month
+ *   Free  → 1/day · 2/week · 8/month
+ *   Pro   → 3/day · 20/month
  *
  * Required Vercel env vars (in addition to ANTHROPIC_API_KEY):
  *   SUPABASE_URL          – your Supabase project URL
@@ -17,11 +17,14 @@
 
 import { createClient } from "@supabase/supabase-js";
 
-const FREE_WEEKLY_LIMIT  = 1;   // generations per 7-day rolling window
-const PRO_DAILY_LIMIT    = 3;   // generations per calendar day
-const PRO_MONTHLY_LIMIT  = 20;  // generations per calendar month
+// ── Rate limit constants ────────────────────────────────────────
+const FREE_DAILY_LIMIT   = 1;   // Free: per calendar day
+const FREE_WEEKLY_LIMIT  = 2;   // Free: per 7-day rolling window
+const FREE_MONTHLY_LIMIT = 8;   // Free: per calendar month
+const PRO_DAILY_LIMIT    = 3;   // Pro:  per calendar day
+const PRO_MONTHLY_LIMIT  = 20;  // Pro:  per calendar month
 
-// ── helpers ────────────────────────────────────────────────────
+// ── Time window helpers ─────────────────────────────────────────
 const startOfDay = (d = new Date()) =>
   new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
 
@@ -30,6 +33,26 @@ const startOfMonth = (d = new Date()) =>
 
 const sevenDaysAgo = () =>
   new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+// ── Count helper — logs and returns 0 on error instead of silently skipping ──
+async function countLogs(sb, userId, since, label) {
+  const { count, error } = await sb
+    .from("generation_log")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .gte("generated_at", since);
+
+  if (error) {
+    console.error(`[rate-limit] SELECT ${label} FAILED — error:`, JSON.stringify(error));
+    // Return a high number so generation is blocked when the DB can't be read.
+    // This prevents the silent-failure bypass where count stays 0.
+    return 999;
+  }
+
+  const n = count ?? 0;
+  console.log(`[rate-limit] ${label} count for user ${userId}: ${n}`);
+  return n;
+}
 
 // ── main handler ───────────────────────────────────────────────
 export default async function handler(req, res) {
@@ -48,73 +71,93 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing profile data" });
     }
 
+    // ── Guard: userId is required for rate limiting ──────────────
+    if (!userId || typeof userId !== "string" || userId.trim() === "") {
+      console.error("[rate-limit] Request missing userId — rejecting");
+      return res.status(400).json({ error: "userId is required" });
+    }
+    console.log(`[rate-limit] Request from userId: ${userId} isPro: ${isPro}`);
+
     // ── Supabase service client (bypasses RLS — server-side only) ──
     const sbUrl = process.env.SUPABASE_URL;
     const sbKey = process.env.SUPABASE_SERVICE_KEY;
-    const sb = sbUrl && sbKey ? createClient(sbUrl, sbKey) : null;
+    if (!sbUrl || !sbKey) {
+      console.error("[rate-limit] SUPABASE_URL or SUPABASE_SERVICE_KEY not configured — blocking generation");
+      return res.status(500).json({ error: "Server misconfiguration — cannot enforce rate limits" });
+    }
+    const sb = createClient(sbUrl, sbKey);
 
-    // ── Rate limiting ──
-    let weeklyCount = 0, dayCount = 0, monthCount = 0;
+    // ── Rate limiting ───────────────────────────────────────────
+    let dayCount = 0, weeklyCount = 0, monthCount = 0;
 
-    if (sb && userId) {
-      if (!isPro) {
-        // Free: count generations in the last 7 days
-        const { count, error } = await sb
-          .from("generation_log")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", userId)
-          .gte("generated_at", sevenDaysAgo());
+    if (!isPro) {
+      // Free tier: check all three windows in parallel
+      [dayCount, weeklyCount, monthCount] = await Promise.all([
+        countLogs(sb, userId, startOfDay(),    "daily"),
+        countLogs(sb, userId, sevenDaysAgo(),  "weekly"),
+        countLogs(sb, userId, startOfMonth(),  "monthly"),
+      ]);
 
-        if (!error) weeklyCount = count || 0;
+      console.log(`[rate-limit] FREE check — day:${dayCount}/${FREE_DAILY_LIMIT} week:${weeklyCount}/${FREE_WEEKLY_LIMIT} month:${monthCount}/${FREE_MONTHLY_LIMIT}`);
 
-        if (weeklyCount >= FREE_WEEKLY_LIMIT) {
-          return res.status(429).json({
-            error: "Free plan allows 1 AI plan per week. Upgrade to Pro for more.",
-            limitReached: true,
-            isPro: false,
-            remaining: { weekly: 0 },
-          });
-        }
-      } else {
-        // Pro: count per day and per month in parallel
-        const [dayRes, monthRes] = await Promise.all([
-          sb.from("generation_log")
-            .select("*", { count: "exact", head: true })
-            .eq("user_id", userId)
-            .gte("generated_at", startOfDay()),
-          sb.from("generation_log")
-            .select("*", { count: "exact", head: true })
-            .eq("user_id", userId)
-            .gte("generated_at", startOfMonth()),
-        ]);
-
-        dayCount   = dayRes.count   || 0;
-        monthCount = monthRes.count || 0;
-
-        if (dayCount >= PRO_DAILY_LIMIT) {
-          return res.status(429).json({
-            error: "You've reached your daily generation limit. Your limit resets tomorrow.",
-            limitReached: true,
-            isPro: true,
-            remaining: {
-              daily: 0,
-              monthly: Math.max(0, PRO_MONTHLY_LIMIT - monthCount),
-            },
-          });
-        }
-
-        if (monthCount >= PRO_MONTHLY_LIMIT) {
-          return res.status(429).json({
-            error: "You've reached your monthly generation limit. Your limit resets next month.",
-            limitReached: true,
-            isPro: true,
-            remaining: {
-              daily: Math.max(0, PRO_DAILY_LIMIT - dayCount),
-              monthly: 0,
-            },
-          });
-        }
+      if (dayCount >= FREE_DAILY_LIMIT) {
+        console.log(`[rate-limit] BLOCKED — daily limit hit (${dayCount})`);
+        return res.status(429).json({
+          error: "You've used your free plan for today. Upgrade to Pro for more.",
+          limitReached: true,
+          isPro: false,
+          remaining: { daily: 0, weekly: Math.max(0, FREE_WEEKLY_LIMIT - weeklyCount), monthly: Math.max(0, FREE_MONTHLY_LIMIT - monthCount) },
+        });
       }
+      if (weeklyCount >= FREE_WEEKLY_LIMIT) {
+        console.log(`[rate-limit] BLOCKED — weekly limit hit (${weeklyCount})`);
+        return res.status(429).json({
+          error: "You've used your 2 free plans this week. Upgrade to Pro for more.",
+          limitReached: true,
+          isPro: false,
+          remaining: { daily: 0, weekly: 0, monthly: Math.max(0, FREE_MONTHLY_LIMIT - monthCount) },
+        });
+      }
+      if (monthCount >= FREE_MONTHLY_LIMIT) {
+        console.log(`[rate-limit] BLOCKED — monthly limit hit (${monthCount})`);
+        return res.status(429).json({
+          error: "You've used your 8 free plans this month. Upgrade to Pro for more.",
+          limitReached: true,
+          isPro: false,
+          remaining: { daily: 0, weekly: 0, monthly: 0 },
+        });
+      }
+
+      console.log(`[rate-limit] FREE — PASSED`);
+    } else {
+      // Pro tier: check day and month in parallel
+      [dayCount, monthCount] = await Promise.all([
+        countLogs(sb, userId, startOfDay(),   "daily"),
+        countLogs(sb, userId, startOfMonth(), "monthly"),
+      ]);
+
+      console.log(`[rate-limit] PRO check — day:${dayCount}/${PRO_DAILY_LIMIT} month:${monthCount}/${PRO_MONTHLY_LIMIT}`);
+
+      if (dayCount >= PRO_DAILY_LIMIT) {
+        console.log(`[rate-limit] BLOCKED — Pro daily limit hit (${dayCount})`);
+        return res.status(429).json({
+          error: "You've reached your daily generation limit. Resets tomorrow.",
+          limitReached: true,
+          isPro: true,
+          remaining: { daily: 0, monthly: Math.max(0, PRO_MONTHLY_LIMIT - monthCount) },
+        });
+      }
+      if (monthCount >= PRO_MONTHLY_LIMIT) {
+        console.log(`[rate-limit] BLOCKED — Pro monthly limit hit (${monthCount})`);
+        return res.status(429).json({
+          error: "You've reached your monthly generation limit. Resets next month.",
+          limitReached: true,
+          isPro: true,
+          remaining: { daily: Math.max(0, PRO_DAILY_LIMIT - dayCount), monthly: 0 },
+        });
+      }
+
+      console.log(`[rate-limit] PRO — PASSED`);
     }
 
     // ── Build Claude prompt ──
@@ -248,25 +291,36 @@ The JSON must follow this exact structure:
       // Non-fatal: continue with whatever was returned
     }
 
-    // ── Log this generation (don't block response on failure) ──
-    if (sb && userId) {
-      sb.from("generation_log")
-        .insert({ user_id: userId })
-        .then(({ error }) => { if (error) console.error("generation_log insert error:", error.message); })
-        .catch((e) => console.error("generation_log insert threw:", e.message));
+    // ── Log this generation — awaited so the next request sees the updated count ──
+    // generated_at is set explicitly (never rely solely on DB default)
+    console.log(`[rate-limit] Inserting generation_log for user ${userId}`);
+    const { error: insertError } = await sb
+      .from("generation_log")
+      .insert({ user_id: userId, generated_at: new Date().toISOString() });
+
+    if (insertError) {
+      // Log full error so it shows in Vercel function logs
+      console.error("[rate-limit] generation_log INSERT FAILED:", JSON.stringify(insertError));
+      console.error("[rate-limit] Insert error details — code:", insertError.code, "message:", insertError.message, "hint:", insertError.hint);
+      // Do NOT block the response — the user gets their plan, but flag it
+      console.warn("[rate-limit] Generation served WITHOUT being logged — this user's limit may not enforce correctly");
+    } else {
+      console.log(`[rate-limit] generation_log insert OK for user ${userId}`);
     }
 
     // ── Compute remaining counts (after this generation) ──
     let remaining = null;
-    if (sb && userId) {
-      if (!isPro) {
-        remaining = { weekly: Math.max(0, FREE_WEEKLY_LIMIT - (weeklyCount + 1)) };
-      } else {
-        remaining = {
-          daily:   Math.max(0, PRO_DAILY_LIMIT   - (dayCount   + 1)),
-          monthly: Math.max(0, PRO_MONTHLY_LIMIT  - (monthCount + 1)),
-        };
-      }
+    if (!isPro) {
+      remaining = {
+        daily:   Math.max(0, FREE_DAILY_LIMIT   - (dayCount   + 1)),
+        weekly:  Math.max(0, FREE_WEEKLY_LIMIT  - (weeklyCount + 1)),
+        monthly: Math.max(0, FREE_MONTHLY_LIMIT - (monthCount  + 1)),
+      };
+    } else {
+      remaining = {
+        daily:   Math.max(0, PRO_DAILY_LIMIT   - (dayCount   + 1)),
+        monthly: Math.max(0, PRO_MONTHLY_LIMIT  - (monthCount + 1)),
+      };
     }
 
     return res.json({ abPlan, remaining });

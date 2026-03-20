@@ -601,7 +601,10 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
 };
 
 // ─── PLAN (AI-POWERED) ─────────────────────────────────────────
-const FREE_WEEKLY  = 1;
+// Must mirror the constants in api/generate-plan.js exactly
+const FREE_DAILY   = 1;
+const FREE_WEEKLY  = 2;
+const FREE_MONTHLY = 8;
 const PRO_DAILY    = 3;
 const PRO_MONTHLY  = 20;
 
@@ -640,16 +643,20 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate}) => {
       }
       setPlansLoaded(true);
 
-      // Derive remaining from live usage
+      // Derive remaining from live usage (mirrors api/generate-plan.js limits)
       if(usage){
         if(!isPro){
-          const rem={weekly:Math.max(0,FREE_WEEKLY-usage.weeklyCount)};
+          const rem={
+            daily:   Math.max(0, FREE_DAILY   - usage.dailyCount),
+            weekly:  Math.max(0, FREE_WEEKLY  - usage.weeklyCount),
+            monthly: Math.max(0, FREE_MONTHLY - usage.monthlyCount),
+          };
           setRemaining(rem);
-          if(rem.weekly===0) setLimitHit(true);
+          if(rem.daily===0 || rem.weekly===0 || rem.monthly===0) setLimitHit(true);
         } else {
           const rem={
-            daily:  Math.max(0,PRO_DAILY  -usage.dailyCount),
-            monthly:Math.max(0,PRO_MONTHLY-usage.monthlyCount),
+            daily:   Math.max(0, PRO_DAILY   - usage.dailyCount),
+            monthly: Math.max(0, PRO_MONTHLY - usage.monthlyCount),
           };
           setRemaining(rem);
           if(rem.daily===0||rem.monthly===0) setLimitHit(true);
@@ -678,7 +685,15 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate}) => {
       clearInterval(interval);
       const plan=result.abPlan;
       setAbPlan(plan);
-      if(result.remaining) setRemaining(result.remaining);
+      if(result.remaining){
+        setRemaining(result.remaining);
+        // Re-evaluate limitHit based on updated remaining counts
+        const r = result.remaining;
+        const hit = isPro
+          ? (r.daily===0 || r.monthly===0)
+          : (r.daily===0 || r.weekly===0 || r.monthly===0);
+        setLimitHit(hit);
+      }
       setGenCount(c=>c+1);
       setLoading(false);
       // Bug 1: persist to localStorage (instant on remount) and Supabase (cross-device)
@@ -711,11 +726,15 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate}) => {
   const usageLine = () => {
     if(!remaining) return null;
     if(!isPro){
-      const w = remaining.weekly ?? 0;
-      return `${w} of ${FREE_WEEKLY} free plan${w===1?"":"s"} remaining this week`;
+      // Show the most restrictive remaining count so the user always knows
+      // exactly how many generations they have left right now.
+      const d = remaining.daily   ?? 0;
+      const w = remaining.weekly  ?? 0;
+      const m = remaining.monthly ?? 0;
+      return `${d} of ${FREE_DAILY} today · ${w} of ${FREE_WEEKLY} this week · ${m} of ${FREE_MONTHLY} this month`;
     }
     // Pro
-    const dayTxt   = `${remaining.daily ?? 0} of ${PRO_DAILY} left today`;
+    const dayTxt   = `${remaining.daily   ?? 0} of ${PRO_DAILY} left today`;
     const monthTxt = `${remaining.monthly ?? 0} of ${PRO_MONTHLY} left this month`;
     return `${dayTxt} · ${monthTxt}`;
   };
