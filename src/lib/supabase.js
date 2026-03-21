@@ -14,8 +14,18 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Explicit auth options ensure session persists in localStorage across PWA launches.
+// iOS Safari PWA runs in an isolated WKWebView — without these, the session can be
+// lost between launches because the default storage detection may not pick up localStorage.
 export const supabase = supabaseUrl && supabaseKey
-  ? createClient(supabaseUrl, supabaseKey)
+  ? createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        persistSession: true,
+        storage: typeof window !== "undefined" ? window.localStorage : undefined,
+        autoRefreshToken: true,
+        detectSessionInUrl: false, // PWA never has auth tokens in the URL
+      },
+    })
   : null;
 
 // ── AUTH ────────────────────────────────────────────────────────

@@ -2014,20 +2014,28 @@ const DIET_OPTIONS = ["None","Vegan","Vegetarian","Keto","Carnivore","Gluten-Fre
 
 const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
   const m = profile?.macros;
-  const [view, setView] = useState(null); // null | "diet" | "foods" | "cuisines"
+  // view: null | "diet" | "foods" | "cuisines" | "name" | "sex" | "age" | "weight" | "height" | "activity" | "goal"
+  const [view, setView] = useState(null);
   const [savedToast, setSavedToast] = useState(false);
+  // Drafts for preference sub-views
   const [draftDiet, setDraftDiet] = useState([]);
   const [draftFoods, setDraftFoods] = useState([]);
   const [draftCuisines, setDraftCuisines] = useState([]);
   const [foodInput, setFoodInput] = useState("");
-
-  const stats = [{l:"Goal",v:(profile?.goal||"lean bulk").replace("_"," ")},{l:"Weight",v:`${profile?.weightLbs||185} lbs`},{l:"Height",v:`${profile?.heightFt||5}'${profile?.heightIn||11}"`},{l:"Activity",v:(profile?.activity||"active").replace("_"," ")}];
+  // Drafts for stat sub-views
+  const [draftName, setDraftName] = useState("");
+  const [draftSex, setDraftSex] = useState("male");
+  const [draftAge, setDraftAge] = useState(28);
+  const [draftWeight, setDraftWeight] = useState(185);
+  const [draftHeightFt, setDraftHeightFt] = useState(5);
+  const [draftHeightIn, setDraftHeightIn] = useState(11);
+  const [draftActivity, setDraftActivity] = useState("moderate");
+  const [draftGoal, setDraftGoal] = useState("maintain");
 
   const showSaved = () => { setSavedToast(true); setTimeout(()=>setSavedToast(false),2000); };
 
   const saveField = async (updates) => {
     const merged = {...profile, ...updates};
-    // Recalculate macros any time stats that affect them change
     const recalcKeys = ["sex","age","weightLbs","heightFt","heightIn","activity","goal"];
     const needsRecalc = Object.keys(updates).some(k => recalcKeys.includes(k));
     const updated = needsRecalc ? {...merged, macros: calcMacros(merged)} : merged;
@@ -2041,6 +2049,13 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
     if(v==="diet") setDraftDiet(profile?.diet||[]);
     if(v==="foods"){ setDraftFoods(profile?.dislikedFoods||[]); setFoodInput(""); }
     if(v==="cuisines") setDraftCuisines(profile?.dislikedCuisines||[]);
+    if(v==="name") setDraftName(profile?.name||"");
+    if(v==="sex") setDraftSex(profile?.sex||"male");
+    if(v==="age") setDraftAge(profile?.age||28);
+    if(v==="weight") setDraftWeight(profile?.weightLbs||185);
+    if(v==="height"){ setDraftHeightFt(profile?.heightFt||5); setDraftHeightIn(profile?.heightIn||11); }
+    if(v==="activity") setDraftActivity(profile?.activity||"moderate");
+    if(v==="goal") setDraftGoal(profile?.goal||"maintain");
     setView(v);
   };
 
@@ -2052,6 +2067,16 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
   const Chevron = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="1.5" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>;
   const BackBtn = ({onBack}) => <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:0,color:T.acc,fontSize:14,fontWeight:600,fontFamily:T.font,marginBottom:20}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>Back</button>;
   const SaveBtn = ({onClick,label="Save"}) => <button onClick={onClick} style={{width:"100%",padding:14,borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font,marginTop:24}}>{label}</button>;
+  // Reusable single-select option button
+  const SelBtn = ({label,desc,selected,onClick}) => (
+    <button onClick={onClick} style={{padding:"14px 16px",borderRadius:T.r,border:`1.5px solid ${selected?T.acc:T.bd}`,background:selected?T.accM:"transparent",color:selected?T.acc:T.tx,fontSize:14,fontWeight:selected?600:500,cursor:"pointer",fontFamily:T.font,textAlign:"left",display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",transition:"all 0.15s"}}>
+      <div>
+        <span>{label}</span>
+        {desc&&<p style={{fontSize:12,color:selected?T.acc:T.txM,margin:"2px 0 0",fontWeight:400}}>{desc}</p>}
+      </div>
+      {selected&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
+    </button>
+  );
 
   // ── Diet sub-view ──
   if(view==="diet"){
@@ -2127,34 +2152,156 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
     </div>;
   }
 
+  // ── Name sub-view ──
+  if(view==="name"){
+    return <div style={{padding:"0 20px 24px"}}>
+      <BackBtn onBack={()=>setView(null)}/>
+      <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Your Name</h1>
+      <Lbl>Name</Lbl>
+      <input value={draftName} onChange={e=>setDraftName(e.target.value)} placeholder="Your name" autoFocus style={{width:"100%",padding:"14px 16px",borderRadius:T.r,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,fontFamily:T.font,fontWeight:500,outline:"none",boxSizing:"border-box",marginTop:8}}/>
+      <SaveBtn onClick={()=>saveField({name:draftName.trim()||profile?.name})}/>
+    </div>;
+  }
+
+  // ── Sex sub-view ──
+  if(view==="sex"){
+    return <div style={{padding:"0 20px 24px"}}>
+      <BackBtn onBack={()=>setView(null)}/>
+      <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Sex</h1>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        <SelBtn label="Male" selected={draftSex==="male"} onClick={()=>setDraftSex("male")}/>
+        <SelBtn label="Female" selected={draftSex==="female"} onClick={()=>setDraftSex("female")}/>
+      </div>
+      <SaveBtn onClick={()=>saveField({sex:draftSex})}/>
+    </div>;
+  }
+
+  // ── Age sub-view ──
+  if(view==="age"){
+    return <div style={{padding:"0 20px 24px"}}>
+      <BackBtn onBack={()=>setView(null)}/>
+      <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Age</h1>
+      <NumInput label="Age" value={draftAge} onChange={setDraftAge} min={13} max={99} unit="yrs"/>
+      <SaveBtn onClick={()=>saveField({age:draftAge})}/>
+    </div>;
+  }
+
+  // ── Weight sub-view ──
+  if(view==="weight"){
+    return <div style={{padding:"0 20px 24px"}}>
+      <BackBtn onBack={()=>setView(null)}/>
+      <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Weight</h1>
+      <NumInput label="Weight" value={draftWeight} onChange={setDraftWeight} min={50} max={600} unit="lbs"/>
+      <SaveBtn onClick={()=>saveField({weightLbs:draftWeight})}/>
+    </div>;
+  }
+
+  // ── Height sub-view ──
+  if(view==="height"){
+    return <div style={{padding:"0 20px 24px"}}>
+      <BackBtn onBack={()=>setView(null)}/>
+      <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Height</h1>
+      <div style={{display:"flex",gap:12}}>
+        <NumInput label="Feet" value={draftHeightFt} onChange={setDraftHeightFt} min={3} max={8} unit="ft"/>
+        <NumInput label="Inches" value={draftHeightIn} onChange={setDraftHeightIn} min={0} max={11} unit="in"/>
+      </div>
+      <SaveBtn onClick={()=>saveField({heightFt:draftHeightFt,heightIn:draftHeightIn})}/>
+    </div>;
+  }
+
+  // ── Activity sub-view ──
+  if(view==="activity"){
+    const actOpts = [
+      {v:"sedentary",l:"Sedentary",d:"Little or no exercise"},
+      {v:"light",l:"Light",d:"1–3 days/week"},
+      {v:"moderate",l:"Moderate",d:"3–5 days/week"},
+      {v:"active",l:"Active",d:"6–7 days/week"},
+      {v:"very_active",l:"Very Active",d:"Twice a day or physical job"},
+    ];
+    return <div style={{padding:"0 20px 24px"}}>
+      <BackBtn onBack={()=>setView(null)}/>
+      <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Activity Level</h1>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {actOpts.map(o=><SelBtn key={o.v} label={o.l} desc={o.d} selected={draftActivity===o.v} onClick={()=>setDraftActivity(o.v)}/>)}
+      </div>
+      <SaveBtn onClick={()=>saveField({activity:draftActivity})}/>
+    </div>;
+  }
+
+  // ── Goal sub-view ──
+  if(view==="goal"){
+    const goalOpts = [
+      {v:"cut",l:"Cut",d:"Lose fat — 500 cal deficit"},
+      {v:"maintain",l:"Maintain",d:"Hold current weight"},
+      {v:"lean_bulk",l:"Lean Bulk",d:"+250 cal surplus"},
+      {v:"bulk",l:"Bulk",d:"+500 cal surplus"},
+    ];
+    return <div style={{padding:"0 20px 24px"}}>
+      <BackBtn onBack={()=>setView(null)}/>
+      <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Goal</h1>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {goalOpts.map(o=><SelBtn key={o.v} label={o.l} desc={o.d} selected={draftGoal===o.v} onClick={()=>setDraftGoal(o.v)}/>)}
+      </div>
+      <SaveBtn onClick={()=>saveField({goal:draftGoal})}/>
+    </div>;
+  }
+
   // ── Main profile view ──
   const foodsCount = (profile?.dislikedFoods||[]).length;
   const cuisinesCount = (profile?.dislikedCuisines||[]).length;
+  const actLabel = {sedentary:"Sedentary",light:"Light",moderate:"Moderate",active:"Active",very_active:"Very Active"};
+  const goalLabel = {cut:"Cut",maintain:"Maintain",lean_bulk:"Lean Bulk",bulk:"Bulk"};
+  const statRows = [
+    {l:"Name",     v: profile?.name||"—",                               view:"name"},
+    {l:"Sex",      v: profile?.sex==="female"?"Female":"Male",          view:"sex"},
+    {l:"Age",      v: `${profile?.age||"—"} yrs`,                      view:"age"},
+    {l:"Weight",   v: `${profile?.weightLbs||"—"} lbs`,                view:"weight"},
+    {l:"Height",   v: `${profile?.heightFt||"—"}'${profile?.heightIn??'—'}"`, view:"height"},
+    {l:"Activity", v: actLabel[profile?.activity]||"—",                view:"activity"},
+    {l:"Goal",     v: goalLabel[profile?.goal]||"—",                   view:"goal"},
+  ];
 
   return <div style={{padding:"0 20px 24px"}}>
     {savedToast&&<div style={{position:"fixed",top:60,left:"50%",transform:"translateX(-50%)",background:T.ok,color:T.bg,padding:"8px 22px",borderRadius:20,fontSize:13,fontWeight:700,zIndex:200,display:"flex",alignItems:"center",gap:6,boxShadow:"0 4px 20px rgba(0,0,0,0.3)"}}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.bg} strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg> Saved
     </div>}
     <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"4px 0 20px",letterSpacing:"-0.02em"}}>Profile</h1>
+
+    {/* Avatar + name card */}
     <Card style={{padding:20,marginBottom:20,display:"flex",alignItems:"center",gap:16}}>
-      <div style={{width:52,height:52,borderRadius:"50%",background:T.acc,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:700,color:T.bg}}>{(profile?.name||"U")[0]}</div>
-      <div>
+      <div style={{width:52,height:52,borderRadius:"50%",background:T.acc,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:700,color:T.bg,flexShrink:0}}>{(profile?.name||"U")[0].toUpperCase()}</div>
+      <div style={{flex:1}}>
         <h2 style={{fontSize:18,fontWeight:600,color:T.tx,margin:"0 0 2px"}}>{profile?.name||"User"}</h2>
         <span style={{fontSize:12,color:T.txM}}>Macra Free</span>
         <span style={{fontSize:12,color:T.acc,marginLeft:8,fontWeight:500,cursor:"pointer"}}>Go Pro →</span>
       </div>
     </Card>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
-      {stats.map(s=><Card key={s.l} style={{padding:"12px 14px"}}><Lbl>{s.l}</Lbl><p style={{fontSize:15,fontWeight:600,color:T.tx,margin:"4px 0 0",textTransform:"capitalize"}}>{s.v}</p></Card>)}
-    </div>
+
+    {/* Macro targets */}
     {m&&<Card style={{padding:"14px 16px",marginBottom:20,background:T.accG,border:`1px solid ${T.accM}`}}>
-      <div style={{display:"flex",justifyContent:"space-between"}}>
-        {[{l:"Target",v:`${m.target} cal`,c:T.acc},{l:"Protein",v:`${m.proteinG}g`,c:T.pro},{l:"Carbs",v:`${m.carbG}g`,c:T.carb},{l:"Fat",v:`${m.fatG}g`,c:T.fat}].map(x=>
+      <Lbl>Your Targets</Lbl>
+      <div style={{display:"flex",justifyContent:"space-between",marginTop:10}}>
+        {[{l:"Calories",v:`${m.target}`,c:T.acc},{l:"Protein",v:`${m.proteinG}g`,c:T.pro},{l:"Carbs",v:`${m.carbG}g`,c:T.carb},{l:"Fat",v:`${m.fatG}g`,c:T.fat}].map(x=>
           <div key={x.l} style={{textAlign:"center"}}><p style={{fontSize:15,fontWeight:700,color:x.c,margin:0,fontFamily:T.mono}}>{x.v}</p><Lbl>{x.l}</Lbl></div>
         )}
       </div>
     </Card>}
 
+    {/* Editable stat rows */}
+    <Lbl>Your Stats</Lbl>
+    <Card style={{marginTop:8,marginBottom:20,overflow:"hidden"}}>
+      {statRows.map((s,i)=>(
+        <div key={s.l} onClick={()=>enterView(s.view)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",borderBottom:i<statRows.length-1?`1px solid ${T.bd}`:"none",cursor:"pointer"}}>
+          <div>
+            <Lbl>{s.l}</Lbl>
+            <p style={{fontSize:15,fontWeight:600,color:T.tx,margin:"3px 0 0"}}>{s.v}</p>
+          </div>
+          <Chevron/>
+        </div>
+      ))}
+    </Card>
+
+    {/* Food preferences */}
     <Lbl>Food Preferences</Lbl>
     <Card onClick={()=>enterView("diet")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginTop:8,marginBottom:6,cursor:"pointer"}}>
       <div><p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>Dietary Preference</p><p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{dietLabel()}</p></div>
@@ -2169,8 +2316,9 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
       <Chevron/>
     </Card>
 
+    {/* App settings */}
     <Lbl>App Settings</Lbl>
-    {[{l:"Personal Stats",d:"Age, weight, height, activity"},{l:"Household Mode",d:"Add partner's profile",pro:true},{l:"Notifications",d:"Meal reminders, reports"},{l:"Subscription",d:"Macra Free"}].map((s,i)=>(
+    {[{l:"Household Mode",d:"Add partner's profile",pro:true},{l:"Notifications",d:"Meal reminders, reports"},{l:"Subscription",d:"Macra Free"}].map((s,i)=>(
       <Card key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginTop:8,marginBottom:6,cursor:"pointer"}}>
         <div>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
@@ -2339,6 +2487,30 @@ export default function App() {
     setPwaPrompt(null);
     if(outcome === "accepted") localStorage.setItem("pwa-dismissed","1");
   };
+
+  // ── Supabase auth state listener ───────────────────────────────
+  // Runs once on mount (not tied to phase) so token refreshes and sign-outs
+  // from Supabase are always reflected in app state, including in PWA mode.
+  useEffect(() => {
+    if(!supabase) return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("[onAuthStateChange]", event, session?.user?.id ?? "no user");
+      if(event === "TOKEN_REFRESHED" && session?.user) {
+        // Silently update user ref — no phase change needed, already in app
+        setUser(session.user);
+      }
+      if(event === "SIGNED_OUT") {
+        setUser(null);
+        setProfile(null);
+        setSavedMeals([]);
+        setTodayLog([]);
+        setTodayPlan([]);
+        setWeekPlans({});
+        setPhase("auth");
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Check auth state after splash
   // Uses getSession() (reads local storage — no network round-trip, reliable on Safari ITP)
