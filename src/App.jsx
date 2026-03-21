@@ -2187,6 +2187,61 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
 };
 
 // ─── MAIN ──────────────────────────────────────────────────────
+// ─── PWA INSTALL PROMPT ────────────────────────────────────────
+// Shown as a bottom sheet after 30s in-app or after first plan generation.
+// iOS Safari: no beforeinstallprompt — show manual share instructions instead.
+const PwaPrompt = ({type, onInstall, onDismiss}) => (
+  <>
+    {/* Backdrop */}
+    <div onClick={onDismiss} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:99}}/>
+    {/* Sheet */}
+    <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,zIndex:100,background:T.sf,borderTop:`1px solid ${T.bd}`,borderRadius:"20px 20px 0 0",padding:"8px 20px 44px",boxShadow:"0 -8px 40px rgba(0,0,0,0.5)"}}>
+      {/* Drag handle */}
+      <div style={{width:36,height:4,borderRadius:2,background:T.bd,margin:"0 auto 20px"}}/>
+      {/* App icon + headline */}
+      <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:20}}>
+        <div style={{width:52,height:52,borderRadius:14,background:`linear-gradient(135deg,${T.acc},#A89560)`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:`0 4px 16px rgba(200,184,138,0.25)`}}>
+          <span style={{fontSize:24,fontWeight:800,color:T.bg,fontFamily:T.font}}>M</span>
+        </div>
+        <div>
+          <p style={{margin:0,fontSize:16,fontWeight:700,color:T.tx,letterSpacing:"-0.01em"}}>Add Macra to your home screen</p>
+          <p style={{margin:"4px 0 0",fontSize:13,color:T.tx2}}>For the best experience</p>
+        </div>
+      </div>
+
+      {type === "native" ? (
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={onDismiss} style={{flex:1,padding:"13px 0",borderRadius:T.r,border:`1px solid ${T.bd}`,background:"transparent",color:T.tx2,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:T.font}}>Not Now</button>
+          <button onClick={onInstall} style={{flex:2,padding:"13px 0",borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font}}>Add to Home Screen</button>
+        </div>
+      ) : (
+        /* iOS Safari — manual instructions */
+        <>
+          <div style={{background:T.bg,borderRadius:T.r,border:`1px solid ${T.bd}`,padding:"14px 16px",marginBottom:16}}>
+            <p style={{margin:0,fontSize:14,color:T.tx2,lineHeight:1.7}}>
+              1. Tap the{" "}
+              <svg style={{display:"inline",verticalAlign:"-3px"}} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/>
+              </svg>{" "}
+              <span style={{color:T.acc,fontWeight:600}}>Share</span> button in Safari
+            </p>
+            <p style={{margin:"8px 0 0",fontSize:14,color:T.tx2,lineHeight:1.7}}>
+              2. Scroll down and tap <span style={{color:T.acc,fontWeight:600}}>"Add to Home Screen"</span>
+            </p>
+          </div>
+          {/* Arrow pointing down toward the browser UI */}
+          <div style={{display:"flex",justifyContent:"center",marginBottom:16}}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14M5 12l7 7 7-7"/>
+            </svg>
+          </div>
+          <button onClick={onDismiss} style={{width:"100%",padding:"13px 0",borderRadius:T.r,border:`1px solid ${T.bd}`,background:"transparent",color:T.tx2,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:T.font}}>Got It</button>
+        </>
+      )}
+    </div>
+  </>
+);
+
 const navTabs=[
   {id:"home",label:"Home",d:"M3 9.5L12 3l9 6.5V20a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 20V9.5z"},
   {id:"plan",label:"Plan",d:"M3,4h18v18H3zM16 2v4M8 2v4M3 10h18"},
@@ -2205,6 +2260,85 @@ export default function App() {
   const [todayLog,setTodayLog] = useState([]);
   const [todayPlan,setTodayPlan] = useState([]);
   const [weekPlans,setWeekPlans] = useState({});
+
+  // ── PWA install prompt ──────────────────────────────────────────
+  const [pwaPrompt,setPwaPrompt] = useState(null); // null | 'native' | 'ios'
+  const deferredInstallEvent = useRef(null); // stores the beforeinstallprompt event
+  const pwaTimerRef = useRef(null);          // 30-second delay timer
+  const pwaTypeRef = useRef(null);           // 'native' | 'ios', set when ready
+
+  // Set up PWA listeners once the user reaches the app phase
+  useEffect(() => {
+    if(phase !== "app") return;
+
+    // Already running as installed PWA — never show
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || !!window.navigator.standalone;
+    if(isStandalone) return;
+
+    // User dismissed previously — never show again
+    if(localStorage.getItem("pwa-dismissed")) return;
+
+    const ua = navigator.userAgent;
+    const isIos = /iphone|ipad|ipod/i.test(ua);
+    const isSafari = /safari/i.test(ua) && !/chrome|crios|fxios|edgios/i.test(ua);
+
+    if(isIos && isSafari){
+      // iOS Safari has no beforeinstallprompt — show manual instructions
+      pwaTypeRef.current = "ios";
+      pwaTimerRef.current = setTimeout(() => setPwaPrompt("ios"), 30000);
+      return () => clearTimeout(pwaTimerRef.current);
+    }
+
+    // Chrome / Android / Edge — wait for beforeinstallprompt
+    const handleBip = (e) => {
+      e.preventDefault();
+      deferredInstallEvent.current = e;
+      pwaTypeRef.current = "native";
+      if(!pwaTimerRef.current){
+        pwaTimerRef.current = setTimeout(() => setPwaPrompt("native"), 30000);
+      }
+    };
+
+    const handleInstalled = () => {
+      clearTimeout(pwaTimerRef.current);
+      deferredInstallEvent.current = null;
+      setPwaPrompt(null);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBip);
+    window.addEventListener("appinstalled", handleInstalled);
+    return () => {
+      clearTimeout(pwaTimerRef.current);
+      window.removeEventListener("beforeinstallprompt", handleBip);
+      window.removeEventListener("appinstalled", handleInstalled);
+    };
+  }, [phase]);
+
+  // Called when first plan is generated — shows prompt immediately (skips 30s timer)
+  const triggerPwaEarly = () => {
+    if(localStorage.getItem("pwa-dismissed")) return;
+    if(pwaPrompt) return; // already visible
+    const type = pwaTypeRef.current;
+    if(!type) return;
+    clearTimeout(pwaTimerRef.current);
+    pwaTimerRef.current = null;
+    setPwaPrompt(type);
+  };
+
+  const dismissPwa = () => {
+    localStorage.setItem("pwa-dismissed","1");
+    setPwaPrompt(null);
+  };
+
+  const handleInstallClick = async () => {
+    const evt = deferredInstallEvent.current;
+    if(!evt) return;
+    evt.prompt();
+    const { outcome } = await evt.userChoice;
+    deferredInstallEvent.current = null;
+    setPwaPrompt(null);
+    if(outcome === "accepted") localStorage.setItem("pwa-dismissed","1");
+  };
 
   // Check auth state after splash
   // Uses getSession() (reads local storage — no network round-trip, reliable on Safari ITP)
@@ -2365,11 +2499,14 @@ export default function App() {
     home:<Dashboard setTab={switchTab} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal} onUnlogMeal={handleUnlogMeal} todayPlan={todayPlan} weekPlans={weekPlans} userId={user?.id} savedMeals={savedMeals} onHeartMeal={handleHeartToggle}/>,
     plan:<Plan profile={profile} userId={user?.id} isPro={isPro} savedMeals={savedMeals} onHeartMeal={handleHeartToggle} onWeekPlanUpdate={(plans)=>{
       // plans = { 0: dayA[], 1: dayB[] }
+      const wasEmpty = Object.keys(weekPlans).length === 0;
       setWeekPlans(plans);
       const dow=new Date().getDay();
       const idx=dow===0?6:dow-1;
       const abKey=idx%2===0?0:1;
       if(plans[abKey]) setTodayPlan(plans[abKey]);
+      // Show PWA prompt on first plan generation (whichever trigger fires first)
+      if(wasEmpty) triggerPwaEarly();
     }}/>,
     log:<LogMeal savedMeals={savedMeals} onSaveMeal={handleSaveMeal} todayLog={todayLog} onLogMeal={handleLogMeal} userId={user?.id} onDeleteSavedMeal={handleDeleteSavedMeal}/>,
     grocery:<Grocery isPro={isPro} setIsPro={handleSetIsPro} weekPlans={weekPlans} userId={user?.id}/>,
@@ -2390,6 +2527,8 @@ export default function App() {
     {tab==="home"&&<button onClick={()=>switchTab("log")} style={{position:"fixed",bottom:86,right:"calc(50% - 195px)",width:52,height:52,borderRadius:"50%",background:T.acc,border:"none",cursor:"pointer",boxShadow:`0 4px 20px ${T.accM}`,display:"flex",alignItems:"center",justifyContent:"center",zIndex:20}}>
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={T.bg} strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
     </button>}
+
+    {pwaPrompt && <PwaPrompt type={pwaPrompt} onInstall={handleInstallClick} onDismiss={dismissPwa}/>}
 
     <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:"rgba(9,9,11,0.95)",backdropFilter:"blur(24px)",borderTop:`1px solid ${T.bd}`,display:"flex",justifyContent:"space-around",padding:"6px 0 22px",zIndex:10}}>
       {navTabs.map(t=>{
