@@ -249,11 +249,14 @@ export async function getGenerationUsage(userId) {
 
 export async function getCustomGroceryList(userId) {
   if (!supabase) return [];
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("custom_grocery_lists")
-    .select("items")
+    .select("*")
     .eq("user_id", userId)
-    .single();
+    .maybeSingle(); // .single() returns 406 when no row exists; .maybeSingle() returns null safely
+  if (error) {
+    console.error("[getCustomGroceryList] failed", { code: error.code, message: error.message, hint: error.hint });
+  }
   return data?.items || [];
 }
 

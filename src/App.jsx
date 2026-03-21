@@ -2019,6 +2019,9 @@ export default function App() {
         // Load profile from Supabase
         const {data} = await getProfile(u.id);
         if(data){
+          const proFlag = data.is_pro === true;
+          console.log("[checkAuth] profile loaded", { userId: u.id, isPro: proFlag });
+          setIsPro(proFlag);
           const p = {
             name:data.name, sex:data.sex, age:data.age,
             weightLbs:data.weight_lbs, heightFt:data.height_ft, heightIn:data.height_in,
@@ -2057,6 +2060,9 @@ export default function App() {
     setUser(u);
     const {data} = await getProfile(u.id);
     if(data){
+      const proFlag = data.is_pro === true;
+      console.log("[handleAuth] profile loaded", { userId: u.id, isPro: proFlag });
+      setIsPro(proFlag);
       const p = {
         name:data.name, sex:data.sex, age:data.age,
         weightLbs:data.weight_lbs, heightFt:data.height_ft, heightIn:data.height_in,
