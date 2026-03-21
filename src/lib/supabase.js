@@ -156,17 +156,34 @@ export async function deleteMealLog(logId) {
 
 export async function saveMealPlan(userId, dayOfWeek, meals) {
   if (!supabase) return;
-  // Upsert: replace existing plan for this day
-  const { error } = await supabase.from("meal_plans").upsert(
-    {
-      user_id: userId,
-      day_of_week: dayOfWeek,
-      meals: meals,
-      generated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id,day_of_week" }
-  );
-  return { error };
+
+  const row = {
+    user_id: userId,
+    day_of_week: dayOfWeek,
+    meals: meals,
+    generated_at: new Date().toISOString(),
+  };
+  console.log("[saveMealPlan] saving row", { userId, dayOfWeek, mealCount: meals?.length, generated_at: row.generated_at });
+
+  // DELETE first (no unique constraint needed), then INSERT fresh
+  const { error: delErr } = await supabase
+    .from("meal_plans")
+    .delete()
+    .eq("user_id", userId)
+    .eq("day_of_week", dayOfWeek);
+
+  if (delErr) {
+    console.error("[saveMealPlan] DELETE failed", { code: delErr.code, message: delErr.message, hint: delErr.hint });
+  }
+
+  const { error: insErr } = await supabase.from("meal_plans").insert(row);
+  if (insErr) {
+    console.error("[saveMealPlan] INSERT failed", { code: insErr.code, message: insErr.message, hint: insErr.hint });
+  } else {
+    console.log("[saveMealPlan] INSERT ok", { dayOfWeek });
+  }
+
+  return { error: insErr };
 }
 
 export async function getWeekPlans(userId) {
