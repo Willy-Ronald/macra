@@ -249,6 +249,8 @@ ${cuisineAssignmentLines}
 
 Each meal must reflect its assigned cuisine style in ingredients, seasoning, and preparation. The goal is a realistic mixed day of eating — the way people actually eat — not a single-cuisine day. Breakfast might be American, lunch Mexican, snack Mediterranean, dinner Japanese. Make each meal feel authentic to its assigned style.
 
+IMPORTANT — meal name rules: The "name" field must contain only the dish name itself (e.g. "Miso Glazed Salmon"). Never include the cuisine type, style label, or category prefix in the name field. The "cuisine" field stores the cuisine style string separately (e.g. "Japanese"). The cuisine style should only influence the ingredients and preparation, not appear in the name.
+
 Across Day A and Day B, use overlapping base ingredients where practical (same protein prepared differently, same vegetables used in different ways) so the weekly grocery list stays efficient and affordable to shop for.
 
 Never repeat the exact same meal across generations. Even if the cuisine style repeats, the specific dish must be different.
@@ -264,16 +266,16 @@ Return ONLY valid JSON. No markdown, no code blocks, no backticks, no explanatio
 The JSON must follow this exact structure:
 {
   "A": [
-    {"type":"BREAKFAST","name":"Meal name","desc":"Short description","cal":400,"p":30,"c":45,"f":12,"time":"10 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"cup"}]},
-    {"type":"LUNCH","name":"Meal name","desc":"Short description","cal":600,"p":50,"c":55,"f":18,"time":"20 min","ingredients":[{"name":"ingredient name","qty":"6","unit":"oz"}]},
-    {"type":"SNACK","name":"Meal name","desc":"Short description","cal":300,"p":25,"c":20,"f":10,"time":"5 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"serving"}]},
-    {"type":"DINNER","name":"Meal name","desc":"Short description","cal":700,"p":55,"c":50,"f":22,"time":"30 min","ingredients":[{"name":"ingredient name","qty":"8","unit":"oz"}]}
+    {"type":"BREAKFAST","cuisine":"American","name":"Meal name","desc":"Short description","cal":400,"p":30,"c":45,"f":12,"time":"10 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"cup"}]},
+    {"type":"LUNCH","cuisine":"Mexican","name":"Meal name","desc":"Short description","cal":600,"p":50,"c":55,"f":18,"time":"20 min","ingredients":[{"name":"ingredient name","qty":"6","unit":"oz"}]},
+    {"type":"SNACK","cuisine":"Mediterranean","name":"Meal name","desc":"Short description","cal":300,"p":25,"c":20,"f":10,"time":"5 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"serving"}]},
+    {"type":"DINNER","cuisine":"Japanese","name":"Meal name","desc":"Short description","cal":700,"p":55,"c":50,"f":22,"time":"30 min","ingredients":[{"name":"ingredient name","qty":"8","unit":"oz"}]}
   ],
   "B": [
-    {"type":"BREAKFAST","name":"Different meal","desc":"Short description","cal":400,"p":30,"c":45,"f":12,"time":"10 min","ingredients":[{"name":"ingredient name","qty":"2","unit":"piece"}]},
-    {"type":"LUNCH","name":"Different meal","desc":"Short description","cal":600,"p":50,"c":55,"f":18,"time":"20 min","ingredients":[{"name":"ingredient name","qty":"0.5","unit":"cup"}]},
-    {"type":"SNACK","name":"Different meal","desc":"Short description","cal":300,"p":25,"c":20,"f":10,"time":"5 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"oz"}]},
-    {"type":"DINNER","name":"Different meal","desc":"Short description","cal":700,"p":55,"c":50,"f":22,"time":"30 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"lbs"}]}
+    {"type":"BREAKFAST","cuisine":"Greek","name":"Different meal","desc":"Short description","cal":400,"p":30,"c":45,"f":12,"time":"10 min","ingredients":[{"name":"ingredient name","qty":"2","unit":"piece"}]},
+    {"type":"LUNCH","cuisine":"Korean","name":"Different meal","desc":"Short description","cal":600,"p":50,"c":55,"f":18,"time":"20 min","ingredients":[{"name":"ingredient name","qty":"0.5","unit":"cup"}]},
+    {"type":"SNACK","cuisine":"Indian","name":"Different meal","desc":"Short description","cal":300,"p":25,"c":20,"f":10,"time":"5 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"oz"}]},
+    {"type":"DINNER","cuisine":"Italian","name":"Different meal","desc":"Short description","cal":700,"p":55,"c":50,"f":22,"time":"30 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"lbs"}]}
   ]
 }`;
 

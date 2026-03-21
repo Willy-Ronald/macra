@@ -105,20 +105,38 @@ function calcMacros(profile) {
   const {sex,age,weightLbs,heightFt,heightIn,activity,goal} = profile;
   const weightKg = weightLbs * 0.453592;
   const heightCm = (heightFt * 12 + heightIn) * 2.54;
-  // Mifflin-St Jeor
-  let bmr = sex === "male"
+
+  // Mifflin-St Jeor BMR
+  const bmr = sex === "male"
     ? 10 * weightKg + 6.25 * heightCm - 5 * age + 5
     : 10 * weightKg + 6.25 * heightCm - 5 * age - 161;
+
+  // TDEE
   const actMult = {sedentary:1.2,light:1.375,moderate:1.55,active:1.725,very_active:1.9};
-  let tdee = Math.round(bmr * (actMult[activity] || 1.55));
+  const tdee = Math.round(bmr * (actMult[activity] || 1.55));
+
+  // Goal-adjusted calorie target
   const goalAdj = {cut:-500,maintain:0,lean_bulk:250,bulk:500};
-  let target = Math.round(tdee + (goalAdj[goal] || 0));
-  // Macro split
-  let proteinG = Math.round(weightLbs * (goal==="cut"?1.2:goal==="bulk"?0.9:1.0));
-  let fatG = Math.round((target * 0.25) / 9);
-  let carbG = Math.round((target - proteinG*4 - fatG*9) / 4);
-  if(carbG < 50) carbG = 50;
-  return {tdee,target,proteinG,fatG,carbG};
+  const target = Math.round(tdee + (goalAdj[goal] || 0));
+
+  // BMI-based protein multiplier — prevents dangerously high targets for heavier users
+  const heightM = heightCm / 100;
+  const bmi = weightKg / (heightM * heightM);
+  const proteinMult = bmi < 25 ? 1.0 : bmi < 30 ? 0.85 : 0.7;
+  const proteinG = Math.max(100, Math.round(weightLbs * proteinMult));
+
+  // Fat: 25% of target calories
+  const fatG = Math.round((target * 0.25) / 9);
+
+  // Carbs fill remaining calories (floor at 50g)
+  const carbG = Math.max(50, Math.round((target - proteinG * 4 - fatG * 9) / 4));
+
+  console.log(
+    `[macros] weight:${weightLbs}lbs height:${heightFt}'${heightIn}" age:${age} sex:${sex} activity:${activity} goal:${goal} BMI:${bmi.toFixed(1)}\n` +
+    `[macros] BMR:${Math.round(bmr)} TDEE:${tdee} target_cal:${target} protein:${proteinG}g carbs:${carbG}g fat:${fatG}g (protein mult:${proteinMult})`
+  );
+
+  return {tdee, target, proteinG, fatG, carbG};
 }
 
 // ─── SPLASH SCREEN ─────────────────────────────────────────────
@@ -805,7 +823,8 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate}) => {
         <span style={{fontSize:10,fontWeight:600,color:T.acc,letterSpacing:"0.14em"}}>{m.type}</span>
         <span style={{fontSize:11,color:T.txM}}>{m.time}</span>
       </div>
-      <h3 style={{fontSize:16,fontWeight:600,color:T.tx,margin:"0 0 4px"}}>{m.name}</h3>
+      <h3 style={{fontSize:16,fontWeight:600,color:T.tx,margin:"0 0 2px"}}>{m.name}</h3>
+      {m.cuisine && <p style={{fontSize:11,color:T.txM,margin:"0 0 4px",letterSpacing:"0.03em"}}>{m.cuisine}</p>}
       <p style={{fontSize:12,color:T.txM,margin:"0 0 12px"}}>{m.desc}</p>
       <div style={{display:"flex",gap:16,marginBottom:m.ingredients?.length>0?12:0}}>
         {[{l:"cal",v:m.cal,c:T.acc},{l:"P",v:m.p+"g",c:T.pro},{l:"C",v:m.c+"g",c:T.carb},{l:"F",v:m.f+"g",c:T.fat}].map(x=>
@@ -1831,7 +1850,11 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
   const showSaved = () => { setSavedToast(true); setTimeout(()=>setSavedToast(false),2000); };
 
   const saveField = async (updates) => {
-    const updated = {...profile, ...updates};
+    const merged = {...profile, ...updates};
+    // Recalculate macros any time stats that affect them change
+    const recalcKeys = ["sex","age","weightLbs","heightFt","heightIn","activity","goal"];
+    const needsRecalc = Object.keys(updates).some(k => recalcKeys.includes(k));
+    const updated = needsRecalc ? {...merged, macros: calcMacros(merged)} : merged;
     onProfileUpdate(updated);
     if(userId) await saveProfile(userId, updated);
     showSaved();
