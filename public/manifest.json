@@ -2,7 +2,7 @@
   "name": "Macra — Eat with intention",
   "short_name": "Macra",
   "description": "AI-powered meal planning and macro tracking",
-  "start_url": "/",
+  "start_url": "/app",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#09090B",
