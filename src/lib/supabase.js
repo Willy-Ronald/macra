@@ -89,7 +89,7 @@ export async function getProfile(userId) {
     .from("profiles")
     .select("*")
     .eq("id", userId)
-    .single();
+    .maybeSingle(); // .single() returns 406 when no row exists (new user in onboarding)
   return { data, error };
 }
 

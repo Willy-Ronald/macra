@@ -182,6 +182,64 @@ const Splash = ({onFinish}) => {
   </div>;
 };
 
+// ─── NUMERIC INPUT ─────────────────────────────────────────────
+// Defined at module level (not inside Onboarding) so React treats it as a
+// stable component type across re-renders — prevents unmount/remount on each
+// state change which was causing spurious network requests.
+const NumInput = ({label, value, onChange, min, max, unit}) => {
+  const [display, setDisplay] = useState("");
+  const [focused, setFocused] = useState(false);
+
+  // When parent value changes (e.g. +/- buttons) and we're not editing, sync display
+  useEffect(() => {
+    if (!focused) setDisplay(String(value));
+  }, [value, focused]);
+
+  const handleFocus = () => {
+    setFocused(true);
+    setDisplay(""); // clear so user types from scratch
+  };
+
+  const handleBlur = () => {
+    setFocused(false);
+    const parsed = parseInt(display, 10);
+    if (!isNaN(parsed)) {
+      const clamped = Math.min(max, Math.max(min, parsed));
+      onChange(clamped);
+      setDisplay(String(clamped));
+    } else {
+      // empty or invalid — restore the last valid value
+      setDisplay(String(value));
+    }
+  };
+
+  const btnStyle = {width:40,height:40,borderRadius:10,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font,flexShrink:0};
+
+  return (
+    <div style={{flex:1}}>
+      {label ? <Lbl>{label}</Lbl> : null}
+      <div style={{display:"flex",alignItems:"center",gap:8,marginTop:label?8:0}}>
+        <button onClick={()=>onChange(Math.max(min, value-1))} style={btnStyle}>−</button>
+        <div style={{flex:1,display:"flex",alignItems:"baseline",justifyContent:"center",gap:4}}>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={focused ? display : value}
+            min={min}
+            max={max}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            onChange={e => setDisplay(e.target.value)} // free typing, no clamping
+            style={{width:68,textAlign:"center",fontSize:28,fontWeight:700,color:T.tx,fontFamily:T.mono,background:"transparent",border:"none",outline:"none",appearance:"textfield",WebkitAppearance:"none",MozAppearance:"textfield",padding:0,margin:0}}
+          />
+          {unit && <span style={{fontSize:13,color:T.txM}}>{unit}</span>}
+        </div>
+        <button onClick={()=>onChange(Math.min(max, value+1))} style={btnStyle}>+</button>
+      </div>
+    </div>
+  );
+};
+
 // ─── ONBOARDING ────────────────────────────────────────────────
 const Onboarding = ({onComplete}) => {
   const [step,setStep] = useState(0);
@@ -216,29 +274,6 @@ const Onboarding = ({onComplete}) => {
       <span>{label}</span>
       {selected && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
     </button>
-  );
-
-  const NumInput = ({label,value,onChange,min,max,unit}) => (
-    <div style={{flex:1}}>
-      {label?<Lbl>{label}</Lbl>:null}
-      <div style={{display:"flex",alignItems:"center",gap:8,marginTop:label?8:0}}>
-        <button onClick={()=>onChange(Math.max(min,value-1))} style={{width:40,height:40,borderRadius:10,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font,flexShrink:0}}>−</button>
-        <div style={{flex:1,display:"flex",alignItems:"baseline",justifyContent:"center",gap:4}}>
-          {/* FIX 4: tap-to-type number input, keep +/- for fine-tuning */}
-          <input
-            type="number"
-            inputMode="numeric"
-            value={value}
-            min={min}
-            max={max}
-            onChange={e=>{const v=parseInt(e.target.value,10);if(!isNaN(v))onChange(Math.min(max,Math.max(min,v)));}}
-            style={{width:68,textAlign:"center",fontSize:28,fontWeight:700,color:T.tx,fontFamily:T.mono,background:"transparent",border:"none",outline:"none",appearance:"textfield",WebkitAppearance:"none",MozAppearance:"textfield",padding:0,margin:0}}
-          />
-          {unit&&<span style={{fontSize:13,color:T.txM}}>{unit}</span>}
-        </div>
-        <button onClick={()=>onChange(Math.min(max,value+1))} style={{width:40,height:40,borderRadius:10,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.font,flexShrink:0}}>+</button>
-      </div>
-    </div>
   );
 
   const macros = step===5 ? calcMacros(profile) : null;
