@@ -102,41 +102,45 @@ const AuthScreen = ({onAuth}) => {
 };
 
 // ─── MACRO CALCULATOR ENGINE ───────────────────────────────────
+function getProteinMult(bmi, goal, activity) {
+  if (bmi > 35) return 0.7;
+  if (activity === "sedentary") return goal === "cut" ? 0.85 : 0.75;
+  if (goal === "cut") {
+    if (activity === "light" || activity === "moderate") return 1.0;
+    if (activity === "active") return 1.1;
+    if (activity === "very_active") return 1.2;
+  }
+  if (goal === "maintain") {
+    if (activity === "light") return 0.85;
+    if (activity === "moderate") return 0.9;
+    if (activity === "active" || activity === "very_active") return 1.0;
+  }
+  if (goal === "lean_bulk" || goal === "bulk") {
+    if (activity === "light" || activity === "moderate") return 1.0;
+    if (activity === "active") return 1.1;
+    if (activity === "very_active") return 1.2;
+  }
+  return 1.0;
+}
+
 function calcMacros(profile) {
   const {sex,age,weightLbs,heightFt,heightIn,activity,goal} = profile;
   const weightKg = weightLbs * 0.453592;
   const heightCm = (heightFt * 12 + heightIn) * 2.54;
-
-  // Mifflin-St Jeor BMR
   const bmr = sex === "male"
     ? 10 * weightKg + 6.25 * heightCm - 5 * age + 5
     : 10 * weightKg + 6.25 * heightCm - 5 * age - 161;
-
-  // TDEE
   const actMult = {sedentary:1.2,light:1.375,moderate:1.55,active:1.725,very_active:1.9};
   const tdee = Math.round(bmr * (actMult[activity] || 1.55));
-
-  // Goal-adjusted calorie target
   const goalAdj = {cut:-500,maintain:0,lean_bulk:250,bulk:500};
   const target = Math.round(tdee + (goalAdj[goal] || 0));
-
-  // BMI-based protein multiplier — prevents dangerously high targets for heavier users
   const heightM = heightCm / 100;
   const bmi = weightKg / (heightM * heightM);
-  const proteinMult = bmi < 25 ? 1.0 : bmi < 30 ? 0.85 : 0.7;
+  const proteinMult = getProteinMult(bmi, goal, activity);
   const proteinG = Math.max(100, Math.round(weightLbs * proteinMult));
-
-  // Fat: 25% of target calories
   const fatG = Math.round((target * 0.25) / 9);
-
-  // Carbs fill remaining calories (floor at 50g)
   const carbG = Math.max(50, Math.round((target - proteinG * 4 - fatG * 9) / 4));
-
-  console.log(
-    `[macros] weight:${weightLbs}lbs height:${heightFt}'${heightIn}" age:${age} sex:${sex} activity:${activity} goal:${goal} BMI:${bmi.toFixed(1)}\n` +
-    `[macros] BMR:${Math.round(bmr)} TDEE:${tdee} target_cal:${target} protein:${proteinG}g carbs:${carbG}g fat:${fatG}g (protein mult:${proteinMult})`
-  );
-
+  console.log(`[macros] BMI:${bmi.toFixed(1)} goal:${goal} activity:${activity} → proteinMult:${proteinMult} | BMR:${Math.round(bmr)} TDEE:${tdee} target:${target} P:${proteinG}g C:${carbG}g F:${fatG}g`);
   return {tdee, target, proteinG, fatG, carbG};
 }
 
@@ -2067,7 +2071,7 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
 
   const showSaved = () => { setSavedToast(true); setTimeout(()=>setSavedToast(false),2000); };
 
-  const saveField = async (updates) => {
+  const saveField = async (updates, returnTo=null) => {
     const merged = {...profile, ...updates};
     const recalcKeys = ["sex","age","weightLbs","heightFt","heightIn","activity","goal"];
     const needsRecalc = Object.keys(updates).some(k => recalcKeys.includes(k));
@@ -2075,7 +2079,7 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
     onProfileUpdate(updated);
     if(userId) await saveProfile(userId, updated);
     showSaved();
-    setView(null);
+    setView(returnTo);
   };
 
   const enterView = (v) => {
@@ -2185,60 +2189,79 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
     </div>;
   }
 
+  // ── Stats sub-screen (lists all 7 editable rows) ──
+  if(view==="stats"){
+    return <div style={{padding:"0 20px 24px"}}>
+      <BackBtn onBack={()=>setView(null)}/>
+      <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Adjust Your Stats</h1>
+      <Card style={{overflow:"hidden"}}>
+        {statRows.map((s,i)=>(
+          <div key={s.l} onClick={()=>enterView(s.view)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",borderBottom:i<statRows.length-1?`1px solid ${T.bd}`:"none",cursor:"pointer"}}>
+            <div>
+              <Lbl>{s.l}</Lbl>
+              <p style={{fontSize:15,fontWeight:600,color:T.tx,margin:"3px 0 0"}}>{s.v}</p>
+            </div>
+            <Chevron/>
+          </div>
+        ))}
+      </Card>
+    </div>;
+  }
+
   // ── Name sub-view ──
   if(view==="name"){
     return <div style={{padding:"0 20px 24px"}}>
-      <BackBtn onBack={()=>setView(null)}/>
+      <BackBtn onBack={()=>setView("stats")}/>
       <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Your Name</h1>
       <Lbl>Name</Lbl>
       <input value={draftName} onChange={e=>setDraftName(e.target.value)} placeholder="Your name" autoFocus style={{width:"100%",padding:"14px 16px",borderRadius:T.r,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,fontFamily:T.font,fontWeight:500,outline:"none",boxSizing:"border-box",marginTop:8}}/>
-      <SaveBtn onClick={()=>saveField({name:draftName.trim()||profile?.name})}/>
+      <SaveBtn onClick={()=>saveField({name:draftName.trim()||profile?.name},"stats")}/>
     </div>;
   }
 
   // ── Sex sub-view ──
   if(view==="sex"){
     return <div style={{padding:"0 20px 24px"}}>
-      <BackBtn onBack={()=>setView(null)}/>
+      <BackBtn onBack={()=>setView("stats")}/>
       <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Sex</h1>
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         <SelBtn label="Male" selected={draftSex==="male"} onClick={()=>setDraftSex("male")}/>
         <SelBtn label="Female" selected={draftSex==="female"} onClick={()=>setDraftSex("female")}/>
       </div>
-      <SaveBtn onClick={()=>saveField({sex:draftSex})}/>
+      <SaveBtn onClick={()=>saveField({sex:draftSex},"stats")}/>
     </div>;
   }
 
   // ── Age sub-view ──
   if(view==="age"){
     return <div style={{padding:"0 20px 24px"}}>
-      <BackBtn onBack={()=>setView(null)}/>
+      <BackBtn onBack={()=>setView("stats")}/>
       <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Age</h1>
       <NumInput label="Age" value={draftAge} onChange={setDraftAge} min={13} max={99} unit="yrs"/>
-      <SaveBtn onClick={()=>saveField({age:draftAge})}/>
+      <SaveBtn onClick={()=>saveField({age:draftAge},"stats")}/>
     </div>;
   }
 
   // ── Weight sub-view ──
   if(view==="weight"){
     return <div style={{padding:"0 20px 24px"}}>
-      <BackBtn onBack={()=>setView(null)}/>
+      <BackBtn onBack={()=>setView("stats")}/>
       <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Weight</h1>
       <NumInput label="Weight" value={draftWeight} onChange={setDraftWeight} min={50} max={600} unit="lbs"/>
-      <SaveBtn onClick={()=>saveField({weightLbs:draftWeight})}/>
+      <SaveBtn onClick={()=>saveField({weightLbs:draftWeight},"stats")}/>
     </div>;
   }
 
   // ── Height sub-view ──
   if(view==="height"){
     return <div style={{padding:"0 20px 24px"}}>
-      <BackBtn onBack={()=>setView(null)}/>
+      <BackBtn onBack={()=>setView("stats")}/>
       <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Height</h1>
       <div style={{display:"flex",gap:12}}>
         <NumInput label="Feet" value={draftHeightFt} onChange={setDraftHeightFt} min={3} max={8} unit="ft"/>
         <NumInput label="Inches" value={draftHeightIn} onChange={setDraftHeightIn} min={0} max={11} unit="in"/>
       </div>
-      <SaveBtn onClick={()=>saveField({heightFt:draftHeightFt,heightIn:draftHeightIn})}/>
+      <SaveBtn onClick={()=>saveField({heightFt:draftHeightFt,heightIn:draftHeightIn},"stats")}/>
     </div>;
   }
 
@@ -2252,12 +2275,12 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
       {v:"very_active",l:"Very Active",d:"Twice a day or physical job"},
     ];
     return <div style={{padding:"0 20px 24px"}}>
-      <BackBtn onBack={()=>setView(null)}/>
+      <BackBtn onBack={()=>setView("stats")}/>
       <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Activity Level</h1>
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {actOpts.map(o=><SelBtn key={o.v} label={o.l} desc={o.d} selected={draftActivity===o.v} onClick={()=>setDraftActivity(o.v)}/>)}
       </div>
-      <SaveBtn onClick={()=>saveField({activity:draftActivity})}/>
+      <SaveBtn onClick={()=>saveField({activity:draftActivity},"stats")}/>
     </div>;
   }
 
@@ -2270,12 +2293,12 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
       {v:"bulk",l:"Bulk",d:"+500 cal surplus"},
     ];
     return <div style={{padding:"0 20px 24px"}}>
-      <BackBtn onBack={()=>setView(null)}/>
+      <BackBtn onBack={()=>setView("stats")}/>
       <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Goal</h1>
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {goalOpts.map(o=><SelBtn key={o.v} label={o.l} desc={o.d} selected={draftGoal===o.v} onClick={()=>setDraftGoal(o.v)}/>)}
       </div>
-      <SaveBtn onClick={()=>saveField({goal:draftGoal})}/>
+      <SaveBtn onClick={()=>saveField({goal:draftGoal},"stats")}/>
     </div>;
   }
 
@@ -2293,6 +2316,12 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
     {l:"Activity", v: actLabel[profile?.activity]||"—",                view:"activity"},
     {l:"Goal",     v: goalLabel[profile?.goal]||"—",                   view:"goal"},
   ];
+  const statsSummary = [
+    profile?.age ? `${profile.age} yrs` : null,
+    profile?.weightLbs ? `${profile.weightLbs} lbs` : null,
+    (profile?.heightFt != null) ? `${profile.heightFt}'${profile.heightIn??0}"` : null,
+    actLabel[profile?.activity] || null,
+  ].filter(Boolean).join(" · ") || "Tap to update";
 
   return <div style={{padding:"0 20px 24px"}}>
     {savedToast&&<div style={{position:"fixed",top:60,left:"50%",transform:"translateX(-50%)",background:T.ok,color:T.bg,padding:"8px 22px",borderRadius:20,fontSize:13,fontWeight:700,zIndex:200,display:"flex",alignItems:"center",gap:6,boxShadow:"0 4px 20px rgba(0,0,0,0.3)"}}>
@@ -2320,19 +2349,16 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
       </div>
     </Card>}
 
-    {/* Editable stat rows */}
+    {/* Adjust Your Stats — single tappable row */}
     <Lbl>Adjust Your Stats</Lbl>
-    <Card style={{marginTop:8,marginBottom:20,overflow:"hidden"}}>
-      {statRows.map((s,i)=>(
-        <div key={s.l} onClick={()=>enterView(s.view)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",borderBottom:i<statRows.length-1?`1px solid ${T.bd}`:"none",cursor:"pointer"}}>
-          <div>
-            <Lbl>{s.l}</Lbl>
-            <p style={{fontSize:15,fontWeight:600,color:T.tx,margin:"3px 0 0"}}>{s.v}</p>
-          </div>
-          <Chevron/>
-        </div>
-      ))}
+    <Card onClick={()=>enterView("stats")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginTop:8,marginBottom:6,cursor:"pointer"}}>
+      <div>
+        <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>Your Stats</p>
+        <p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{statsSummary}</p>
+      </div>
+      <Chevron/>
     </Card>
+    <div style={{marginBottom:20}}/>
 
     {/* Food preferences */}
     <Lbl>Food Preferences</Lbl>
@@ -2560,13 +2586,16 @@ export default function App() {
           const proFlag = data.is_pro === true;
           console.log("[checkAuth] profile loaded", { userId: u.id, isPro: proFlag });
           setIsPro(proFlag);
-          const p = {
+          const pBase = {
             name:data.name, sex:data.sex, age:data.age,
             weightLbs:data.weight_lbs, heightFt:data.height_ft, heightIn:data.height_in,
             activity:data.activity, goal:data.goal, diet:data.diet||[],
             dislikedFoods:data.disliked_foods||[], dislikedCuisines:data.disliked_cuisines||[],
-            macros:{target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat}
           };
+          const hasStats = pBase.sex && pBase.age && pBase.weightLbs && pBase.heightFt != null && pBase.activity && pBase.goal;
+          const freshMacros = hasStats ? calcMacros(pBase) : {target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat};
+          const p = {...pBase, macros: freshMacros};
+          if(hasStats) saveProfile(u.id, p).catch(e=>console.error("[checkAuth] macro resave failed:",e));
           setProfile(p);
           // Load saved meals
           const meals = await getSavedMeals(u.id);
@@ -2601,13 +2630,16 @@ export default function App() {
       const proFlag = data.is_pro === true;
       console.log("[handleAuth] profile loaded", { userId: u.id, isPro: proFlag });
       setIsPro(proFlag);
-      const p = {
+      const pBase = {
         name:data.name, sex:data.sex, age:data.age,
         weightLbs:data.weight_lbs, heightFt:data.height_ft, heightIn:data.height_in,
         activity:data.activity, goal:data.goal, diet:data.diet||[],
         dislikedFoods:data.disliked_foods||[], dislikedCuisines:data.disliked_cuisines||[],
-        macros:{target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat}
       };
+      const hasStats = pBase.sex && pBase.age && pBase.weightLbs && pBase.heightFt != null && pBase.activity && pBase.goal;
+      const freshMacros = hasStats ? calcMacros(pBase) : {target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat};
+      const p = {...pBase, macros: freshMacros};
+      if(hasStats) saveProfile(u.id, p).catch(e=>console.error("[handleAuth] macro resave failed:",e));
       setProfile(p);
       const meals = await getSavedMeals(u.id);
       setSavedMeals(meals.map(m=>({id:m.id,name:m.name,source:m.source||'custom',ingredients:m.ingredients||[],totals:{cal:m.total_calories,p:m.total_protein,c:m.total_carbs,f:m.total_fat}})));
