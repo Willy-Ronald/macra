@@ -259,6 +259,34 @@ export async function getGenerationUsage(userId) {
   }
 }
 
+// ── FREQUENT MEALS ─────────────────────────────────────────────
+
+export async function getFrequentMeals(userId) {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("meal_log")
+    .select("name, calories, protein, carbs, fat")
+    .eq("user_id", userId)
+    .order("logged_at", { ascending: false }); // newest first → most-recent macros
+  if (error) {
+    console.error("[getFrequentMeals] failed", { code: error.code, message: error.message, hint: error.hint });
+    return [];
+  }
+  // Count occurrences per name; capture macros from the most-recent entry
+  const counts = {};
+  const macros = {};
+  (data || []).forEach(row => {
+    const key = (row.name || "").trim();
+    if (!key) return;
+    counts[key] = (counts[key] || 0) + 1;
+    if (!macros[key]) macros[key] = { cal: row.calories || 0, p: row.protein || 0, c: row.carbs || 0, f: row.fat || 0 };
+  });
+  return Object.entries(counts)
+    .filter(([, n]) => n >= 2)
+    .sort((a, b) => b[1] - a[1]) // most frequent first
+    .map(([name]) => ({ name, ...macros[name] }));
+}
+
 // ── CUSTOM GROCERY LIST ─────────────────────────────────────────
 
 export async function getCustomGroceryList(userId) {
