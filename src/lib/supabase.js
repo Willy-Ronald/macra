@@ -105,7 +105,32 @@ export async function saveMeal(userId, meal) {
     total_protein: meal.totals.p,
     total_carbs: meal.totals.c,
     total_fat: meal.totals.f,
+    source: 'custom',
   });
+  return { error };
+}
+
+// Heart a meal (ai_plan or manual source) — returns the new row for optimistic state update
+export async function heartMeal(userId, meal, source) {
+  if (!supabase) return { data: null };
+  const { data, error } = await supabase.from("saved_meals").insert({
+    user_id: userId,
+    name: meal.name,
+    ingredients: meal.ingredients || [],
+    total_calories: meal.cal ?? meal.totals?.cal ?? 0,
+    total_protein: meal.p  ?? meal.totals?.p  ?? 0,
+    total_carbs:   meal.c  ?? meal.totals?.c  ?? 0,
+    total_fat:     meal.f  ?? meal.totals?.f  ?? 0,
+    source,
+  }).select().maybeSingle();
+  if (error) console.error("[heartMeal] failed", { code: error.code, message: error.message });
+  return { data, error };
+}
+
+export async function deleteSavedMeal(id) {
+  if (!supabase) return;
+  const { error } = await supabase.from("saved_meals").delete().eq("id", id);
+  if (error) console.error("[deleteSavedMeal] failed", { code: error.code, message: error.message });
   return { error };
 }
 

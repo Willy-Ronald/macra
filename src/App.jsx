@@ -4,6 +4,7 @@ import {
   saveProfile, getProfile, saveProStatus,
   saveMeal, getSavedMeals,
   logMeal, getTodayLog, getLogByDate, deleteMealLog, getFrequentMeals,
+  heartMeal, deleteSavedMeal,
   saveMealPlan, getWeekPlans,
   getGenerationUsage,
   getCustomGroceryList, saveCustomGroceryList,
@@ -461,6 +462,13 @@ const Onboarding = ({onComplete}) => {
   </div>;
 };
 
+// ─── HEART ICON ────────────────────────────────────────────────
+const HeartIcon = ({filled, size=16}) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={filled?T.acc:"none"} stroke={filled?T.acc:T.txM} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:"block"}}>
+    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+  </svg>
+);
+
 // ─── SWIPEABLE ROW ─────────────────────────────────────────────
 // Reveals a red Delete button on left-swipe. Used for log entries and
 // frequently-logged items. Defined at module level so it's a stable
@@ -512,7 +520,7 @@ const SwipeableRow = ({onDelete, children}) => {
 };
 
 // ─── DASHBOARD ─────────────────────────────────────────────────
-const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[],weekPlans={},userId}) => {
+const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[],weekPlans={},userId,savedMeals=[],onHeartMeal}) => {
   const [viewDate,setViewDate]=useState(()=>new Date());
   const [historyLog,setHistoryLog]=useState(null); // null = showing today
   const [loggingId,setLoggingId]=useState(null);
@@ -703,7 +711,12 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
             </div>
           </div>
         </div>
-        <span style={{fontSize:10,color:T.txM,letterSpacing:"0.05em"}}>swipe ←</span>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <button onClick={(e)=>{e.stopPropagation();onHeartMeal&&onHeartMeal({name:x.name,cal:x.calories,p:x.protein,c:x.carbs,f:x.fat},'manual');}} style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex",alignItems:"center"}}>
+            <HeartIcon filled={savedMeals.some(s=>s.name===x.name)}/>
+          </button>
+          <span style={{fontSize:10,color:T.txM,letterSpacing:"0.05em"}}>swipe ←</span>
+        </div>
       </Card>
     </SwipeableRow>)}
 
@@ -722,7 +735,7 @@ const FREE_MONTHLY = 8;
 const PRO_DAILY    = 3;
 const PRO_MONTHLY  = 20;
 
-const Plan = ({profile,userId,isPro,onWeekPlanUpdate}) => {
+const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal}) => {
   const [sel,setSel]=useState("A");
   const [loading,setLoading]=useState(false);
   const [loadMsg,setLoadMsg]=useState("");
@@ -906,9 +919,14 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate}) => {
 
     {/* Meal cards */}
     {!loading && meals.map((m,i)=><Card key={i+"-"+sel+"-"+genCount} style={{padding:18,marginBottom:8,animation:"fadeUp 0.4s ease both",animationDelay:`${i*0.08}s`}}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
         <span style={{fontSize:10,fontWeight:600,color:T.acc,letterSpacing:"0.14em"}}>{m.type}</span>
-        <span style={{fontSize:11,color:T.txM}}>{m.time}</span>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <button onClick={(e)=>{e.stopPropagation();onHeartMeal&&onHeartMeal(m,'ai_plan');}} style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex",alignItems:"center"}}>
+            <HeartIcon filled={savedMeals.some(s=>s.name===m.name)}/>
+          </button>
+          <span style={{fontSize:11,color:T.txM}}>{m.time}</span>
+        </div>
       </div>
       <h3 style={{fontSize:16,fontWeight:600,color:T.tx,margin:"0 0 2px"}}>{m.name}</h3>
       {m.cuisine && <p style={{fontSize:11,color:T.txM,margin:"0 0 4px",letterSpacing:"0.03em"}}>{m.cuisine}</p>}
@@ -1140,17 +1158,8 @@ const MealCreator = ({onSave,onBack}) => {
   </div>;
 };
 
-const getMealTypeByTime = () => {
-  const h = new Date().getHours();
-  if(h < 11) return "breakfast";
-  if(h < 14) return "lunch";
-  if(h < 17) return "snack";
-  return "dinner";
-};
-
-const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal,userId}) => {
-  const [view,setView]=useState("main"); // main | create | manual
-  const savedRef = useRef(null);
+const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDeleteSavedMeal}) => {
+  const [view,setView]=useState("main"); // main | create | manual | saved | custom
   const [loggedId,setLoggedId]=useState(null);
   const [manualForm,setManualForm]=useState({name:"",cal:"",p:"",c:"",f:""});
   const [manualSuccess,setManualSuccess]=useState(false);
@@ -1183,6 +1192,14 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal,userId}) => {
   const [searchLogSuccess,setSearchLogSuccess]=useState(false);
   const debounceRef = useRef(null);
   const abortRef = useRef(null);
+
+  const getMealTypeByTime = () => {
+    const h = new Date().getHours();
+    if(h<10) return "breakfast";
+    if(h<13) return "lunch";
+    if(h<16) return "snack";
+    return "dinner";
+  };
 
   // Parse gram weight from a serving_size string like "215g", "1 burger (215g)", "150 ml"
   const parseServingGrams = (str) => {
@@ -1403,7 +1420,86 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal,userId}) => {
     setTimeout(()=>{setManualSuccess(false);setManualForm({name:"",cal:"",p:"",c:"",f:""});setView("main")},1500);
   };
 
-  if(view==="create") return <MealCreator onBack={()=>setView("main")} onSave={(meal)=>{if(onSaveMeal)onSaveMeal(meal);setView("main")}}/>;
+  if(view==="create") return <MealCreator onBack={()=>setView("custom")} onSave={(meal)=>{if(onSaveMeal)onSaveMeal(meal);setView("custom")}}/>;
+
+  // ── Saved Meals sub-view ──
+  if(view==="saved") {
+    const savedList = savedMeals.filter(m=>m.source!=='custom');
+    const BackBtn2 = () => <button onClick={()=>setView("main")} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"0 0 16px",color:T.acc,fontSize:14,fontWeight:600,fontFamily:T.font}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>Back</button>;
+    return <div style={{padding:"0 20px 24px"}}>
+      <BackBtn2/>
+      <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 4px",letterSpacing:"-0.02em"}}>Saved Meals</h1>
+      <p style={{fontSize:13,color:T.txM,margin:"0 0 20px"}}>Hearted meals from your plan and logs.</p>
+      {savedList.length===0 && <Card style={{padding:"24px 16px",textAlign:"center"}}>
+        <p style={{fontSize:13,color:T.txM,margin:0}}>No saved meals yet. Heart a meal in the Plan tab or on a logged entry to save it here.</p>
+      </Card>}
+      {savedList.map(m=>{
+        const fk="savedv-"+m.id;
+        const isLogged=loggedId===fk;
+        return <SwipeableRow key={m.id} onDelete={()=>onDeleteSavedMeal&&onDeleteSavedMeal(m.id)}>
+          <Card style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:0,cursor:"pointer"}} onClick={()=>quickLog({name:m.name,cal:m.totals.cal,p:m.totals.p,c:m.totals.c,f:m.totals.f},fk)}>
+            <div style={{flex:1}}>
+              <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{m.name}</p>
+              <div style={{display:"flex",gap:8,marginTop:3}}>
+                {[{v:m.totals.cal,l:"cal",c:T.acc},{v:m.totals.p+"g",l:"P",c:T.pro},{v:m.totals.c+"g",l:"C",c:T.carb},{v:m.totals.f+"g",l:"F",c:T.fat}].map(x=>
+                  <span key={x.l} style={{fontSize:10,fontFamily:T.mono,color:x.c}}>{x.v}<span style={{color:T.txM,fontSize:8}}> {x.l}</span></span>
+                )}
+              </div>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <button onClick={(e)=>{e.stopPropagation();onDeleteSavedMeal&&onDeleteSavedMeal(m.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex",alignItems:"center"}}>
+                <HeartIcon filled size={18}/>
+              </button>
+              <div style={{width:28,height:28,borderRadius:"50%",background:isLogged?T.ok:T.accM,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.3s ease"}}>
+                {isLogged
+                  ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                  : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>}
+              </div>
+            </div>
+          </Card>
+        </SwipeableRow>;
+      })}
+    </div>;
+  }
+
+  // ── Custom Meals sub-view ──
+  if(view==="custom") {
+    const customList = savedMeals.filter(m=>m.source==='custom'||!m.source);
+    const BackBtn2 = () => <button onClick={()=>setView("main")} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"0 0 16px",color:T.acc,fontSize:14,fontWeight:600,fontFamily:T.font}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>Back</button>;
+    return <div style={{padding:"0 20px 24px"}}>
+      <BackBtn2/>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+        <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:0,letterSpacing:"-0.02em"}}>Custom Meals</h1>
+        <button onClick={()=>setView("create")} style={{padding:"8px 16px",borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:T.font}}>+ Create New</button>
+      </div>
+      <p style={{fontSize:13,color:T.txM,margin:"0 0 20px"}}>Your hand-built recipes and meal templates.</p>
+      {customList.length===0 && <Card style={{padding:"24px 16px",textAlign:"center"}}>
+        <p style={{fontSize:13,color:T.txM,margin:0}}>No custom meals yet. Tap Create New to build your own recipe.</p>
+      </Card>}
+      {customList.map((m,i)=>{
+        const fk="customv-"+m.id;
+        const isLogged=loggedId===fk;
+        return <SwipeableRow key={m.id||i} onDelete={()=>onDeleteSavedMeal&&onDeleteSavedMeal(m.id)}>
+          <Card style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:0,cursor:"pointer"}} onClick={()=>quickLog({name:m.name,cal:m.totals.cal,p:m.totals.p,c:m.totals.c,f:m.totals.f},fk)}>
+            <div style={{flex:1}}>
+              <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{m.name}</p>
+              <div style={{display:"flex",gap:8,marginTop:3}}>
+                {[{v:m.totals.cal,l:"cal",c:T.acc},{v:m.totals.p+"g",l:"P",c:T.pro},{v:m.totals.c+"g",l:"C",c:T.carb},{v:m.totals.f+"g",l:"F",c:T.fat}].map(x=>
+                  <span key={x.l} style={{fontSize:10,fontFamily:T.mono,color:x.c}}>{x.v}<span style={{color:T.txM,fontSize:8}}> {x.l}</span></span>
+                )}
+              </div>
+              {m.ingredients.length>0&&<p style={{fontSize:10,color:T.txM,margin:"3px 0 0"}}>{m.ingredients.length} ingredient{m.ingredients.length!==1?"s":""}</p>}
+            </div>
+            <div style={{width:28,height:28,borderRadius:"50%",background:isLogged?T.ok:T.accM,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.3s ease"}}>
+              {isLogged
+                ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>}
+            </div>
+          </Card>
+        </SwipeableRow>;
+      })}
+    </div>;
+  }
 
   const inputStyle={width:"100%",padding:"12px 14px",borderRadius:10,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:14,fontFamily:T.font,fontWeight:500,outline:"none",boxSizing:"border-box"};
 
@@ -1549,11 +1645,12 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal,userId}) => {
       </div>
       <p style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>Meal Logged!</p>
     </Card>}
+    {/* ── Quick action buttons ── */}
     <div style={{display:"flex",gap:8,marginBottom:24}}>
       {[
         {l:"Manual",i:"✎",h:view==="manual",action:()=>setView(view==="manual"?"main":"manual")},
-        {l:"Custom",i:"✦",h:false,action:()=>setView("create")},
-        {l:"Saved",i:"♡",h:false,action:()=>{setView("main");setTimeout(()=>savedRef.current?.scrollIntoView({behavior:"smooth"}),100)}},
+        {l:"Saved",i:"♥",h:view==="saved",action:()=>setView("saved")},
+        {l:"Custom",i:"✦",h:view==="custom",action:()=>setView("custom")},
       ].map(a=>
         <button key={a.l} onClick={a.action||undefined} style={{flex:1,padding:"14px 4px",borderRadius:T.r,border:a.h?`1.5px solid ${T.acc}`:`1px solid ${T.bd}`,background:a.h?T.accM:T.sf,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
           <span style={{fontSize:16,color:a.h?T.acc:T.tx2}}>{a.i}</span>
@@ -1592,6 +1689,7 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal,userId}) => {
         </button>
       </>}
     </Card>}
+    {/* ── Frequently Logged ── */}
     <Lbl>Frequently Logged</Lbl>
     <div style={{marginTop:10}}>
       {frequentMeals.filter(m=>!hiddenNames.includes(m.name)).length === 0 && freqLoaded && (
@@ -1619,35 +1717,6 @@ const LogMeal = ({savedMeals,onSaveMeal,todayLog=[],onLogMeal,userId}) => {
           </Card>
         </SwipeableRow>;
       })}
-    </div>
-    <div ref={savedRef} style={{marginTop:20}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-        <Lbl>My Saved Meals ({savedMeals.length})</Lbl>
-        <span onClick={()=>setView("create")} style={{fontSize:11,color:T.acc,fontWeight:500,cursor:"pointer"}}>+ Create New</span>
-      </div>
-      {savedMeals.map((m,i)=>{
-        const feedbackKey = "saved-"+i;
-        const isLogged = loggedId===feedbackKey;
-        return <Card key={i} style={{padding:"14px 16px",marginBottom:6,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div>
-            <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{m.name}</p>
-            <div style={{display:"flex",gap:10,marginTop:4}}>
-              {[{v:m.totals.cal,l:"cal",c:T.acc},{v:m.totals.p+"g",l:"P",c:T.pro},{v:m.totals.c+"g",l:"C",c:T.carb},{v:m.totals.f+"g",l:"F",c:T.fat}].map(x=>
-                <span key={x.l} style={{fontSize:11,fontFamily:T.mono,color:x.c}}>{x.v}<span style={{color:T.txM,fontSize:9}}> {x.l}</span></span>
-              )}
-            </div>
-            <p style={{fontSize:10,color:T.txM,margin:"4px 0 0"}}>{m.ingredients.length} ingredient{m.ingredients.length!==1?"s":""}</p>
-          </div>
-          <div onClick={(e)=>{e.stopPropagation();quickLog({n:m.name,cal:m.totals.cal,p:m.totals.p,c:m.totals.c,f:m.totals.f},feedbackKey)}} style={{width:30,height:30,borderRadius:"50%",background:isLogged?T.ok:T.accM,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.3s ease",cursor:"pointer"}}>
-            {isLogged
-              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
-              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>}
-          </div>
-        </Card>;
-      })}
-      {savedMeals.length===0 && <Card style={{padding:"20px 16px",textAlign:"center"}}>
-        <p style={{fontSize:13,color:T.txM,margin:0}}>No saved meals yet. Create your first custom meal to log it quickly later.</p>
-      </Card>}
     </div>
   </div>;
 };
@@ -2162,7 +2231,7 @@ export default function App() {
           setProfile(p);
           // Load saved meals
           const meals = await getSavedMeals(u.id);
-          setSavedMeals(meals.map(m=>({id:m.id,name:m.name,ingredients:m.ingredients||[],totals:{cal:m.total_calories,p:m.total_protein,c:m.total_carbs,f:m.total_fat}})));
+          setSavedMeals(meals.map(m=>({id:m.id,name:m.name,source:m.source||'custom',ingredients:m.ingredients||[],totals:{cal:m.total_calories,p:m.total_protein,c:m.total_carbs,f:m.total_fat}})));
           // Load today's log
           const log = await getTodayLog(u.id);
           setTodayLog(log);
@@ -2202,7 +2271,7 @@ export default function App() {
       };
       setProfile(p);
       const meals = await getSavedMeals(u.id);
-      setSavedMeals(meals.map(m=>({id:m.id,name:m.name,ingredients:m.ingredients||[],totals:{cal:m.total_calories,p:m.total_protein,c:m.total_carbs,f:m.total_fat}})));
+      setSavedMeals(meals.map(m=>({id:m.id,name:m.name,source:m.source||'custom',ingredients:m.ingredients||[],totals:{cal:m.total_calories,p:m.total_protein,c:m.total_carbs,f:m.total_fat}})));
       const log = await getTodayLog(u.id);
       setTodayLog(log);
       const plans = await getWeekPlans(u.id);
@@ -2249,10 +2318,38 @@ export default function App() {
     await refreshTodayLog();
   };
 
+  const mapSavedMeals = (rows) =>
+    rows.map(m=>({id:m.id,name:m.name,source:m.source||'custom',ingredients:m.ingredients||[],totals:{cal:m.total_calories,p:m.total_protein,c:m.total_carbs,f:m.total_fat}}));
+
   const handleSaveMeal = async (meal) => {
     if(user) await saveMeal(user.id, meal);
     const meals = user ? await getSavedMeals(user.id) : [];
-    setSavedMeals(meals.map(m=>({id:m.id,name:m.name,ingredients:m.ingredients||[],totals:{cal:m.total_calories,p:m.total_protein,c:m.total_carbs,f:m.total_fat}})));
+    setSavedMeals(mapSavedMeals(meals));
+  };
+
+  // Toggle heart on a meal — optimistically updates state, syncs to DB
+  const handleHeartToggle = async (meal, source) => {
+    const existing = savedMeals.find(s => s.name === meal.name);
+    if(existing){
+      // Already saved — unsave it
+      setSavedMeals(prev => prev.filter(s => s.id !== existing.id));
+      await deleteSavedMeal(existing.id);
+    } else {
+      // Not saved — save it with given source
+      const { data } = await heartMeal(user.id, meal, source);
+      if(data){
+        setSavedMeals(prev => [...prev, {id:data.id,name:data.name,source:data.source||source,ingredients:data.ingredients||[],totals:{cal:data.total_calories,p:data.total_protein,c:data.total_carbs,f:data.total_fat}}]);
+      } else {
+        // Fallback: reload from DB
+        const rows = await getSavedMeals(user.id);
+        setSavedMeals(mapSavedMeals(rows));
+      }
+    }
+  };
+
+  const handleDeleteSavedMeal = async (id) => {
+    setSavedMeals(prev => prev.filter(s => s.id !== id));
+    await deleteSavedMeal(id);
   };
 
   const switchTab = (t) => {
@@ -2265,8 +2362,8 @@ export default function App() {
   if(phase==="onboarding") return <Onboarding onComplete={handleComplete}/>;
 
   const screens = {
-    home:<Dashboard setTab={switchTab} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal} onUnlogMeal={handleUnlogMeal} todayPlan={todayPlan} weekPlans={weekPlans} userId={user?.id}/>,
-    plan:<Plan profile={profile} userId={user?.id} isPro={isPro} onWeekPlanUpdate={(plans)=>{
+    home:<Dashboard setTab={switchTab} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal} onUnlogMeal={handleUnlogMeal} todayPlan={todayPlan} weekPlans={weekPlans} userId={user?.id} savedMeals={savedMeals} onHeartMeal={handleHeartToggle}/>,
+    plan:<Plan profile={profile} userId={user?.id} isPro={isPro} savedMeals={savedMeals} onHeartMeal={handleHeartToggle} onWeekPlanUpdate={(plans)=>{
       // plans = { 0: dayA[], 1: dayB[] }
       setWeekPlans(plans);
       const dow=new Date().getDay();
@@ -2274,7 +2371,7 @@ export default function App() {
       const abKey=idx%2===0?0:1;
       if(plans[abKey]) setTodayPlan(plans[abKey]);
     }}/>,
-    log:<LogMeal savedMeals={savedMeals} onSaveMeal={handleSaveMeal} todayLog={todayLog} onLogMeal={handleLogMeal} userId={user?.id}/>,
+    log:<LogMeal savedMeals={savedMeals} onSaveMeal={handleSaveMeal} todayLog={todayLog} onLogMeal={handleLogMeal} userId={user?.id} onDeleteSavedMeal={handleDeleteSavedMeal}/>,
     grocery:<Grocery isPro={isPro} setIsPro={handleSetIsPro} weekPlans={weekPlans} userId={user?.id}/>,
     profile:<ProfileScreen profile={profile} userId={user?.id} onProfileUpdate={p=>setProfile(p)} onSignOut={handleSignOut}/>
   };
