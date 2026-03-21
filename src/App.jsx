@@ -102,8 +102,9 @@ const AuthScreen = ({onAuth}) => {
 };
 
 // ─── MACRO CALCULATOR ENGINE ───────────────────────────────────
-function getProteinMult(bmi, goal, activity) {
+function getProteinMult(bmi, goal, activity, diet=[]) {
   if (bmi > 35) return 0.7;
+  if (diet.includes("High Protein")) return 1.2;
   if (activity === "sedentary") return goal === "cut" ? 0.85 : 0.75;
   if (goal === "cut") {
     if (activity === "light" || activity === "moderate") return 1.0;
@@ -124,7 +125,7 @@ function getProteinMult(bmi, goal, activity) {
 }
 
 function calcMacros(profile) {
-  const {sex,age,weightLbs,heightFt,heightIn,activity,goal} = profile;
+  const {sex,age,weightLbs,heightFt,heightIn,activity,goal,diet=[]} = profile;
   const weightKg = weightLbs * 0.453592;
   const heightCm = (heightFt * 12 + heightIn) * 2.54;
   const bmr = sex === "male"
@@ -136,11 +137,12 @@ function calcMacros(profile) {
   const target = Math.round(tdee + (goalAdj[goal] || 0));
   const heightM = heightCm / 100;
   const bmi = weightKg / (heightM * heightM);
-  const proteinMult = getProteinMult(bmi, goal, activity);
+  const proteinMult = getProteinMult(bmi, goal, activity, diet);
   const proteinG = Math.max(100, Math.round(weightLbs * proteinMult));
   const fatG = Math.round((target * 0.25) / 9);
   const carbG = Math.max(50, Math.round((target - proteinG * 4 - fatG * 9) / 4));
-  console.log(`[macros] BMI:${bmi.toFixed(1)} goal:${goal} activity:${activity} → proteinMult:${proteinMult} | BMR:${Math.round(bmr)} TDEE:${tdee} target:${target} P:${proteinG}g C:${carbG}g F:${fatG}g`);
+  const rule = bmi > 35 ? "BMI>35 cap" : diet.includes("High Protein") ? "high_protein preference" : `${goal}+${activity}`;
+  console.log(`[macros] protein rule: ${rule} → ${proteinMult}g/lb = ${proteinG}g | BMR:${Math.round(bmr)} TDEE:${tdee} target:${target} C:${carbG}g F:${fatG}g`);
   return {tdee, target, proteinG, fatG, carbG};
 }
 
@@ -2101,6 +2103,25 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
     return d.length > 0 ? d.join(", ") : "No restrictions";
   };
 
+  // Declared early so view==="stats" sub-screen can access them
+  const actLabel = {sedentary:"Sedentary",light:"Light",moderate:"Moderate",active:"Active",very_active:"Very Active"};
+  const goalLabel = {cut:"Cut",maintain:"Maintain",lean_bulk:"Lean Bulk",bulk:"Bulk"};
+  const statRows = [
+    {l:"Name",     v: profile?.name||"—",                                          view:"name"},
+    {l:"Sex",      v: profile?.sex==="female"?"Female":"Male",                     view:"sex"},
+    {l:"Age",      v: `${profile?.age||"—"} yrs`,                                 view:"age"},
+    {l:"Weight",   v: `${profile?.weightLbs||"—"} lbs`,                           view:"weight"},
+    {l:"Height",   v: `${profile?.heightFt??'—'}'${profile?.heightIn??'—'}"`,     view:"height"},
+    {l:"Activity", v: actLabel[profile?.activity]||"—",                            view:"activity"},
+    {l:"Goal",     v: goalLabel[profile?.goal]||"—",                               view:"goal"},
+  ];
+  const statsSummary = [
+    profile?.age ? `${profile.age} yrs` : null,
+    profile?.weightLbs ? `${profile.weightLbs} lbs` : null,
+    (profile?.heightFt != null) ? `${profile.heightFt}'${profile.heightIn??0}"` : null,
+    actLabel[profile?.activity] || null,
+  ].filter(Boolean).join(" · ") || "Tap to update";
+
   const Chevron = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="1.5" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>;
   const BackBtn = ({onBack}) => <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:0,color:T.acc,fontSize:14,fontWeight:600,fontFamily:T.font,marginBottom:20}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>Back</button>;
   const SaveBtn = ({onClick,label="Save"}) => <button onClick={onClick} style={{width:"100%",padding:14,borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font,marginTop:24}}>{label}</button>;
@@ -2305,23 +2326,6 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
   // ── Main profile view ──
   const foodsCount = (profile?.dislikedFoods||[]).length;
   const cuisinesCount = (profile?.dislikedCuisines||[]).length;
-  const actLabel = {sedentary:"Sedentary",light:"Light",moderate:"Moderate",active:"Active",very_active:"Very Active"};
-  const goalLabel = {cut:"Cut",maintain:"Maintain",lean_bulk:"Lean Bulk",bulk:"Bulk"};
-  const statRows = [
-    {l:"Name",     v: profile?.name||"—",                               view:"name"},
-    {l:"Sex",      v: profile?.sex==="female"?"Female":"Male",          view:"sex"},
-    {l:"Age",      v: `${profile?.age||"—"} yrs`,                      view:"age"},
-    {l:"Weight",   v: `${profile?.weightLbs||"—"} lbs`,                view:"weight"},
-    {l:"Height",   v: `${profile?.heightFt||"—"}'${profile?.heightIn??'—'}"`, view:"height"},
-    {l:"Activity", v: actLabel[profile?.activity]||"—",                view:"activity"},
-    {l:"Goal",     v: goalLabel[profile?.goal]||"—",                   view:"goal"},
-  ];
-  const statsSummary = [
-    profile?.age ? `${profile.age} yrs` : null,
-    profile?.weightLbs ? `${profile.weightLbs} lbs` : null,
-    (profile?.heightFt != null) ? `${profile.heightFt}'${profile.heightIn??0}"` : null,
-    actLabel[profile?.activity] || null,
-  ].filter(Boolean).join(" · ") || "Tap to update";
 
   return <div style={{padding:"0 20px 24px"}}>
     {savedToast&&<div style={{position:"fixed",top:60,left:"50%",transform:"translateX(-50%)",background:T.ok,color:T.bg,padding:"8px 22px",borderRadius:20,fontSize:13,fontWeight:700,zIndex:200,display:"flex",alignItems:"center",gap:6,boxShadow:"0 4px 20px rgba(0,0,0,0.3)"}}>
@@ -2353,7 +2357,7 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
     <Lbl>Adjust Your Stats</Lbl>
     <Card onClick={()=>enterView("stats")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginTop:8,marginBottom:6,cursor:"pointer"}}>
       <div>
-        <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>Your Stats</p>
+        <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>Adjust Your Stats</p>
         <p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{statsSummary}</p>
       </div>
       <Chevron/>

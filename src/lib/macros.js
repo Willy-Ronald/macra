@@ -4,15 +4,21 @@
  * Uses the Mifflin-St Jeor equation to calculate BMR,
  * then applies activity multiplier and goal adjustment.
  *
- * Protein multiplier is based on goal + activity level,
- * with a hard BMI cap above 35.
+ * Protein multiplier priority:
+ *  1. BMI > 35 → hard cap 0.7g/lb (safety override)
+ *  2. "High Protein" diet preference → 1.2g/lb
+ *  3. Goal + activity level rules
+ *  Floor: 100g minimum
  */
 
-function getProteinMultiplier(bmi, goal, activity) {
-  // Hard cap for BMI > 35 regardless of goal/activity
+function getProteinMultiplier(bmi, goal, activity, diet = []) {
+  // 1. Safety cap — applies even with High Protein preference
   if (bmi > 35) return 0.7;
 
-  // Sedentary overrides first (except cut gets a bump)
+  // 2. High Protein dietary preference
+  if (diet.includes("High Protein")) return 1.2;
+
+  // 3. Sedentary (except cut gets a small bump)
   if (activity === "sedentary") {
     return goal === "cut" ? 0.85 : 0.75;
   }
@@ -39,7 +45,7 @@ function getProteinMultiplier(bmi, goal, activity) {
 }
 
 export function calcMacros(profile) {
-  const { sex, age, weightLbs, heightFt, heightIn, activity, goal } = profile;
+  const { sex, age, weightLbs, heightFt, heightIn, activity, goal, diet = [] } = profile;
 
   // Convert to metric
   const weightKg = weightLbs * 0.453592;
@@ -52,11 +58,7 @@ export function calcMacros(profile) {
 
   // Activity multiplier
   const activityMultipliers = {
-    sedentary: 1.2,
-    light: 1.375,
-    moderate: 1.55,
-    active: 1.725,
-    very_active: 1.9,
+    sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725, very_active: 1.9,
   };
   const tdee = Math.round(bmr * (activityMultipliers[activity] || 1.55));
 
@@ -68,7 +70,7 @@ export function calcMacros(profile) {
   const heightM = heightCm / 100;
   const bmi = weightKg / (heightM * heightM);
 
-  const proteinMult = getProteinMultiplier(bmi, goal, activity);
+  const proteinMult = getProteinMultiplier(bmi, goal, activity, diet);
   const proteinG = Math.max(100, Math.round(weightLbs * proteinMult));
 
   // Fat: 25% of target calories
@@ -76,6 +78,9 @@ export function calcMacros(profile) {
 
   // Carbs fill remaining (floor at 50g)
   const carbG = Math.max(50, Math.round((target - proteinG * 4 - fatG * 9) / 4));
+
+  const rule = bmi > 35 ? "BMI>35 cap" : diet.includes("High Protein") ? "high_protein preference" : `${goal}+${activity}`;
+  console.log(`[macros] protein rule: ${rule} → ${proteinMult}g/lb = ${proteinG}g | BMR:${Math.round(bmr)} TDEE:${tdee} target:${target} C:${carbG}g F:${fatG}g`);
 
   return { bmr: Math.round(bmr), tdee, target, proteinG, fatG, carbG,
     proteinCal: proteinG * 4, carbCal: carbG * 4, fatCal: fatG * 9 };
