@@ -560,6 +560,9 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
   const proteinLeft = Math.max(0,m.proteinG - consumed.p);
   const mealsLeft = unloggedPlan.length;
 
+  // Empty state: today, nothing logged, no plan generated yet
+  const isEmpty = isToday && todayLog.length === 0 && Object.keys(weekPlans).length === 0;
+
   const insightText = consumed.cal === 0
     ? `Start your day! Your target is ${m.target} calories with ${m.proteinG}g protein.`
     : proteinLeft > 20 && mealsLeft > 0
@@ -626,10 +629,13 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:28}}>
       <div>
         <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"6px 0 0",letterSpacing:"-0.02em"}}>
-          {isToday ? (profile?.name ? `Hey, ${profile.name}` : "Daily Overview") : "Day Review"}
+          {isEmpty
+            ? (profile?.name ? `Welcome, ${profile.name}.` : "Welcome.")
+            : isToday ? (profile?.name ? `Hey, ${profile.name}` : "Daily Overview") : "Day Review"}
         </h1>
+        {isEmpty && <p style={{fontSize:14,color:T.tx2,margin:"4px 0 0",fontWeight:400}}>Let's get started.</p>}
       </div>
-      <div style={{width:38,height:38,borderRadius:"50%",background:T.acc,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{width:38,height:38,borderRadius:"50%",background:T.acc,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
         <span style={{fontSize:14,fontWeight:700,color:T.bg}}>{(profile?.name||"U")[0]}</span>
       </div>
     </div>
@@ -659,71 +665,98 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
       </div>
     </Card>
 
-    {/* ── Day's Plan ── */}
-    {dayPlanMeals.length > 0 && <>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"24px 0 14px"}}>
-        <div>
-          <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>{isToday?"Today's Plan":"Day's Plan"}</h2>
-          <span style={{fontSize:10,color:T.txM,fontWeight:500}}>{planLabel}</span>
-        </div>
-        <span onClick={()=>setTab("plan")} style={{fontSize:12,color:T.acc,fontWeight:500,cursor:"pointer"}}>View Plan</span>
+    {/* ── Empty state: no log + no plan yet ── */}
+    {isEmpty ? <>
+      <p style={{fontSize:13,color:T.txM,textAlign:"center",margin:"20px 0 20px",fontWeight:500}}>Log meals to track your progress</p>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <Card onClick={()=>setTab("plan")} style={{padding:"18px 20px",cursor:"pointer",display:"flex",alignItems:"center",gap:14,border:`1px solid ${T.acc}30`}}>
+          <div style={{width:42,height:42,borderRadius:12,background:T.accM,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 4h18v18H3z"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          </div>
+          <div style={{flex:1}}>
+            <p style={{fontSize:15,fontWeight:700,color:T.tx,margin:0}}>Generate Your First Meal Plan</p>
+            <p style={{fontSize:12,color:T.tx2,margin:"3px 0 0"}}>Let AI build a week of meals for your goals</p>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="2" strokeLinecap="round" style={{flexShrink:0}}><path d="M9 18l6-6-6-6"/></svg>
+        </Card>
+        <Card onClick={()=>setTab("log")} style={{padding:"18px 20px",cursor:"pointer",display:"flex",alignItems:"center",gap:14}}>
+          <div style={{width:42,height:42,borderRadius:12,background:"rgba(107,203,119,0.12)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.ok} strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          </div>
+          <div style={{flex:1}}>
+            <p style={{fontSize:15,fontWeight:700,color:T.tx,margin:0}}>Log Your First Meal</p>
+            <p style={{fontSize:12,color:T.tx2,margin:"3px 0 0"}}>Search foods or enter macros manually</p>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="2" strokeLinecap="round" style={{flexShrink:0}}><path d="M9 18l6-6-6-6"/></svg>
+        </Card>
       </div>
-      {unloggedPlan.length === 0 && <Card style={{padding:"16px",textAlign:"center",marginBottom:6}}>
-        <p style={{fontSize:13,color:T.txM,margin:0}}>All planned meals logged! Nice work.</p>
+    </> : <>
+      {/* ── Day's Plan ── */}
+      {dayPlanMeals.length > 0 && <>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"24px 0 14px"}}>
+          <div>
+            <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>{isToday?"Today's Plan":"Day's Plan"}</h2>
+            <span style={{fontSize:10,color:T.txM,fontWeight:500}}>{planLabel}</span>
+          </div>
+          <span onClick={()=>setTab("plan")} style={{fontSize:12,color:T.acc,fontWeight:500,cursor:"pointer"}}>View Plan</span>
+        </div>
+        {unloggedPlan.length === 0 && <Card style={{padding:"16px",textAlign:"center",marginBottom:6}}>
+          <p style={{fontSize:13,color:T.txM,margin:0}}>All planned meals logged! Nice work.</p>
+        </Card>}
+        {unloggedPlan.map((pm,i)=>{
+          const isLogging = loggingId === pm.name;
+          return <Card key={"plan-"+i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,border:`1px dashed ${T.bd}`,background:"transparent",cursor:"pointer"}} onClick={()=>handleLogForDate({type:pm.type||"meal",name:pm.name,cal:pm.cal,p:pm.p||0,c:pm.c||0,f:pm.f||0})}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <div style={{width:7,height:7,borderRadius:"50%",background:T.txM}}/>
+              <div>
+                <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{pm.name}</p>
+                <div style={{display:"flex",gap:8,marginTop:3}}>
+                  {[{v:pm.cal,l:"cal",c:T.acc},{v:(pm.p||0)+"g",l:"P",c:T.pro},{v:(pm.c||0)+"g",l:"C",c:T.carb},{v:(pm.f||0)+"g",l:"F",c:T.fat}].map(x=>
+                    <span key={x.l} style={{fontSize:10,fontFamily:T.mono,color:x.c}}>{x.v}<span style={{color:T.txM,fontSize:8}}> {x.l}</span></span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <span style={{fontSize:13,fontWeight:600,fontFamily:T.mono,color:isLogging?T.ok:T.acc}}>{isLogging?"✓":"Log →"}</span>
+          </Card>;
+        })}
+      </>}
+
+      {/* ── Eaten / Meals Logged ── */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"24px 0 14px"}}>
+        <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>{isToday?"Eaten Today":"Meals Logged"}</h2>
+        <span style={{fontSize:12,color:T.txM,fontFamily:T.mono}}>{displayLog.length} meal{displayLog.length!==1?"s":""}</span>
+      </div>
+      {displayLog.length === 0 && <Card style={{padding:"16px",textAlign:"center",marginBottom:6}}>
+        <p style={{fontSize:13,color:T.txM,margin:0}}>{isToday?"Nothing logged yet. Tap a meal above or go to the Log tab.":"No meals logged on this day. Tap any planned meal above to log it."}</p>
       </Card>}
-      {unloggedPlan.map((pm,i)=>{
-        const isLogging = loggingId === pm.name;
-        return <Card key={"plan-"+i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,border:`1px dashed ${T.bd}`,background:"transparent",cursor:"pointer"}} onClick={()=>handleLogForDate({type:pm.type||"meal",name:pm.name,cal:pm.cal,p:pm.p||0,c:pm.c||0,f:pm.f||0})}>
+      {displayLog.map((x)=><SwipeableRow key={x.id} onDelete={()=>handleUnlogForDate(x.id)}>
+        <Card style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:0}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:7,height:7,borderRadius:"50%",background:T.txM}}/>
+            <div style={{width:7,height:7,borderRadius:"50%",background:T.ok,boxShadow:`0 0 8px ${T.ok}40`}}/>
             <div>
-              <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{pm.name}</p>
+              <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{x.name}</p>
               <div style={{display:"flex",gap:8,marginTop:3}}>
-                {[{v:pm.cal,l:"cal",c:T.acc},{v:(pm.p||0)+"g",l:"P",c:T.pro},{v:(pm.c||0)+"g",l:"C",c:T.carb},{v:(pm.f||0)+"g",l:"F",c:T.fat}].map(x=>
-                  <span key={x.l} style={{fontSize:10,fontFamily:T.mono,color:x.c}}>{x.v}<span style={{color:T.txM,fontSize:8}}> {x.l}</span></span>
+                {[{v:x.calories||0,l:"cal",c:T.acc},{v:x.protein||0,l:"P",c:T.pro,u:"g"},{v:x.carbs||0,l:"C",c:T.carb,u:"g"},{v:x.fat||0,l:"F",c:T.fat,u:"g"}].map(z=>
+                  <span key={z.l} style={{fontSize:10,fontFamily:T.mono,color:z.c}}>{z.v}{z.u||""}<span style={{color:T.txM,fontSize:8}}> {z.l}</span></span>
                 )}
               </div>
             </div>
           </div>
-          <span style={{fontSize:13,fontWeight:600,fontFamily:T.mono,color:isLogging?T.ok:T.acc}}>{isLogging?"✓":"Log →"}</span>
-        </Card>;
-      })}
-    </>}
-
-    {/* ── Eaten / Meals Logged ── */}
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"24px 0 14px"}}>
-      <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>{isToday?"Eaten Today":"Meals Logged"}</h2>
-      <span style={{fontSize:12,color:T.txM,fontFamily:T.mono}}>{displayLog.length} meal{displayLog.length!==1?"s":""}</span>
-    </div>
-    {displayLog.length === 0 && <Card style={{padding:"16px",textAlign:"center",marginBottom:6}}>
-      <p style={{fontSize:13,color:T.txM,margin:0}}>{isToday?"Nothing logged yet. Tap a meal above or go to the Log tab.":"No meals logged on this day. Tap any planned meal above to log it."}</p>
-    </Card>}
-    {displayLog.map((x)=><SwipeableRow key={x.id} onDelete={()=>handleUnlogForDate(x.id)}>
-      <Card style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:0}}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:7,height:7,borderRadius:"50%",background:T.ok,boxShadow:`0 0 8px ${T.ok}40`}}/>
-          <div>
-            <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{x.name}</p>
-            <div style={{display:"flex",gap:8,marginTop:3}}>
-              {[{v:x.calories||0,l:"cal",c:T.acc},{v:x.protein||0,l:"P",c:T.pro,u:"g"},{v:x.carbs||0,l:"C",c:T.carb,u:"g"},{v:x.fat||0,l:"F",c:T.fat,u:"g"}].map(z=>
-                <span key={z.l} style={{fontSize:10,fontFamily:T.mono,color:z.c}}>{z.v}{z.u||""}<span style={{color:T.txM,fontSize:8}}> {z.l}</span></span>
-              )}
-            </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <button onClick={(e)=>{e.stopPropagation();onHeartMeal&&onHeartMeal({name:x.name,cal:x.calories,p:x.protein,c:x.carbs,f:x.fat},'manual');}} style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex",alignItems:"center"}}>
+              <HeartIcon filled={savedMeals.some(s=>s.name===x.name)}/>
+            </button>
+            <span style={{fontSize:10,color:T.txM,letterSpacing:"0.05em"}}>swipe ←</span>
           </div>
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <button onClick={(e)=>{e.stopPropagation();onHeartMeal&&onHeartMeal({name:x.name,cal:x.calories,p:x.protein,c:x.carbs,f:x.fat},'manual');}} style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex",alignItems:"center"}}>
-            <HeartIcon filled={savedMeals.some(s=>s.name===x.name)}/>
-          </button>
-          <span style={{fontSize:10,color:T.txM,letterSpacing:"0.05em"}}>swipe ←</span>
-        </div>
-      </Card>
-    </SwipeableRow>)}
+        </Card>
+      </SwipeableRow>)}
 
-    {isToday && <Card style={{padding:"14px 16px",marginTop:16,background:T.accG,border:`1px solid ${T.accM}`,display:"flex",alignItems:"flex-start",gap:10}}>
-      <span style={{fontSize:14}}>✦</span>
-      <p style={{fontSize:13,color:T.tx2,margin:0,lineHeight:1.5}}>{insightText}</p>
-    </Card>}
+      {isToday && <Card style={{padding:"14px 16px",marginTop:16,background:T.accG,border:`1px solid ${T.accM}`,display:"flex",alignItems:"flex-start",gap:10}}>
+        <span style={{fontSize:14}}>✦</span>
+        <p style={{fontSize:13,color:T.tx2,margin:0,lineHeight:1.5}}>{insightText}</p>
+      </Card>}
+    </>}
   </div>;
 };
 
@@ -2288,7 +2321,7 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
     </Card>}
 
     {/* Editable stat rows */}
-    <Lbl>Your Stats</Lbl>
+    <Lbl>Adjust Your Stats</Lbl>
     <Card style={{marginTop:8,marginBottom:20,overflow:"hidden"}}>
       {statRows.map((s,i)=>(
         <div key={s.l} onClick={()=>enterView(s.view)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",borderBottom:i<statRows.length-1?`1px solid ${T.bd}`:"none",cursor:"pointer"}}>
