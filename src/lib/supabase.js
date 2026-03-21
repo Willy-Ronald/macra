@@ -69,6 +69,20 @@ export async function saveProfile(userId, profile) {
   return { error };
 }
 
+export async function saveProStatus(userId, isPro) {
+  if (!supabase) return;
+  const { error } = await supabase
+    .from("profiles")
+    .update({ is_pro: isPro, updated_at: new Date().toISOString() })
+    .eq("id", userId);
+  if (error) {
+    console.error("[saveProStatus] failed", { code: error.code, message: error.message, hint: error.hint });
+  } else {
+    console.log("[saveProStatus] saved", { userId, isPro });
+  }
+  return { error };
+}
+
 export async function getProfile(userId) {
   if (!supabase) return null;
   const { data, error } = await supabase

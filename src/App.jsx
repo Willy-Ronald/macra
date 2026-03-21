@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   supabase, signUp, signIn, signOut, getUser,
-  saveProfile, getProfile,
+  saveProfile, getProfile, saveProStatus,
   saveMeal, getSavedMeals,
   logMeal, getTodayLog, getLogByDate, deleteMealLog,
   saveMealPlan, getWeekPlans,
@@ -2099,6 +2099,12 @@ export default function App() {
     setTab("home");setPhase("auth");
   };
 
+  // Persists pro status to DB so it survives refresh and is ready for Stripe webhooks
+  const handleSetIsPro = async (value) => {
+    setIsPro(value);
+    if(user) await saveProStatus(user.id, value);
+  };
+
   const refreshTodayLog = async () => {
     if(user) { const log = await getTodayLog(user.id); setTodayLog(log); }
   };
@@ -2139,7 +2145,7 @@ export default function App() {
       if(plans[abKey]) setTodayPlan(plans[abKey]);
     }}/>,
     log:<LogMeal savedMeals={savedMeals} onSaveMeal={handleSaveMeal} todayLog={todayLog} onLogMeal={handleLogMeal}/>,
-    grocery:<Grocery isPro={isPro} setIsPro={setIsPro} weekPlans={weekPlans} userId={user?.id}/>,
+    grocery:<Grocery isPro={isPro} setIsPro={handleSetIsPro} weekPlans={weekPlans} userId={user?.id}/>,
     profile:<ProfileScreen profile={profile} userId={user?.id} onProfileUpdate={p=>setProfile(p)} onSignOut={handleSignOut}/>
   };
 
