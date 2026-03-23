@@ -139,10 +139,16 @@ function calcMacros(profile) {
   const bmi = weightKg / (heightM * heightM);
   const proteinMult = getProteinMult(bmi, goal, activity, diet);
   const proteinG = Math.max(100, Math.round(weightLbs * proteinMult));
-  const fatG = Math.round((target * 0.25) / 9);
-  const carbG = Math.max(50, Math.round((target - proteinG * 4 - fatG * 9) / 4));
+  const proteinCal = proteinG * 4;
+  const remaining = target - proteinCal;
+  const fatG  = Math.max(40, Math.round((remaining * 0.50) / 9));
+  const carbG = Math.max(50, Math.round((remaining * 0.50) / 4));
   const rule = bmi > 35 ? "BMI>35 cap" : diet.includes("High Protein") ? "high_protein preference" : `${goal}+${activity}`;
-  console.log(`[macros] protein rule: ${rule} → ${proteinMult}g/lb = ${proteinG}g | BMR:${Math.round(bmr)} TDEE:${tdee} target:${target} C:${carbG}g F:${fatG}g`);
+  const proteinPct = Math.round((proteinCal / target) * 100);
+  const carbPct    = Math.round((carbG * 4  / target) * 100);
+  const fatPct     = Math.round((fatG  * 9  / target) * 100);
+  console.log(`[macros] protein rule: ${rule} → ${proteinMult}g/lb = ${proteinG}g | BMR:${Math.round(bmr)} TDEE:${tdee} target:${target}`);
+  console.log(`[macros] split — protein: ${proteinPct}% carbs: ${carbPct}% fat: ${fatPct}% (${proteinG}g / ${carbG}g / ${fatG}g)`);
   return {tdee, target, proteinG, fatG, carbG};
 }
 
