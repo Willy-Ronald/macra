@@ -289,8 +289,12 @@ export default async function handler(req, res) {
     ].filter(Boolean).join("\n");
 
     const avgMealProtein = Math.round(macros.proteinG / 4);
+    const weeklyBudget = profile.weeklyBudget ?? null;
+    const budgetLine = weeklyBudget
+      ? `BUDGET GUIDANCE: Target a weekly grocery cost of approximately $${weeklyBudget} for this full meal plan (both Day A and Day B combined). Prioritize affordable protein sources such as eggs, canned fish, chicken thighs, ground turkey, and legumes. Avoid expensive specialty ingredients, exotic produce, or premium cuts unless essential. This is a best-effort estimate — prices vary by location.`
+      : "";
 
-    const buildPrompt = (retryPrefix = "") => `${retryPrefix}Generate an A/B day meal plan. Goal: ${goal}.
+    const buildPrompt = (retryPrefix = "") => `${retryPrefix}Generate an A/B day meal plan. Goal: ${goal}.${budgetLine ? `\n\n${budgetLine}` : ""}
 
 HIT THESE MACROS WITHIN 3% — adjust portions not ingredients:
 Cal:${macros.target} P:${macros.proteinG}g C:${macros.carbG}g F:${macros.fatG}g

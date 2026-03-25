@@ -259,14 +259,15 @@ const Onboarding = ({onComplete}) => {
   const [dir,setDir] = useState(1);
   const [profile,setProfile] = useState({
     name:"",sex:"male",age:28,weightLbs:185,heightFt:5,heightIn:11,
-    activity:"active",goal:"lean_bulk",diet:[]
+    activity:"active",goal:"lean_bulk",diet:[],weeklyBudget:null
   });
+  const [budgetInput,setBudgetInput] = useState("");
 
   const set = (k,v) => setProfile(p=>({...p,[k]:v}));
   const next = () => {setDir(1);setStep(s=>s+1)};
   const back = () => {setDir(-1);setStep(s=>s-1)};
 
-  const totalSteps = 6;
+  const totalSteps = 7;
   const pct = ((step+1)/totalSteps)*100;
 
   const inputStyle = {
@@ -394,8 +395,32 @@ const Onboarding = ({onComplete}) => {
       </div>
     </div>,
 
-    // 5: Results
+    // 5: Weekly Grocery Budget
     <div key="5">
+      <h2 style={{fontSize:28,fontWeight:700,color:T.tx,margin:"0 0 6px",letterSpacing:"-0.02em"}}>Weekly Grocery Budget</h2>
+      <p style={{fontSize:14,color:T.txM,margin:"0 0 28px",lineHeight:1.5}}>What's your weekly grocery budget?</p>
+      <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:8}}>
+        <span style={{padding:"14px 0 14px 16px",borderRadius:`${T.r} 0 0 ${T.r}`,border:`1px solid ${T.bd}`,borderRight:"none",background:T.sf,color:T.txM,fontSize:16,fontWeight:600,lineHeight:1,height:50,boxSizing:"border-box",display:"flex",alignItems:"center"}}>$</span>
+        <input
+          type="number" inputMode="numeric" placeholder="e.g. 100"
+          value={budgetInput}
+          onChange={e=>setBudgetInput(e.target.value.replace(/[^0-9]/g,""))}
+          style={{flex:1,padding:"14px 16px",borderRadius:`0 ${T.r} ${T.r} 0`,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,fontFamily:T.font,fontWeight:500,outline:"none",boxSizing:"border-box",height:50}}
+        />
+      </div>
+      <p style={{fontSize:12,color:T.txM,margin:"0 0 12px",lineHeight:1.6}}>
+        This helps us tailor your meal plans to fit your budget. Without a budget set, suggested meals and ingredients may be more extensive or costly.
+      </p>
+      <p style={{fontSize:10,color:T.txM,margin:"0 0 28px",lineHeight:1.6,opacity:0.7}}>
+        Note: Macra cannot guarantee exact budget accuracy. Grocery prices vary by location, store, and season. Budget guidance is approximate and intended as a helpful starting point only.
+      </p>
+      <button onClick={()=>{set("weeklyBudget",null);next();}} style={{width:"100%",padding:12,borderRadius:T.r,border:`1px solid ${T.bd}`,background:"transparent",color:T.tx2,fontSize:14,fontWeight:500,cursor:"pointer",fontFamily:T.font}}>
+        Skip
+      </button>
+    </div>,
+
+    // 6: Results
+    <div key="6">
       <h2 style={{fontSize:28,fontWeight:700,color:T.tx,margin:"0 0 6px",letterSpacing:"-0.02em"}}>Your Targets</h2>
       <p style={{fontSize:14,color:T.txM,margin:"0 0 8px",lineHeight:1.5}}>
         {profile.name ? `${profile.name}, here's` : "Here's"} your personalized daily nutrition plan.
@@ -459,8 +484,16 @@ const Onboarding = ({onComplete}) => {
     {/* CTA */}
     <div style={{padding:"0 20px 32px"}}>
       <button onClick={()=>{
-        if(step < totalSteps - 1) next();
-        else onComplete({...profile,macros:calcMacros(profile)});
+        if(step === 5){
+          // Budget step — save value if entered, then advance
+          const val = budgetInput ? parseInt(budgetInput, 10) : null;
+          set("weeklyBudget", val && val > 0 ? val : null);
+          next();
+        } else if(step < totalSteps - 1){
+          next();
+        } else {
+          onComplete({...profile,macros:calcMacros(profile)});
+        }
       }} style={{
         width:"100%",padding:16,borderRadius:T.r,border:"none",
         background:T.acc,color:T.bg,fontSize:15,fontWeight:700,
@@ -2442,6 +2475,26 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
     </div>;
   }
 
+  // ── Budget sub-view ──
+  if(view==="budget"){
+    const [budgetDraft,setBudgetDraft]=useState(profile?.weeklyBudget?String(profile.weeklyBudget):"");
+    return <div style={{padding:"0 20px 24px"}}>
+      <BackBtn onBack={()=>setView(null)}/>
+      <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Weekly Grocery Budget</h1>
+      <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:8}}>
+        <span style={{padding:"14px 0 14px 16px",borderRadius:`${T.r} 0 0 ${T.r}`,border:`1px solid ${T.bd}`,borderRight:"none",background:T.sf,color:T.txM,fontSize:16,fontWeight:600,display:"flex",alignItems:"center"}}>$</span>
+        <input type="number" inputMode="numeric" placeholder="e.g. 100" value={budgetDraft} onChange={e=>setBudgetDraft(e.target.value.replace(/[^0-9]/g,""))} style={{flex:1,padding:"14px 16px",borderRadius:`0 ${T.r} ${T.r} 0`,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,fontFamily:T.font,fontWeight:500,outline:"none",boxSizing:"border-box"}}/>
+      </div>
+      <p style={{fontSize:12,color:T.txM,margin:"0 0 10px",lineHeight:1.6}}>This helps us tailor your meal plans to fit your budget. Without a budget set, suggested meals and ingredients may be more extensive or costly.</p>
+      <p style={{fontSize:10,color:T.txM,margin:"0 0 24px",lineHeight:1.6,opacity:0.7}}>Note: Macra cannot guarantee exact budget accuracy. Grocery prices vary by location, store, and season. Budget guidance is approximate and intended as a helpful starting point only.</p>
+      <SaveBtn onClick={()=>{
+        const val=budgetDraft?parseInt(budgetDraft,10):null;
+        saveField({weeklyBudget:val&&val>0?val:null},null);
+      }}/>
+      <button onClick={()=>{saveField({weeklyBudget:null},null);}} style={{width:"100%",padding:12,borderRadius:T.r,border:`1px solid ${T.bd}`,background:"transparent",color:T.tx2,fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:T.font,marginTop:10}}>Clear Budget</button>
+    </div>;
+  }
+
   // ── Main profile view ──
   const foodsCount = (profile?.dislikedFoods||[]).length;
   const cuisinesCount = (profile?.dislikedCuisines||[]).length;
@@ -2481,6 +2534,13 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
       </div>
       <Chevron/>
     </Card>
+    <Card onClick={()=>enterView("budget")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,cursor:"pointer"}}>
+      <div>
+        <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>Weekly Budget</p>
+        <p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{profile?.weeklyBudget?`~$${profile.weeklyBudget}/week`:"Not set"}</p>
+      </div>
+      <Chevron/>
+    </Card>
     <div style={{marginBottom:20}}/>
 
     {/* Food preferences */}
@@ -2500,18 +2560,22 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
 
     {/* App settings */}
     <Lbl>App Settings</Lbl>
-    {[{l:"Household Mode",d:"Add partner's profile",pro:true},{l:"Notifications",d:"Meal reminders, reports"},{l:"Subscription",d:"Macra Free"}].map((s,i)=>(
-      <Card key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginTop:8,marginBottom:6,cursor:"pointer"}}>
-        <div>
-          <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{s.l}</p>
-            {s.pro&&<span style={{fontSize:8,fontWeight:700,color:T.bg,background:T.acc,padding:"2px 6px",borderRadius:4}}>PRO</span>}
-          </div>
-          <p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{s.d}</p>
-        </div>
-        <Chevron/>
-      </Card>
-    ))}
+    {/* Household Tracking — coming soon, not tappable */}
+    <Card style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginTop:8,marginBottom:6}}>
+      <div>
+        <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>Household Tracking</p>
+        <p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>Track multiple household members</p>
+      </div>
+      <span style={{fontSize:10,fontWeight:600,color:T.txM,border:`1px solid ${T.bd}`,borderRadius:10,padding:"3px 9px",letterSpacing:"0.04em"}}>Coming Soon</span>
+    </Card>
+    {/* Subscription */}
+    <Card style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginTop:8,marginBottom:6,cursor:"pointer"}}>
+      <div>
+        <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>Subscription</p>
+        <p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>Macra Free</p>
+      </div>
+      <Chevron/>
+    </Card>
     {onSignOut&&<button onClick={onSignOut} style={{width:"100%",padding:14,borderRadius:T.r,border:`1px solid rgba(239,68,68,0.3)`,background:"rgba(239,68,68,0.08)",color:"#EF4444",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:T.font,marginTop:20}}>Sign Out</button>}
   </div>;
 };
@@ -2714,6 +2778,7 @@ export default function App() {
             weightLbs:data.weight_lbs, heightFt:data.height_ft, heightIn:data.height_in,
             activity:data.activity, goal:data.goal, diet:data.diet||[],
             dislikedFoods:data.disliked_foods||[], dislikedCuisines:data.disliked_cuisines||[],
+            weeklyBudget:data.weekly_budget??null,
           };
           const hasStats = pBase.sex && pBase.age && pBase.weightLbs && pBase.heightFt != null && pBase.activity && pBase.goal;
           const freshMacros = hasStats ? calcMacros(pBase) : {target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat};

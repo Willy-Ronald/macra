@@ -74,6 +74,7 @@ export async function saveProfile(userId, profile) {
     target_fat: profile.macros?.fatG,
     disliked_foods: profile.dislikedFoods || [],
     disliked_cuisines: profile.dislikedCuisines || [],
+    weekly_budget: profile.weeklyBudget ?? null,
     updated_at: new Date().toISOString(),
   });
   return { error };
