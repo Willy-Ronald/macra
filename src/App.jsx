@@ -770,8 +770,14 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
         </Card>
       </div>
     </> : <>
+      {/* ── Manual mode banner ── */}
+      {profile?.trackingMode==='manual' && <Card style={{padding:"16px 18px",marginBottom:16,textAlign:"center",border:`1px solid ${T.bd}`}}>
+        <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:"0 0 4px"}}>Manual Track Mode</p>
+        <p style={{fontSize:12,color:T.tx2,margin:0}}>Log your meals in the Log tab to track your macros.</p>
+      </Card>}
+
       {/* ── Day's Plan ── */}
-      {dayPlanMeals.length > 0 && <>
+      {profile?.trackingMode!=='manual' && dayPlanMeals.length > 0 && <>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"24px 0 14px"}}>
           <div>
             <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>{isToday?"Today's Plan":"Day's Plan"}</h2>
@@ -952,7 +958,7 @@ const RecipeDetail = ({meal, savedMeals=[], onHeartMeal, onLogMeal, onBack}) => 
   </div>;
 };
 
-const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,onLogMeal}) => {
+const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,onLogMeal,setTab}) => {
   const [sel,setSel]=useState("A");
   const [loading,setLoading]=useState(false);
   const [loadMsg,setLoadMsg]=useState("");
@@ -1107,6 +1113,18 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,o
   };
 
   if(selectedMeal) return <RecipeDetail meal={selectedMeal} savedMeals={savedMeals} onHeartMeal={onHeartMeal} onLogMeal={onLogMeal} onBack={()=>setSelectedMeal(null)}/>;
+
+  if(profile?.trackingMode==='manual') return <div style={{padding:"0 20px 24px"}}>
+    <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"4px 0 20px",letterSpacing:"-0.02em"}}>Meal Plan</h1>
+    <Card style={{padding:"28px 20px",textAlign:"center"}}>
+      <div style={{width:48,height:48,borderRadius:14,background:T.accM,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="1.5" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </div>
+      <p style={{fontSize:16,fontWeight:700,color:T.tx,margin:"0 0 8px"}}>Manual Track Mode</p>
+      <p style={{fontSize:13,color:T.tx2,margin:"0 0 20px",lineHeight:1.5}}>You're logging meals freely. Switch to AI Plan Mode to generate a personalised weekly meal plan.</p>
+      <button onClick={()=>setTab&&setTab("profile")} style={{padding:"12px 24px",borderRadius:T.r,border:`1.5px solid ${T.acc}`,background:"transparent",color:T.acc,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:T.font}}>Switch to AI Plan Mode →</button>
+    </Card>
+  </div>;
 
   return <div style={{padding:"0 20px 24px"}}>
     <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
@@ -1782,6 +1800,9 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
         </div>}
       </Card>
 
+      {/* Expanding soon note */}
+      {!searchQuery && <p style={{fontSize:11,color:T.txM,margin:"6px 4px 0",lineHeight:1.5}}>Food database expanding soon — manual entry always available for unlisted items.</p>}
+
       {/* Search error — only when both APIs fail */}
       {searchError && !searchLoading && !hasResults && <Card style={{padding:"14px 16px",marginTop:4}}>
         <p style={{fontSize:13,color:T.txM,margin:0}}>{searchError}</p>
@@ -2303,6 +2324,7 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
   const [draftGoal, setDraftGoal] = useState("maintain");
   const [draftBudget, setDraftBudget] = useState("");
   const [draftPickiness, setDraftPickiness] = useState(3);
+  const [draftTracking, setDraftTracking] = useState('ai_plan');
 
   const showSaved = () => { setSavedToast(true); setTimeout(()=>setSavedToast(false),2000); };
 
@@ -2333,6 +2355,7 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
       setDraftBudget(b && b !== "null" && Number(b) > 0 ? String(b) : "");
     }
     if(v==="pickiness") setDraftPickiness(profile?.pickinessLevel ?? 3);
+    if(v==="tracking") setDraftTracking(profile?.trackingMode||'ai_plan');
     setView(v);
   };
 
@@ -2605,6 +2628,20 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
     </div>;
   }
 
+  // ── Tracking Mode sub-view ──
+  if(view==="tracking"){
+    return <div style={{padding:"0 20px 24px"}}>
+      <BackBtn onBack={()=>setView(null)}/>
+      <h2 style={{fontSize:20,fontWeight:700,color:T.tx,margin:"0 0 6px",letterSpacing:"-0.02em"}}>Tracking Mode</h2>
+      <p style={{fontSize:13,color:T.tx2,margin:"0 0 20px"}}>Choose how you want to track your nutrition.</p>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        <SelBtn label="AI Plan Mode" desc="Generate a weekly meal plan and follow it" selected={draftTracking==='ai_plan'} onClick={()=>setDraftTracking('ai_plan')}/>
+        <SelBtn label="Manual Track Mode" desc="Log meals freely without a generated plan" selected={draftTracking==='manual'} onClick={()=>setDraftTracking('manual')}/>
+      </div>
+      <SaveBtn onClick={()=>saveField({trackingMode:draftTracking},null)}/>
+    </div>;
+  }
+
   // ── Main profile view ──
   const foodsCount = (profile?.dislikedFoods||[]).length;
   const cuisinesCount = (profile?.dislikedCuisines||[]).length;
@@ -2648,6 +2685,13 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
       <div>
         <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>Weekly Budget</p>
         <p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{profile?.weeklyBudget?`~$${profile.weeklyBudget}/week`:"Not set"}</p>
+      </div>
+      <Chevron/>
+    </Card>
+    <Card onClick={()=>enterView("tracking")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,cursor:"pointer"}}>
+      <div>
+        <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>Tracking Mode</p>
+        <p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{profile?.trackingMode==='manual'?"Manual Track Mode":"AI Plan Mode"}</p>
       </div>
       <Chevron/>
     </Card>
@@ -2898,6 +2942,7 @@ export default function App() {
             activity:data.activity, goal:data.goal, diet:data.diet||[],
             dislikedFoods:data.disliked_foods||[], dislikedCuisines:data.disliked_cuisines||[],
             weeklyBudget:data.weekly_budget??null, pickinessLevel:data.pickiness_level??3,
+            trackingMode:data.tracking_mode||'ai_plan',
           };
           const hasStats = pBase.sex && pBase.age && pBase.weightLbs && pBase.heightFt != null && pBase.activity && pBase.goal;
           const freshMacros = hasStats ? calcMacros(pBase) : {target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat};
@@ -2942,6 +2987,8 @@ export default function App() {
         weightLbs:data.weight_lbs, heightFt:data.height_ft, heightIn:data.height_in,
         activity:data.activity, goal:data.goal, diet:data.diet||[],
         dislikedFoods:data.disliked_foods||[], dislikedCuisines:data.disliked_cuisines||[],
+        weeklyBudget:data.weekly_budget??null, pickinessLevel:data.pickiness_level??3,
+        trackingMode:data.tracking_mode||'ai_plan',
       };
       const hasStats = pBase.sex && pBase.age && pBase.weightLbs && pBase.heightFt != null && pBase.activity && pBase.goal;
       const freshMacros = hasStats ? calcMacros(pBase) : {target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat};
@@ -3041,7 +3088,7 @@ export default function App() {
 
   const screens = {
     home:<Dashboard setTab={switchTab} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal} onUnlogMeal={handleUnlogMeal} todayPlan={todayPlan} weekPlans={weekPlans} userId={user?.id} savedMeals={savedMeals} onHeartMeal={handleHeartToggle}/>,
-    plan:<Plan profile={profile} userId={user?.id} isPro={isPro} savedMeals={savedMeals} onHeartMeal={handleHeartToggle} onLogMeal={handleLogMeal} onWeekPlanUpdate={(plans)=>{
+    plan:<Plan profile={profile} userId={user?.id} isPro={isPro} savedMeals={savedMeals} onHeartMeal={handleHeartToggle} onLogMeal={handleLogMeal} setTab={switchTab} onWeekPlanUpdate={(plans)=>{
       // plans = { 0: dayA[], 1: dayB[] }
       const wasEmpty = Object.keys(weekPlans).length === 0;
       setWeekPlans(plans);
