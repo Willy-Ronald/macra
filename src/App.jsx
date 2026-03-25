@@ -11,6 +11,7 @@ import {
   getWeightLog, addWeightEntry, deleteWeightEntry,
   getTodayWater, upsertWaterLog, getWaterHistory, updateWaterGoal,
   getLoggedDatesInRange,
+  getMealLogRange, getMealLogSummary, getAchievements, unlockAchievement,
 } from "./lib/supabase";
 import { generateMealPlan } from "./lib/claude";
 
@@ -3381,12 +3382,256 @@ const PwaPrompt = ({type, onInstall, onDismiss}) => (
   </>
 );
 
+// ─── STATS TAB ─────────────────────────────────────────────────
+const ACHIEVEMENTS_DEF = [
+  // Logging
+  {key:'first_bite',    name:'First Bite',    desc:'Log your first meal',                   icon:'🍽️', cat:'Logging',  total:1,   prog:d=>Math.min(d.totalMeals,1),    chk:d=>d.totalMeals>=1},
+  {key:'consistent',    name:'Consistent',    desc:'3-day logging streak',                  icon:'🔥', cat:'Logging',  total:3,   prog:d=>Math.min(d.bestLogging,3),   chk:d=>d.bestLogging>=3},
+  {key:'week_warrior',  name:'Week Warrior',  desc:'7-day logging streak',                  icon:'💪', cat:'Logging',  total:7,   prog:d=>Math.min(d.bestLogging,7),   chk:d=>d.bestLogging>=7},
+  {key:'month_strong',  name:'Month Strong',  desc:'30-day logging streak',                 icon:'📅', cat:'Logging',  total:30,  prog:d=>Math.min(d.bestLogging,30),  chk:d=>d.bestLogging>=30},
+  {key:'century',       name:'Century',       desc:'Log 100 total meals',                   icon:'💯', cat:'Logging',  total:100, prog:d=>Math.min(d.totalMeals,100),  chk:d=>d.totalMeals>=100},
+  // Macros
+  {key:'on_target',     name:'On Target',     desc:'Hit your calorie goal once',            icon:'🎯', cat:'Macros',   total:1,   prog:d=>Math.min(d.bestMacros,1),    chk:d=>d.bestMacros>=1},
+  {key:'macro_master',  name:'Macro Master',  desc:'Calorie goal 7 days in a row',          icon:'🏆', cat:'Macros',   total:7,   prog:d=>Math.min(d.bestMacros,7),    chk:d=>d.bestMacros>=7},
+  {key:'precision',     name:'Precision',     desc:'All 3 macros within 10% in one day',   icon:'🔬', cat:'Macros',   total:1,   prog:d=>d.hasPrecision?1:0,          chk:d=>d.hasPrecision},
+  {key:'balanced_week', name:'Balanced Week', desc:'All macros within 10% for 7 days',     icon:'⚖️', cat:'Macros',   total:7,   prog:d=>Math.min(d.bestPrecision,7), chk:d=>d.bestPrecision>=7},
+  // Plan
+  {key:'planner',       name:'Planner',       desc:'Generate your first meal plan',         icon:'📋', cat:'Plan',     total:1,   prog:d=>Math.min(d.lifetimeGens,1),  chk:d=>d.lifetimeGens>=1},
+  {key:'committed',     name:'Committed',     desc:'Follow your plan for 3 days',           icon:'✅', cat:'Plan',     total:3,   prog:d=>Math.min(d.bestPlan,3),      chk:d=>d.bestPlan>=3},
+  {key:'dedicated',     name:'Dedicated',     desc:'Follow your plan for 7 days',           icon:'🎖️', cat:'Plan',     total:7,   prog:d=>Math.min(d.bestPlan,7),      chk:d=>d.bestPlan>=7},
+  // Health
+  {key:'hydrated',      name:'Hydrated',      desc:'Hit your water goal once',              icon:'💧', cat:'Health',   total:1,   prog:d=>Math.min(d.waterGoalHit,1),  chk:d=>d.waterGoalHit>=1},
+  {key:'water_week',    name:'Water Week',    desc:'Hit water goal 7 days in a row',        icon:'🌊', cat:'Health',   total:7,   prog:d=>Math.min(d.waterStreak,7),   chk:d=>d.waterStreak>=7},
+  {key:'weight_watcher',name:'Weight Watcher',desc:'Log your weight 7 times',               icon:'📊', cat:'Health',   total:7,   prog:d=>Math.min(d.weightEntries,7), chk:d=>d.weightEntries>=7},
+  {key:'transformation',name:'Transformation',desc:'Log weight 30 times',                   icon:'🌟', cat:'Health',   total:30,  prog:d=>Math.min(d.weightEntries,30),chk:d=>d.weightEntries>=30},
+  // Milestone
+  {key:'early_adopter', name:'Early Adopter', desc:'One of the first Macra users',          icon:'⭐', cat:'Milestone',total:1,   prog:d=>1,                           chk:d=>true},
+  {key:'pro_member',    name:'Pro Member',    desc:'Upgraded to Macra Pro',                 icon:'👑', cat:'Milestone',total:1,   prog:d=>d.isPro?1:0,                 chk:d=>d.isPro},
+];
+
+const StatsTab = ({profile, userId, isPro}) => {
+  const [statsData, setStatsData] = useState(null);
+  const [unlockedKeys, setUnlockedKeys] = useState(new Set());
+  const [toast, setToast] = useState(null);
+  const toastRef = useRef(null);
+
+  useEffect(() => { if(userId) load(); }, [userId]);
+
+  const load = async () => {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const d90 = new Date(now.getTime() - 90*24*60*60*1000);
+    const d30 = new Date(now.getTime() - 30*24*60*60*1000);
+    const start90 = d90.toISOString().split('T')[0];
+    const start30 = d30.toISOString().split('T')[0];
+
+    const [logData, summary, waterHist, weightLog, dbAch, genUsage] = await Promise.all([
+      getMealLogRange(userId, start90, todayStr),
+      getMealLogSummary(userId),
+      getWaterHistory(userId),
+      getWeightLog(userId),
+      getAchievements(userId),
+      getGenerationUsage(userId),
+    ]);
+
+    // Group 90-day log by date
+    const byDate = {};
+    logData.forEach(r => { if(!byDate[r.date]) byDate[r.date]=[]; byDate[r.date].push(r); });
+
+    // Build ordered date array for 90-day window
+    const dates = [];
+    const d = new Date(d90);
+    while(d <= now){ dates.push(d.toISOString().split('T')[0]); d.setDate(d.getDate()+1); }
+
+    const m = profile?.macros || {target:2200,proteinG:180,carbG:240,fatG:70};
+
+    // Generic streak calculators
+    const calcCurrent = pred => {
+      let streak = 0;
+      for(let i=dates.length-1; i>=0; i--){
+        const dl = byDate[dates[i]]||[];
+        if(pred(dl)) { streak++; }
+        else if(dates[i]===todayStr) { continue; } // today not done yet
+        else { break; }
+      }
+      return streak;
+    };
+    const calcBest = pred => {
+      let best=0,cur=0;
+      dates.forEach(ds=>{ const dl=byDate[ds]||[]; if(pred(dl)){cur++;best=Math.max(best,cur);}else{cur=0;} });
+      return best;
+    };
+
+    const logPred  = dl => dl.length>=1;
+    const calPred  = dl => { const c=dl.reduce((s,r)=>s+(r.calories||0),0); return dl.length>=1&&c>=m.target*0.9&&c<=m.target*1.1; };
+    const planPred = dl => dl.length>=3;
+    const precPred = dl => {
+      if(!dl.length) return false;
+      const cal=dl.reduce((s,r)=>s+(r.calories||0),0);
+      const pro=dl.reduce((s,r)=>s+(r.protein||0),0);
+      const car=dl.reduce((s,r)=>s+(r.carbs||0),0);
+      const fat=dl.reduce((s,r)=>s+(r.fat||0),0);
+      return cal>=m.target*0.9&&cal<=m.target*1.1&&pro>=m.proteinG*0.9&&pro<=m.proteinG*1.1&&car>=m.carbG*0.9&&car<=m.carbG*1.1&&fat>=m.fatG*0.9&&fat<=m.fatG*1.1;
+    };
+
+    const loggingStreak = calcCurrent(logPred);
+    const macroStreak   = calcCurrent(calPred);
+    const planStreak    = calcCurrent(planPred);
+    const precStreak    = calcCurrent(precPred);
+    const bestLogging   = calcBest(logPred);
+    const bestMacros    = calcBest(calPred);
+    const bestPlan      = calcBest(planPred);
+    const bestPrecision = calcBest(precPred);
+
+    // 30-day avg calories
+    const log30 = logData.filter(r=>r.date>=start30);
+    const by30 = {}; log30.forEach(r=>{ if(!by30[r.date])by30[r.date]=0; by30[r.date]+=(r.calories||0); });
+    const days30 = Object.values(by30);
+    const avgCal = days30.length>0 ? Math.round(days30.reduce((s,v)=>s+v,0)/days30.length) : 0;
+
+    // Water (7-day history)
+    const waterGoalHit = waterHist.filter(w=>w.glasses>=(w.goal||8)).length;
+    let waterStreak=0;
+    for(let i=0;i<7;i++){
+      const d2=new Date(now); d2.setDate(d2.getDate()-i);
+      const ds=d2.toISOString().split('T')[0];
+      const entry=waterHist.find(w=>w.log_date===ds);
+      if(entry&&entry.glasses>=(entry.goal||8)){ waterStreak++; }
+      else if(ds===todayStr){ continue; }
+      else { break; }
+    }
+
+    // Weight
+    const weightEntries = weightLog.length;
+    const weightProgress = weightLog.length>=2 ? weightLog[weightLog.length-1].weight_lbs - weightLog[0].weight_lbs : null;
+
+    const computed = {
+      totalMeals:summary.totalMeals, totalDays:summary.totalDays, avgCal,
+      loggingStreak, macroStreak, planStreak, precisionStreak:precStreak,
+      bestLogging, bestMacros, bestPlan, bestPrecision,
+      hasPrecision:bestPrecision>=1,
+      lifetimeGens:genUsage?.lifetimeCount||0,
+      waterGoalHit, waterStreak, weightEntries, weightProgress, isPro,
+    };
+
+    // Unlock new achievements
+    const dbKeys = new Set(dbAch.map(a=>a.achievement_key));
+    const newlyUnlocked = [];
+    for(const ach of ACHIEVEMENTS_DEF){
+      if(!dbKeys.has(ach.key)&&ach.chk(computed)){
+        await unlockAchievement(userId, ach.key);
+        newlyUnlocked.push(ach);
+        dbKeys.add(ach.key);
+      }
+    }
+    setUnlockedKeys(new Set(dbKeys));
+    setStatsData(computed);
+
+    // Show toasts for newly unlocked (stagger if multiple)
+    newlyUnlocked.forEach((ach,i)=>{
+      setTimeout(()=>{
+        setToast(ach);
+        if(toastRef.current) clearTimeout(toastRef.current);
+        toastRef.current = setTimeout(()=>setToast(null), 2800);
+      }, i*3500);
+    });
+  };
+
+  if(!statsData) return <div style={{padding:'60px 20px',textAlign:'center'}}>
+    <div style={{width:28,height:28,borderRadius:'50%',border:`2px solid ${T.bd}`,borderTopColor:T.acc,animation:'spin 1s linear infinite',margin:'0 auto 16px'}}/>
+    <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    <p style={{fontSize:13,color:T.txM,margin:0}}>Calculating your stats…</p>
+  </div>;
+
+  const unlockedCount = unlockedKeys.size;
+
+  return <div style={{padding:'0 20px 32px'}}>
+    {/* Toast */}
+    {toast&&<div style={{position:'fixed',top:56,left:'50%',transform:'translateX(-50%)',zIndex:400,background:T.acc,color:T.bg,padding:'10px 20px',borderRadius:T.r,fontSize:13,fontWeight:700,boxShadow:'0 4px 20px rgba(0,0,0,0.5)',whiteSpace:'nowrap',maxWidth:'90vw',textAlign:'center',transition:'opacity 0.3s'}}>
+      🏆 Achievement Unlocked: {toast.name}!
+    </div>}
+
+    <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:'4px 0 20px',letterSpacing:'-0.02em'}}>Stats</h1>
+
+    {/* ── Streaks ── */}
+    <Lbl>Streaks</Lbl>
+    <div style={{display:'grid',gridTemplateColumns:profile?.trackingMode==='manual'?'1fr 1fr':'1fr 1fr 1fr',gap:8,marginTop:10,marginBottom:28}}>
+      {[
+        {label:'Logging',val:statsData.loggingStreak,best:statsData.bestLogging},
+        {label:'Macros', val:statsData.macroStreak,  best:statsData.bestMacros},
+        ...(profile?.trackingMode!=='manual'?[{label:'Plan',val:statsData.planStreak,best:statsData.bestPlan}]:[]),
+      ].map(s=><Card key={s.label} style={{padding:'16px 8px',textAlign:'center',border:s.val>0?`1px solid ${T.acc}40`:`1px solid ${T.bd}`}}>
+        <div style={{fontSize:22,marginBottom:6}}>🔥</div>
+        <p style={{fontSize:28,fontWeight:700,color:s.val>0?T.acc:T.txM,margin:'0 0 3px',fontFamily:T.mono,lineHeight:1}}>{s.val}</p>
+        <p style={{fontSize:10,fontWeight:600,color:T.txM,margin:'0 0 5px',letterSpacing:'0.05em',textTransform:'uppercase'}}>{s.label}</p>
+        <p style={{fontSize:9,color:T.txM,margin:0}}>Best: {s.best}d</p>
+      </Card>)}
+    </div>
+
+    {/* ── Achievements ── */}
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+      <Lbl>Achievements</Lbl>
+      <span style={{fontSize:11,color:T.txM,fontFamily:T.mono}}>{unlockedCount} of {ACHIEVEMENTS_DEF.length} unlocked</span>
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:28}}>
+      {ACHIEVEMENTS_DEF.map(ach=>{
+        const unlocked = unlockedKeys.has(ach.key);
+        const progress = unlocked ? ach.total : ach.prog(statsData);
+        const pct = Math.min((progress/ach.total)*100, 100);
+        return <div key={ach.key} style={{
+          background:T.sf,borderRadius:T.r,padding:'14px 12px',
+          border:unlocked?`1px solid ${T.acc}30`:`1px solid ${T.bd}`,
+          opacity:unlocked?1:0.62,position:'relative',overflow:'hidden',
+          boxShadow:unlocked?`0 0 18px ${T.acc}0D`:undefined,
+        }}>
+          <span style={{fontSize:26,display:'block',marginBottom:8,lineHeight:1}}>{ach.icon}</span>
+          <p style={{fontSize:12,fontWeight:700,color:unlocked?T.tx:T.tx2,margin:'0 0 3px',lineHeight:1.2}}>{ach.name}</p>
+          <p style={{fontSize:10,color:T.txM,margin:'0 0 10px',lineHeight:1.4}}>{ach.desc}</p>
+          <div style={{height:3,borderRadius:2,background:T.bd,marginBottom:4}}>
+            <div style={{height:'100%',borderRadius:2,background:unlocked?T.acc:T.tx2,width:`${pct}%`,transition:'width 0.8s ease'}}/>
+          </div>
+          <p style={{fontSize:9,color:T.txM,margin:0,textAlign:'right',fontFamily:T.mono}}>{Math.round(progress)}/{ach.total}</p>
+          {unlocked
+            ? <div style={{position:'absolute',top:8,right:8,width:18,height:18,borderRadius:'50%',background:T.acc,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={T.bg} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+              </div>
+            : <div style={{position:'absolute',top:8,right:8}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+              </div>
+          }
+        </div>;
+      })}
+    </div>
+
+    {/* ── Summary ── */}
+    <Lbl>Summary</Lbl>
+    <Card style={{marginTop:10,overflow:'hidden'}}>
+      {[
+        {label:'Total meals logged',    val:String(statsData.totalMeals)},
+        {label:'Days tracked',          val:String(statsData.totalDays)},
+        {label:'Avg daily calories (30d)',val:statsData.avgCal>0?`${statsData.avgCal.toLocaleString()} cal`:'—'},
+        {label:'Best logging streak',   val:`${statsData.bestLogging} day${statsData.bestLogging!==1?'s':''}`},
+      ].map((s,i,arr)=><div key={s.label} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'13px 16px',borderBottom:i<arr.length-1||(statsData.weightProgress!==null)?`1px solid ${T.bd}`:'none'}}>
+        <span style={{fontSize:13,color:T.tx2}}>{s.label}</span>
+        <span style={{fontSize:13,fontWeight:600,color:T.tx,fontFamily:T.mono}}>{s.val}</span>
+      </div>)}
+      {statsData.weightProgress!==null&&<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'13px 16px'}}>
+        <span style={{fontSize:13,color:T.tx2}}>Weight progress</span>
+        <span style={{fontSize:13,fontWeight:600,fontFamily:T.mono,color:statsData.weightProgress<0?T.ok:statsData.weightProgress>0?'#EF4444':T.tx}}>
+          {statsData.weightProgress<0?`↓ ${Math.abs(statsData.weightProgress).toFixed(1)} lbs`:statsData.weightProgress>0?`↑ ${statsData.weightProgress.toFixed(1)} lbs`:'No change'}
+        </span>
+      </div>}
+    </Card>
+  </div>;
+};
+
 const navTabs=[
-  {id:"home",label:"Home",d:"M3 9.5L12 3l9 6.5V20a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 20V9.5z"},
-  {id:"plan",label:"Plan",d:"M3,4h18v18H3zM16 2v4M8 2v4M3 10h18"},
-  {id:"log",label:"Log",d:"M12,3a9,9 0 1,0 0,18a9,9 0 1,0 0,-18M12 7v5l3.5 2"},
+  {id:"home", label:"Home",  d:"M3 9.5L12 3l9 6.5V20a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 20V9.5z"},
+  {id:"plan", label:"Plan",  d:"M3,4h18v18H3zM16 2v4M8 2v4M3 10h18"},
+  {id:"log",  label:"Log",   d:"M12,3a9,9 0 1,0 0,18a9,9 0 1,0 0,-18M12 7v5l3.5 2"},
+  {id:"stats",label:"Stats", d:"M3 20V10|M8 20V4|M13 20V13|M18 20V7"},
   {id:"grocery",label:"List",d:"M9 5h11M9 12h11M9 19h11"},
-  {id:"profile",label:"You",d:"M12,3.5a4.5,4.5 0 1,0 0,9a4.5,4.5 0 1,0 0,-9M4.5 21c0-4.14 3.36-7.5 7.5-7.5s7.5 3.36 7.5 7.5"},
+  {id:"profile",label:"You", d:"M12,3.5a4.5,4.5 0 1,0 0,9a4.5,4.5 0 1,0 0,-9M4.5 21c0-4.14 3.36-7.5 7.5-7.5s7.5 3.36 7.5 7.5"},
 ];
 
 export default function App() {
@@ -3689,6 +3934,7 @@ export default function App() {
       if(wasEmpty) triggerPwaEarly();
     }}/>,
     log:<LogMeal savedMeals={savedMeals} onSaveMeal={handleSaveMeal} todayLog={todayLog} onLogMeal={handleLogMeal} userId={user?.id} onDeleteSavedMeal={handleDeleteSavedMeal} defaultMealType={defaultLogMealType}/>,
+    stats:<StatsTab profile={profile} userId={user?.id} isPro={isPro}/>,
     grocery:<Grocery isPro={isPro} setIsPro={handleSetIsPro} weekPlans={weekPlans} userId={user?.id}/>,
     profile:<ProfileScreen profile={profile} userId={user?.id} onProfileUpdate={p=>setProfile(p)} onSignOut={handleSignOut}/>
   };
@@ -3713,7 +3959,7 @@ export default function App() {
     <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:"rgba(9,9,11,0.95)",backdropFilter:"blur(24px)",borderTop:`1px solid ${T.bd}`,display:"flex",justifyContent:"space-around",padding:"6px 0 22px",zIndex:10}}>
       {navTabs.map(t=>{
         const a=tab===t.id;
-        return <button key={t.id} onClick={()=>switchTab(t.id)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"4px 12px",transition:"all 0.2s"}}>
+        return <button key={t.id} onClick={()=>switchTab(t.id)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"4px 7px",transition:"all 0.2s"}}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?T.acc:"#8E8E93"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             {t.d.split("|").map((p,i)=><path key={i} d={p}/>)}
           </svg>

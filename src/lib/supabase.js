@@ -452,3 +452,50 @@ export async function updateWaterGoal(userId, goal) {
   if (error) console.error("[updateWaterGoal] failed", { code: error.code, message: error.message });
   return { error };
 }
+
+// ── MEAL LOG RANGE (for streak + stats calculation) ──────────────
+
+export async function getMealLogRange(userId, startDate, endDate) {
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from("meal_log")
+    .select("date, calories, protein, carbs, fat")
+    .eq("user_id", userId)
+    .gte("date", startDate)
+    .lte("date", endDate)
+    .order("date", { ascending: true });
+  return data || [];
+}
+
+// All-time meal count + distinct days tracked (lightweight — date column only)
+export async function getMealLogSummary(userId) {
+  if (!supabase) return { totalMeals: 0, totalDays: 0 };
+  const { data } = await supabase
+    .from("meal_log")
+    .select("date")
+    .eq("user_id", userId);
+  const dates = (data || []).map(r => r.date);
+  return { totalMeals: dates.length, totalDays: new Set(dates).size };
+}
+
+// ── ACHIEVEMENTS ─────────────────────────────────────────────────
+
+export async function getAchievements(userId) {
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from("achievements")
+    .select("achievement_key, unlocked_at")
+    .eq("user_id", userId);
+  return data || [];
+}
+
+export async function unlockAchievement(userId, key) {
+  if (!supabase) return;
+  const { error } = await supabase
+    .from("achievements")
+    .insert({ user_id: userId, achievement_key: key });
+  // Ignore unique violation (23505) — means it was already unlocked
+  if (error && error.code !== "23505") {
+    console.error("[unlockAchievement]", { key, code: error.code, message: error.message });
+  }
+}
