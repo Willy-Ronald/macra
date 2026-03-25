@@ -259,23 +259,25 @@ Rules:
 - Day A and Day B must have completely different meals from each other
 - Each day has exactly 4 meals: BREAKFAST, LUNCH, SNACK, DINNER — in that order
 - Use realistic grocery store ingredients
-- Each meal needs an ingredients array
+- Each meal needs an ingredients array, step-by-step instructions, and equipment list.
+
+For instructions, write 4-8 clear step-by-step cooking directions. Each step should be one concise sentence starting with an action verb. For equipment, list only the essential items needed, maximum 4 items.
 
 Return ONLY valid JSON. No markdown, no code blocks, no backticks, no explanation. Just the raw JSON object starting with { and ending with }.
 
 The JSON must follow this exact structure:
 {
   "A": [
-    {"type":"BREAKFAST","cuisine":"American","name":"Meal name","desc":"Short description","cal":400,"p":30,"c":45,"f":12,"time":"10 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"cup"}]},
-    {"type":"LUNCH","cuisine":"Mexican","name":"Meal name","desc":"Short description","cal":600,"p":50,"c":55,"f":18,"time":"20 min","ingredients":[{"name":"ingredient name","qty":"6","unit":"oz"}]},
-    {"type":"SNACK","cuisine":"Mediterranean","name":"Meal name","desc":"Short description","cal":300,"p":25,"c":20,"f":10,"time":"5 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"serving"}]},
-    {"type":"DINNER","cuisine":"Japanese","name":"Meal name","desc":"Short description","cal":700,"p":55,"c":50,"f":22,"time":"30 min","ingredients":[{"name":"ingredient name","qty":"8","unit":"oz"}]}
+    {"type":"BREAKFAST","cuisine":"American","name":"Meal name","desc":"Short description","cal":400,"p":30,"c":45,"f":12,"time":"10 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"cup"}],"instructions":["Step 1: Do this first.","Step 2: Then do this.","Step 3: Continue until done."],"equipment":["Non-stick skillet","Cutting board"]},
+    {"type":"LUNCH","cuisine":"Mexican","name":"Meal name","desc":"Short description","cal":600,"p":50,"c":55,"f":18,"time":"20 min","ingredients":[{"name":"ingredient name","qty":"6","unit":"oz"}],"instructions":["Step 1: Do this first.","Step 2: Then do this."],"equipment":["Large pot","Colander"]},
+    {"type":"SNACK","cuisine":"Mediterranean","name":"Meal name","desc":"Short description","cal":300,"p":25,"c":20,"f":10,"time":"5 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"serving"}],"instructions":["Step 1: Do this first.","Step 2: Then do this."],"equipment":["Bowl"]},
+    {"type":"DINNER","cuisine":"Japanese","name":"Meal name","desc":"Short description","cal":700,"p":55,"c":50,"f":22,"time":"30 min","ingredients":[{"name":"ingredient name","qty":"8","unit":"oz"}],"instructions":["Step 1: Do this first.","Step 2: Then do this.","Step 3: Continue until done.","Step 4: Finish and serve."],"equipment":["Wok","Chef knife","Cutting board"]}
   ],
   "B": [
-    {"type":"BREAKFAST","cuisine":"Greek","name":"Different meal","desc":"Short description","cal":400,"p":30,"c":45,"f":12,"time":"10 min","ingredients":[{"name":"ingredient name","qty":"2","unit":"piece"}]},
-    {"type":"LUNCH","cuisine":"Korean","name":"Different meal","desc":"Short description","cal":600,"p":50,"c":55,"f":18,"time":"20 min","ingredients":[{"name":"ingredient name","qty":"0.5","unit":"cup"}]},
-    {"type":"SNACK","cuisine":"Indian","name":"Different meal","desc":"Short description","cal":300,"p":25,"c":20,"f":10,"time":"5 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"oz"}]},
-    {"type":"DINNER","cuisine":"Italian","name":"Different meal","desc":"Short description","cal":700,"p":55,"c":50,"f":22,"time":"30 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"lbs"}]}
+    {"type":"BREAKFAST","cuisine":"Greek","name":"Different meal","desc":"Short description","cal":400,"p":30,"c":45,"f":12,"time":"10 min","ingredients":[{"name":"ingredient name","qty":"2","unit":"piece"}],"instructions":["Step 1: Do this first.","Step 2: Then do this."],"equipment":["Non-stick pan"]},
+    {"type":"LUNCH","cuisine":"Korean","name":"Different meal","desc":"Short description","cal":600,"p":50,"c":55,"f":18,"time":"20 min","ingredients":[{"name":"ingredient name","qty":"0.5","unit":"cup"}],"instructions":["Step 1: Do this first.","Step 2: Then do this.","Step 3: Continue until done."],"equipment":["Skillet","Tongs"]},
+    {"type":"SNACK","cuisine":"Indian","name":"Different meal","desc":"Short description","cal":300,"p":25,"c":20,"f":10,"time":"5 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"oz"}],"instructions":["Step 1: Do this first.","Step 2: Then do this."],"equipment":["Bowl","Spoon"]},
+    {"type":"DINNER","cuisine":"Italian","name":"Different meal","desc":"Short description","cal":700,"p":55,"c":50,"f":22,"time":"30 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"lbs"}],"instructions":["Step 1: Do this first.","Step 2: Then do this.","Step 3: Continue until done.","Step 4: Finish and serve."],"equipment":["Large pot","Colander","Sauce pan"]}
   ]
 }`;
 
@@ -290,7 +292,7 @@ The JSON must follow this exact structure:
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 2000,
+        max_tokens: 4000,
         messages: [
           { role: "user",      content: prompt },
           { role: "assistant", content: "{"    }, // prefill: forces response to begin with {

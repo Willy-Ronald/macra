@@ -780,7 +780,111 @@ const FREE_MONTHLY = 8;
 const PRO_DAILY    = 3;
 const PRO_MONTHLY  = 20;
 
-const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal}) => {
+// ─── RECIPE DETAIL ─────────────────────────────────────────────
+const RecipeDetail = ({meal, savedMeals=[], onHeartMeal, onLogMeal, onBack}) => {
+  const [logged, setLogged] = useState(false);
+  const isSaved = savedMeals.some(s => s.name === meal.name);
+  const instructions = meal.instructions || [];
+  const equipment = meal.equipment || [];
+
+  const handleLog = async () => {
+    if(onLogMeal){
+      await onLogMeal({type:meal.type||"meal",name:meal.name,cal:meal.cal,p:meal.p||0,c:meal.c||0,f:meal.f||0});
+    }
+    setLogged(true);
+    setTimeout(()=>onBack(), 900);
+  };
+
+  return <div style={{position:"fixed",inset:0,background:T.bg,zIndex:200,overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
+    <div style={{maxWidth:430,margin:"0 auto",paddingBottom:110}}>
+      {/* Header */}
+      <div style={{padding:"52px 20px 0"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:0,color:T.acc,fontSize:14,fontWeight:600,fontFamily:T.font}}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+            Back to Plan
+          </button>
+          <button onClick={()=>onHeartMeal&&onHeartMeal(meal,'ai_plan')} style={{background:"none",border:"none",cursor:"pointer",padding:6,display:"flex",alignItems:"center"}}>
+            <HeartIcon filled={isSaved} size={22}/>
+          </button>
+        </div>
+        <span style={{fontSize:10,fontWeight:600,color:T.acc,letterSpacing:"0.14em"}}>{meal.type}</span>
+        <h1 style={{fontSize:24,fontWeight:700,color:T.tx,margin:"4px 0 4px",letterSpacing:"-0.02em",lineHeight:1.2}}>{meal.name}</h1>
+        {meal.cuisine && <p style={{fontSize:12,color:T.txM,margin:"0 0 6px",letterSpacing:"0.03em"}}>{meal.cuisine}</p>}
+        {meal.desc && <p style={{fontSize:13,color:T.tx2,margin:"0 0 20px",lineHeight:1.5}}>{meal.desc}</p>}
+      </div>
+
+      {/* Macro bar */}
+      <div style={{margin:"0 20px 20px"}}>
+        <Card style={{padding:"14px 18px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            {[{l:"cal",v:meal.cal,c:T.acc},{l:"P",v:(meal.p||0)+"g",c:T.pro},{l:"C",v:(meal.c||0)+"g",c:T.carb},{l:"F",v:(meal.f||0)+"g",c:T.fat}].map(x=>
+              <div key={x.l} style={{textAlign:"center"}}>
+                <p style={{fontSize:16,fontWeight:700,color:x.c,margin:0,fontFamily:T.mono}}>{x.v}</p>
+                <span style={{fontSize:10,color:T.txM,letterSpacing:"0.05em"}}>{x.l}</span>
+              </div>
+            )}
+            {meal.time && <div style={{textAlign:"center"}}>
+              <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{meal.time}</p>
+              <span style={{fontSize:10,color:T.txM,letterSpacing:"0.05em"}}>prep</span>
+            </div>}
+          </div>
+        </Card>
+      </div>
+
+      {/* Ingredients */}
+      {meal.ingredients?.length > 0 && <div style={{padding:"0 20px 20px"}}>
+        <p style={{fontSize:11,fontWeight:700,color:T.txM,margin:"0 0 12px",letterSpacing:"0.08em",textTransform:"uppercase"}}>Ingredients</p>
+        <Card style={{overflow:"hidden"}}>
+          {meal.ingredients.map((ing,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",padding:"11px 16px",borderBottom:i<meal.ingredients.length-1?`1px solid ${T.bd}`:"none"}}>
+              <div style={{width:5,height:5,borderRadius:"50%",background:T.acc,marginRight:12,flexShrink:0}}/>
+              <span style={{fontSize:13,color:T.tx2,fontFamily:T.mono,marginRight:10,minWidth:56,flexShrink:0}}>{ing.qty} {ing.unit}</span>
+              <span style={{fontSize:14,color:T.tx,fontWeight:500}}>{ing.name}</span>
+            </div>
+          ))}
+        </Card>
+      </div>}
+
+      {/* Instructions */}
+      <div style={{padding:"0 20px 20px"}}>
+        <p style={{fontSize:11,fontWeight:700,color:T.txM,margin:"0 0 14px",letterSpacing:"0.08em",textTransform:"uppercase"}}>How to Make It</p>
+        {instructions.length === 0
+          ? <Card style={{padding:"16px 18px"}}><p style={{fontSize:13,color:T.txM,margin:0,lineHeight:1.5}}>Regenerate your plan to see cooking instructions.</p></Card>
+          : <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              {instructions.map((step,i)=>(
+                <div key={i} style={{display:"flex",gap:14,alignItems:"flex-start"}}>
+                  <div style={{width:26,height:26,borderRadius:"50%",background:T.acc,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                    <span style={{fontSize:11,fontWeight:700,color:T.bg,fontFamily:T.mono}}>{i+1}</span>
+                  </div>
+                  <p style={{fontSize:14,color:T.tx,margin:0,lineHeight:1.65,flex:1,paddingTop:3}}>{step}</p>
+                </div>
+              ))}
+            </div>
+        }
+      </div>
+
+      {/* Equipment */}
+      {equipment.length > 0 && <div style={{padding:"0 20px 20px"}}>
+        <p style={{fontSize:11,fontWeight:700,color:T.txM,margin:"0 0 12px",letterSpacing:"0.08em",textTransform:"uppercase"}}>You'll Need</p>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+          {equipment.map((item,i)=>(
+            <span key={i} style={{padding:"7px 14px",borderRadius:20,border:`1px solid ${T.bd}`,fontSize:12,color:T.tx2,background:T.sf,fontWeight:500}}>{item}</span>
+          ))}
+        </div>
+      </div>}
+    </div>
+
+    {/* Fixed footer — Log This Meal */}
+    <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,padding:"14px 20px 30px",background:T.bg,borderTop:`1px solid ${T.bd}`}}>
+      <button onClick={handleLog} disabled={logged} style={{width:"100%",padding:16,borderRadius:T.r,border:"none",background:logged?T.ok:T.acc,color:T.bg,fontSize:15,fontWeight:700,cursor:logged?"default":"pointer",fontFamily:T.font,transition:"background 0.3s",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        {logged?"✓  Logged!":"Log This Meal"}
+      </button>
+    </div>
+  </div>;
+};
+
+const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,onLogMeal}) => {
   const [sel,setSel]=useState("A");
   const [loading,setLoading]=useState(false);
   const [loadMsg,setLoadMsg]=useState("");
@@ -790,6 +894,7 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal})
   const [genCount,setGenCount]=useState(0);
   const [plansLoaded,setPlansLoaded]=useState(false);
   const [remaining,setRemaining]=useState(null); // null = not yet loaded
+  const [selectedMeal,setSelectedMeal]=useState(null);
 
   // Load saved plans + current usage on mount
   useEffect(()=>{
@@ -921,6 +1026,8 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal})
     return null;
   };
 
+  if(selectedMeal) return <RecipeDetail meal={selectedMeal} savedMeals={savedMeals} onHeartMeal={onHeartMeal} onLogMeal={onLogMeal} onBack={()=>setSelectedMeal(null)}/>;
+
   return <div style={{padding:"0 20px 24px"}}>
     <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
     <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"4px 0 16px",letterSpacing:"-0.02em"}}>Meal Plan</h1>
@@ -963,7 +1070,7 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal})
     </Card>}
 
     {/* Meal cards */}
-    {!loading && meals.map((m,i)=><Card key={i+"-"+sel+"-"+genCount} style={{padding:18,marginBottom:8,animation:"fadeUp 0.4s ease both",animationDelay:`${i*0.08}s`}}>
+    {!loading && meals.map((m,i)=><Card key={i+"-"+sel+"-"+genCount} onClick={()=>setSelectedMeal(m)} style={{padding:18,marginBottom:8,animation:"fadeUp 0.4s ease both",animationDelay:`${i*0.08}s`,cursor:"pointer"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
         <span style={{fontSize:10,fontWeight:600,color:T.acc,letterSpacing:"0.14em"}}>{m.type}</span>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -987,6 +1094,9 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal})
           {m.ingredients.map((ing,ii)=><span key={ii} style={{fontSize:11,color:T.tx2}}>{ing.qty} {ing.unit} {ing.name}</span>)}
         </div>
       </div>}
+      <div style={{display:"flex",justifyContent:"flex-end",marginTop:10,paddingTop:8,borderTop:`1px solid ${T.bd}`}}>
+        <span style={{fontSize:12,color:T.acc,fontWeight:600,letterSpacing:"0.02em"}}>View Recipe →</span>
+      </div>
     </Card>)}
 
     {/* Bottom actions */}
@@ -2744,7 +2854,7 @@ export default function App() {
 
   const screens = {
     home:<Dashboard setTab={switchTab} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal} onUnlogMeal={handleUnlogMeal} todayPlan={todayPlan} weekPlans={weekPlans} userId={user?.id} savedMeals={savedMeals} onHeartMeal={handleHeartToggle}/>,
-    plan:<Plan profile={profile} userId={user?.id} isPro={isPro} savedMeals={savedMeals} onHeartMeal={handleHeartToggle} onWeekPlanUpdate={(plans)=>{
+    plan:<Plan profile={profile} userId={user?.id} isPro={isPro} savedMeals={savedMeals} onHeartMeal={handleHeartToggle} onLogMeal={handleLogMeal} onWeekPlanUpdate={(plans)=>{
       // plans = { 0: dayA[], 1: dayB[] }
       const wasEmpty = Object.keys(weekPlans).length === 0;
       setWeekPlans(plans);
