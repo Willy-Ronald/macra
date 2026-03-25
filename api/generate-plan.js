@@ -99,7 +99,7 @@ async function callClaude(apiKey, prompt) {
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 4000,
+      max_tokens: 8000,
       messages: [
         { role: "user",      content: prompt },
         { role: "assistant", content: "{"    }, // prefill forces response to begin with {
@@ -139,8 +139,14 @@ function parsePlan(rawText) {
     return { error: "AI returned unexpected format — please try again." };
   }
 
-  if (abPlan.A.length !== 4 || abPlan.B.length !== 4) {
-    console.warn(`Meal count mismatch: A=${abPlan.A.length}, B=${abPlan.B.length} (expected 4 each)`);
+  if (abPlan.A.length < 4 || abPlan.B.length < 4) {
+    console.warn(`Meal count mismatch: A=${abPlan.A.length}, B=${abPlan.B.length} — treating as truncation`);
+    return {
+      error: "truncated",
+      truncated: true,
+      missingA: abPlan.A.length < 4,
+      missingB: abPlan.B.length < 4,
+    };
   }
 
   return { abPlan };
@@ -363,11 +369,36 @@ The JSON must follow this exact structure:
       return res.status(firstResult.status || 500).json({ error: firstResult.error });
     }
 
-    const { abPlan: firstPlan, error: parseError } = parsePlan(firstResult.rawText);
-    if (parseError) {
-      console.error("Parse error on first attempt:", parseError);
-      return res.status(500).json({ error: parseError });
+    const firstParsed = parsePlan(firstResult.rawText);
+
+    // Truncation on first attempt → retry immediately with a conciseness constraint
+    if (firstParsed.truncated) {
+      console.warn("[truncation] First response cut off — retrying with conciseness cap");
+      const truncRetryPrefix =
+        "Your previous response was cut off before completing. Please provide the complete plan " +
+        "with all 8 meals, keeping instructions concise — maximum 5 steps per meal, each step under 20 words. ";
+      const truncRetry = await callClaude(apiKey, buildPrompt(truncRetryPrefix));
+      if (truncRetry.error) {
+        console.error("Retry after truncation also failed:", truncRetry.error);
+        return res.status(500).json({ error: "AI generation failed — please try again." });
+      }
+      const truncRetryParsed = parsePlan(truncRetry.rawText);
+      if (truncRetryParsed.error) {
+        console.error("Parse error on truncation retry:", truncRetryParsed.error);
+        return res.status(500).json({ error: truncRetryParsed.error });
+      }
+      // Fall through with retry result
+      firstParsed.abPlan = truncRetryParsed.abPlan;
+      delete firstParsed.error;
+      delete firstParsed.truncated;
     }
+
+    if (firstParsed.error) {
+      console.error("Parse error on first attempt:", firstParsed.error);
+      return res.status(500).json({ error: firstParsed.error });
+    }
+
+    const firstPlan = firstParsed.abPlan;
 
     // ── Layer 2: Macro validation ────────────────────────────────
     const checkA = validateMacros(firstPlan.A, macros, "Day A");
