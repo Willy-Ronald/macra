@@ -8,6 +8,8 @@ import {
   saveMealPlan, getWeekPlans,
   getGenerationUsage,
   getCustomGroceryList, saveCustomGroceryList,
+  getWeightLog, addWeightEntry, deleteWeightEntry,
+  getTodayWater, upsertWaterLog, getWaterHistory, updateWaterGoal,
 } from "./lib/supabase";
 import { generateMealPlan } from "./lib/claude";
 
@@ -598,11 +600,334 @@ const SwipeableRow = ({onDelete, children}) => {
   );
 };
 
+// ─── SHARED UI HELPERS ──────────────────────────────────────────
+const BackBtn = ({onBack}) => (
+  <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:"0 0 20px",color:T.acc,fontSize:14,fontWeight:600,fontFamily:T.font}}>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>Back
+  </button>
+);
+
+// ─── SPARKLINE ──────────────────────────────────────────────────
+const Sparkline = ({values, w=72, h=26}) => {
+  if(!values||values.length===0) return null;
+  if(values.length===1) return <svg width={w} height={h}><circle cx={w/2} cy={h/2} r={3} fill={T.acc}/></svg>;
+  const min=Math.min(...values), max=Math.max(...values), range=max-min||1;
+  const pad=3;
+  const pts=values.map((v,i)=>[pad+(i/(values.length-1))*(w-pad*2), pad+(1-(v-min)/range)*(h-pad*2)]);
+  const d=pts.map((p,i)=>`${i===0?'M':'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+  return <svg width={w} height={h} style={{overflow:'visible'}}>
+    <path d={d} fill="none" stroke={T.acc} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"/>
+    {values.length<=4&&pts.map((p,i)=><circle key={i} cx={p[0]} cy={p[1]} r={2.5} fill={T.acc}/>)}
+  </svg>;
+};
+
+// ─── WEIGHT TRACKER ─────────────────────────────────────────────
+const WeightTrackerWidget = ({userId, onViewFull}) => {
+  const [entries,setEntries]=useState([]);
+  const [loaded,setLoaded]=useState(false);
+  const [showInput,setShowInput]=useState(false);
+  const [inputVal,setInputVal]=useState('');
+  const [inputUnit,setInputUnit]=useState('lbs');
+  const [saving,setSaving]=useState(false);
+
+  useEffect(()=>{
+    if(!userId||loaded) return;
+    getWeightLog(userId).then(d=>{setEntries(d);setLoaded(true);});
+  },[userId,loaded]);
+
+  const latest = entries.length>0 ? parseFloat(entries[entries.length-1].weight_lbs) : null;
+  const sparkValues = entries.slice(-7).map(e=>parseFloat(e.weight_lbs));
+
+  const handleLog = async() => {
+    if(!inputVal||!userId) return;
+    setSaving(true);
+    const raw = parseFloat(inputVal);
+    const lbs = inputUnit==='kg' ? Math.round(raw*2.20462*10)/10 : raw;
+    const {data:row} = await addWeightEntry(userId, lbs);
+    if(row) setEntries(p=>[...p,row]);
+    setInputVal(''); setShowInput(false); setSaving(false);
+  };
+
+  return <Card style={{padding:'14px 16px',marginBottom:8}}>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer'}} onClick={()=>!showInput&&onViewFull()}>
+      <div>
+        <Lbl>Weight</Lbl>
+        <div style={{marginTop:4,display:'flex',alignItems:'baseline',gap:4}}>
+          {latest!=null
+            ? <><span style={{fontSize:22,fontWeight:700,color:T.tx,fontFamily:T.mono}}>{latest}</span><span style={{fontSize:12,color:T.txM,fontWeight:500,marginLeft:2}}>lbs</span></>
+            : <span style={{fontSize:12,color:T.txM,fontStyle:'italic'}}>Log your first weight</span>}
+        </div>
+      </div>
+      <div style={{display:'flex',alignItems:'center',gap:10}}>
+        {sparkValues.length>=2&&<Sparkline values={sparkValues} w={64} h={26}/>}
+        <button onClick={e=>{e.stopPropagation();setShowInput(p=>!p);setInputVal('');}} style={{padding:'6px 12px',borderRadius:8,border:`1px solid ${T.acc}`,background:'transparent',color:T.acc,fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:T.font,whiteSpace:'nowrap',flexShrink:0}}>+ Log</button>
+      </div>
+    </div>
+    {showInput&&<div style={{marginTop:12,display:'flex',gap:8,alignItems:'center'}}>
+      <input type="number" value={inputVal} onChange={e=>setInputVal(e.target.value)} placeholder={inputUnit==='lbs'?'185':'84'} style={{flex:1,padding:'10px 12px',borderRadius:8,border:`1px solid ${T.bd}`,background:T.bg,color:T.tx,fontSize:15,fontFamily:T.mono,outline:'none',boxSizing:'border-box'}} onKeyDown={e=>e.key==='Enter'&&handleLog()} autoFocus/>
+      <button onClick={()=>setInputUnit(p=>p==='lbs'?'kg':'lbs')} style={{padding:'10px 10px',borderRadius:8,border:`1px solid ${T.bd}`,background:'transparent',color:T.tx2,fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:T.font,flexShrink:0}}>{inputUnit}</button>
+      <button onClick={handleLog} disabled={saving||!inputVal} style={{padding:'10px 14px',borderRadius:8,border:'none',background:T.acc,color:T.bg,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:T.font,opacity:saving||!inputVal?0.5:1,flexShrink:0}}>Log</button>
+    </div>}
+    {!showInput&&<p style={{fontSize:10,color:T.txM,margin:'6px 0 0',letterSpacing:'0.03em'}}>Tap card to view history · swipe entries to delete</p>}
+  </Card>;
+};
+
+const WeightHistoryView = ({userId, onBack}) => {
+  const [entries,setEntries]=useState([]);
+  const [loaded,setLoaded]=useState(false);
+  const [filter,setFilter]=useState('1M');
+
+  useEffect(()=>{
+    if(!userId) return;
+    getWeightLog(userId).then(d=>{setEntries(d);setLoaded(true);});
+  },[userId]);
+
+  const handleDelete = async(id) => {
+    await deleteWeightEntry(id);
+    setEntries(p=>p.filter(e=>e.id!==id));
+  };
+
+  const now=new Date();
+  const filterMs={'1W':7,'1M':30,'3M':90};
+  const filtered = filter==='All' ? entries : entries.filter(e=>(now-new Date(e.logged_at))<=filterMs[filter]*864e5);
+
+  // SVG line chart
+  const W=320,H=140,pT=24,pR=16,pB=28,pL=38;
+  const plotW=W-pL-pR, plotH=H-pT-pB;
+  const vals=filtered.map(e=>parseFloat(e.weight_lbs));
+  const times=filtered.map(e=>new Date(e.logged_at).getTime());
+  const minV=vals.length?Math.min(...vals):0, maxV=vals.length?Math.max(...vals):100;
+  const rangeV=(maxV-minV)||1;
+  const minT=times.length?Math.min(...times):0, maxT=times.length?Math.max(...times):1;
+  const rangeT=(maxT-minT)||1;
+  const toX=t=>pL+(t-minT)/rangeT*plotW;
+  const toY=v=>pT+(1-(v-minV)/rangeV)*plotH;
+  const pts = filtered.length===1
+    ? [[pL+plotW/2, pT+plotH/2]]
+    : filtered.map(e=>[toX(new Date(e.logged_at).getTime()),toY(parseFloat(e.weight_lbs))]);
+  const linePath=pts.length>=2?pts.map((p,i)=>`${i===0?'M':'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' '):null;
+  const fillPath=linePath?`${linePath} L${pts[pts.length-1][0].toFixed(1)},${(pT+plotH).toFixed(1)} L${pts[0][0].toFixed(1)},${(pT+plotH).toFixed(1)} Z`:null;
+
+  const fmtLong=iso=>{const d=new Date(iso);const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return `${mo[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;};
+
+  return <div style={{padding:'0 20px 24px'}}>
+    <BackBtn onBack={onBack}/>
+    <h2 style={{fontSize:22,fontWeight:700,color:T.tx,margin:'0 0 16px',letterSpacing:'-0.02em'}}>Weight History</h2>
+
+    {/* Time filter tabs */}
+    <Card style={{display:'flex',padding:4,marginBottom:16}}>
+      {['1W','1M','3M','All'].map(f=><button key={f} onClick={()=>setFilter(f)} style={{flex:1,padding:'8px 0',borderRadius:8,border:'none',background:filter===f?T.acc:'transparent',color:filter===f?T.bg:T.txM,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:T.font,transition:'all 0.15s'}}>{f}</button>)}
+    </Card>
+
+    {/* Chart */}
+    <Card style={{padding:'16px',marginBottom:16,overflow:'hidden'}}>
+      {!loaded&&<div style={{height:140,display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{fontSize:13,color:T.txM}}>Loading…</span></div>}
+      {loaded&&filtered.length===0&&<div style={{height:140,display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{fontSize:13,color:T.txM}}>No entries in this period</span></div>}
+      {loaded&&filtered.length>0&&<svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{display:'block',overflow:'visible'}}>
+        {/* Gridlines */}
+        {[0,0.5,1].map(f=>{
+          const y=(pT+f*plotH).toFixed(1);
+          const v=(minV+(1-f)*rangeV).toFixed(1);
+          return <g key={f}>
+            <line x1={pL} y1={y} x2={pL+plotW} y2={y} stroke={T.bd} strokeWidth={0.5} strokeDasharray="3,4"/>
+            <text x={pL-4} y={parseFloat(y)+4} textAnchor="end" fill={T.txM} fontSize={9}>{v}</text>
+          </g>;
+        })}
+        {/* Fill + line */}
+        {fillPath&&<path d={fillPath} fill={`${T.acc}18`}/>}
+        {linePath&&<path d={linePath} fill="none" stroke={T.acc} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>}
+        {/* Dots */}
+        {pts.map((p,i)=><circle key={i} cx={p[0]} cy={p[1]} r={filtered.length<=10?3.5:2} fill={T.acc}/>)}
+        {/* Annotations */}
+        {filtered.length>=2&&<>
+          <text x={pts[0][0]} y={pts[0][1]-9} textAnchor="middle" fill={T.tx2} fontSize={9}>{vals[0]}lbs</text>
+          <text x={pts[pts.length-1][0]} y={pts[pts.length-1][1]-9} textAnchor="middle" fill={T.acc} fontSize={9} fontWeight="bold">{vals[vals.length-1]}lbs</text>
+        </>}
+        {filtered.length===1&&<text x={pts[0][0]} y={pts[0][1]-12} textAnchor="middle" fill={T.acc} fontSize={10} fontWeight="bold">{vals[0]}lbs</text>}
+      </svg>}
+    </Card>
+
+    {/* Entries list */}
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+      <Lbl>All Entries</Lbl>
+      <span style={{fontSize:11,color:T.txM}}>{filtered.length} log{filtered.length!==1?'s':''}</span>
+    </div>
+    {loaded&&entries.length===0&&<Card style={{padding:'20px',textAlign:'center'}}>
+      <p style={{fontSize:13,color:T.txM,margin:0}}>Log your first weight to start tracking</p>
+    </Card>}
+    {[...filtered].reverse().map(e=><SwipeableRow key={e.id} onDelete={()=>handleDelete(e.id)}>
+      <Card style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 16px',marginBottom:0}}>
+        <span style={{fontSize:13,color:T.tx2,fontWeight:500}}>{fmtLong(e.logged_at)}</span>
+        <span style={{fontSize:16,fontWeight:700,color:T.acc,fontFamily:T.mono}}>{parseFloat(e.weight_lbs)} lbs</span>
+      </Card>
+    </SwipeableRow>)}
+  </div>;
+};
+
+// ─── WATER TRACKER ──────────────────────────────────────────────
+const WATER_BLUE = '#4A9EFF';
+
+const WaterTrackerWidget = ({userId, defaultGoal=8, onViewFull}) => {
+  const [glasses,setGlasses]=useState(0);
+  const [goal,setGoal]=useState(defaultGoal);
+  const [loaded,setLoaded]=useState(false);
+
+  useEffect(()=>{
+    if(!userId||loaded) return;
+    getTodayWater(userId).then(data=>{
+      if(data){setGlasses(data.glasses);setGoal(data.goal);}
+      setLoaded(true);
+    });
+  },[userId,loaded]);
+
+  const addGlass = async(e) => {
+    e.stopPropagation();
+    const next=glasses+1;
+    setGlasses(next);
+    await upsertWaterLog(userId,next,goal);
+  };
+
+  const pct=Math.min((glasses/goal)*100,100);
+  const done=glasses>=goal;
+
+  return <Card style={{padding:'14px 16px',marginBottom:8,cursor:'pointer'}} onClick={onViewFull}>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+      <div>
+        <Lbl>Water</Lbl>
+        <div style={{marginTop:4,display:'flex',alignItems:'baseline',gap:3}}>
+          <span style={{fontSize:22,fontWeight:700,color:done?WATER_BLUE:T.tx,fontFamily:T.mono}}>{glasses}</span>
+          <span style={{fontSize:12,color:T.txM,fontWeight:500}}>/ {goal} glasses</span>
+        </div>
+      </div>
+      <button onClick={addGlass} style={{padding:'8px 14px',borderRadius:8,border:`1px solid ${WATER_BLUE}`,background:'transparent',color:WATER_BLUE,fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:T.font,whiteSpace:'nowrap',flexShrink:0}}>+ Glass</button>
+    </div>
+    {/* Progress bar */}
+    <div style={{height:5,borderRadius:3,background:T.bd,overflow:'hidden'}}>
+      <div style={{height:'100%',borderRadius:3,background:WATER_BLUE,width:`${pct}%`,transition:'width 0.4s ease'}}/>
+    </div>
+    {done&&<p style={{fontSize:10,color:WATER_BLUE,margin:'5px 0 0',fontWeight:600,letterSpacing:'0.04em'}}>GOAL REACHED ✓</p>}
+    {!done&&<p style={{fontSize:10,color:T.txM,margin:'5px 0 0'}}>Tap card to adjust goal · {goal-glasses} glass{goal-glasses!==1?'es':''} remaining</p>}
+  </Card>;
+};
+
+const WaterSettingsView = ({userId, defaultGoal=8, onBack, onGoalChange}) => {
+  const [glasses,setGlasses]=useState(0);
+  const [goal,setGoal]=useState(defaultGoal);
+  const [unit,setUnit]=useState('glasses'); // 'glasses' | 'oz'
+  const [history,setHistory]=useState([]);
+  const [loaded,setLoaded]=useState(false);
+  const [saving,setSaving]=useState(false);
+
+  useEffect(()=>{
+    if(!userId) return;
+    Promise.all([getTodayWater(userId),getWaterHistory(userId)]).then(([today,hist])=>{
+      if(today){setGlasses(today.glasses);setGoal(today.goal);}
+      setHistory(hist);
+      setLoaded(true);
+    });
+  },[userId]);
+
+  const updateCount = async(val) => {
+    const next=Math.max(0,val);
+    setGlasses(next);
+    await upsertWaterLog(userId,next,goal);
+  };
+
+  const saveGoal = async(newGoal) => {
+    setSaving(true);
+    setGoal(newGoal);
+    await upsertWaterLog(userId,glasses,newGoal);
+    await updateWaterGoal(userId,newGoal);
+    if(onGoalChange) onGoalChange(newGoal);
+    setSaving(false);
+  };
+
+  const toDisplay = v => unit==='oz' ? Math.round(v*8) : v;
+  const toGlasses = v => unit==='oz' ? Math.round(v/8) : v;
+  const unitLabel = unit==='oz' ? 'oz' : 'glasses';
+
+  // 7-day bar chart
+  const today=new Date().toISOString().split('T')[0];
+  const last7=[];
+  for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);last7.push(d.toISOString().split('T')[0]);}
+  const histMap=Object.fromEntries(history.map(r=>[r.log_date,r]));
+  const barData=last7.map(d=>({date:d,glasses:histMap[d]?.glasses||0,goal:histMap[d]?.goal||goal}));
+  const maxBar=Math.max(...barData.map(b=>Math.max(b.glasses,b.goal)),1);
+  const BAR_H=60;
+  const dayLabels=['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+  return <div style={{padding:'0 20px 24px'}}>
+    <BackBtn onBack={onBack}/>
+    <h2 style={{fontSize:22,fontWeight:700,color:T.tx,margin:'0 0 4px',letterSpacing:'-0.02em'}}>Water Tracker</h2>
+    <p style={{fontSize:13,color:T.tx2,margin:'0 0 20px'}}>Track your daily hydration.</p>
+
+    {/* Unit toggle */}
+    <Card style={{display:'flex',padding:4,marginBottom:16}}>
+      {['glasses','oz'].map(u=><button key={u} onClick={()=>setUnit(u)} style={{flex:1,padding:'8px 0',borderRadius:8,border:'none',background:unit===u?WATER_BLUE:'transparent',color:unit===u?'#fff':T.txM,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:T.font,transition:'all 0.15s',textTransform:'capitalize'}}>{u==='oz'?'Fluid oz':'Glasses'}</button>)}
+    </Card>
+
+    {/* Today's count */}
+    <Card style={{padding:'20px',marginBottom:12}}>
+      <Lbl>Today's Intake</Lbl>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:20,marginTop:14}}>
+        <button onClick={()=>updateCount(glasses-1)} style={{width:40,height:40,borderRadius:'50%',border:`1.5px solid ${T.bd}`,background:'transparent',color:T.tx,fontSize:20,fontWeight:300,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:T.font}}>−</button>
+        <div style={{textAlign:'center'}}>
+          <span style={{fontSize:36,fontWeight:800,color:WATER_BLUE,fontFamily:T.mono}}>{toDisplay(glasses)}</span>
+          <p style={{fontSize:12,color:T.txM,margin:'2px 0 0'}}>{unitLabel} of {toDisplay(goal)} {unitLabel}</p>
+        </div>
+        <button onClick={()=>updateCount(glasses+1)} style={{width:40,height:40,borderRadius:'50%',border:`1.5px solid ${WATER_BLUE}`,background:`${WATER_BLUE}18`,color:WATER_BLUE,fontSize:20,fontWeight:300,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:T.font}}>+</button>
+      </div>
+      {/* Progress bar */}
+      <div style={{height:6,borderRadius:3,background:T.bd,overflow:'hidden',marginTop:16}}>
+        <div style={{height:'100%',borderRadius:3,background:WATER_BLUE,width:`${Math.min((glasses/goal)*100,100)}%`,transition:'width 0.4s ease'}}/>
+      </div>
+    </Card>
+
+    {/* Daily goal setting */}
+    <Card style={{padding:'16px 20px',marginBottom:16}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div>
+          <Lbl>Daily Goal</Lbl>
+          <p style={{fontSize:14,color:T.tx,margin:'4px 0 0',fontWeight:500}}>{toDisplay(goal)} {unitLabel}</p>
+        </div>
+        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+          <button onClick={()=>saveGoal(Math.max(1,goal-1))} disabled={saving} style={{width:32,height:32,borderRadius:8,border:`1px solid ${T.bd}`,background:'transparent',color:T.tx,fontSize:18,fontWeight:300,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:T.font}}>−</button>
+          <button onClick={()=>saveGoal(goal+1)} disabled={saving} style={{width:32,height:32,borderRadius:8,border:`1px solid ${WATER_BLUE}`,background:`${WATER_BLUE}18`,color:WATER_BLUE,fontSize:18,fontWeight:300,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:T.font}}>+</button>
+        </div>
+      </div>
+    </Card>
+
+    {/* 7-day history */}
+    <Lbl>Last 7 Days</Lbl>
+    <Card style={{padding:'16px',marginTop:8}}>
+      {!loaded&&<div style={{height:BAR_H+24,display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{fontSize:12,color:T.txM}}>Loading…</span></div>}
+      {loaded&&<div style={{display:'flex',alignItems:'flex-end',gap:4,justifyContent:'space-between'}}>
+        {barData.map((b,i)=>{
+          const barPct=(b.glasses/maxBar)*BAR_H;
+          const goalPct=(b.goal/maxBar)*BAR_H;
+          const isToday2=b.date===today;
+          const dayIdx=new Date(b.date+'T12:00:00').getDay();
+          return <div key={b.date} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
+            <div style={{width:'100%',display:'flex',alignItems:'flex-end',justifyContent:'center',height:BAR_H,position:'relative'}}>
+              {/* Goal line */}
+              <div style={{position:'absolute',bottom:goalPct,left:0,right:0,height:1,background:`${WATER_BLUE}50`,borderRadius:1}}/>
+              {/* Bar */}
+              <div style={{width:'70%',height:Math.max(barPct,2),borderRadius:'3px 3px 0 0',background:isToday2?WATER_BLUE:`${WATER_BLUE}60`,transition:'height 0.3s ease'}}/>
+            </div>
+            <span style={{fontSize:9,color:isToday2?WATER_BLUE:T.txM,fontWeight:isToday2?700:400}}>{dayLabels[dayIdx]}</span>
+          </div>;
+        })}
+      </div>}
+    </Card>
+  </div>;
+};
+
 // ─── DASHBOARD ─────────────────────────────────────────────────
 const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[],weekPlans={},userId,savedMeals=[],onHeartMeal}) => {
   const [viewDate,setViewDate]=useState(()=>new Date());
   const [historyLog,setHistoryLog]=useState(null); // null = showing today
   const [loggingId,setLoggingId]=useState(null);
+  const [progressView,setProgressView]=useState(null); // null | 'weight' | 'water'
   const m = profile?.macros || {target:2200,proteinG:180,carbG:240,fatG:70};
 
   const todayStr = new Date().toISOString().split("T")[0];
@@ -685,6 +1010,9 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
     }
   };
 
+  if(progressView==='weight') return <WeightHistoryView userId={userId} onBack={()=>setProgressView(null)}/>;
+  if(progressView==='water') return <WaterSettingsView userId={userId} defaultGoal={profile?.waterGoal||8} onBack={()=>setProgressView(null)}/>;
+
   return <div style={{padding:"0 20px 24px"}}>
     {/* Date navigation bar */}
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:4,marginBottom:isToday?0:8}}>
@@ -743,6 +1071,15 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
         <div style={{textAlign:"center"}}><p style={{fontSize:18,fontWeight:700,color:T.acc,margin:0,fontFamily:T.mono}}>{cal.tgt.toLocaleString()}</p><Lbl>target</Lbl></div>
       </div>
     </Card>
+
+    {/* ── Progress section ── */}
+    {isToday&&<>
+      <Lbl>Progress</Lbl>
+      <div style={{marginTop:8,marginBottom:4}}>
+        <WeightTrackerWidget userId={userId} onViewFull={()=>setProgressView('weight')}/>
+        <WaterTrackerWidget userId={userId} defaultGoal={profile?.waterGoal||8} onViewFull={()=>setProgressView('water')}/>
+      </div>
+    </>}
 
     {/* ── Empty state: no log + no plan yet ── */}
     {isEmpty ? <>
@@ -2384,7 +2721,6 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
   ].filter(Boolean).join(" · ") || "Tap to update";
 
   const Chevron = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="1.5" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>;
-  const BackBtn = ({onBack}) => <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:0,color:T.acc,fontSize:14,fontWeight:600,fontFamily:T.font,marginBottom:20}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>Back</button>;
   const SaveBtn = ({onClick,label="Save"}) => <button onClick={onClick} style={{width:"100%",padding:14,borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font,marginTop:24}}>{label}</button>;
   // Reusable single-select option button
   const SelBtn = ({label,desc,selected,onClick}) => (
@@ -2942,7 +3278,7 @@ export default function App() {
             activity:data.activity, goal:data.goal, diet:data.diet||[],
             dislikedFoods:data.disliked_foods||[], dislikedCuisines:data.disliked_cuisines||[],
             weeklyBudget:data.weekly_budget??null, pickinessLevel:data.pickiness_level??3,
-            trackingMode:data.tracking_mode||'ai_plan',
+            trackingMode:data.tracking_mode||'ai_plan', waterGoal:data.water_goal??8,
           };
           const hasStats = pBase.sex && pBase.age && pBase.weightLbs && pBase.heightFt != null && pBase.activity && pBase.goal;
           const freshMacros = hasStats ? calcMacros(pBase) : {target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat};
@@ -2988,7 +3324,7 @@ export default function App() {
         activity:data.activity, goal:data.goal, diet:data.diet||[],
         dislikedFoods:data.disliked_foods||[], dislikedCuisines:data.disliked_cuisines||[],
         weeklyBudget:data.weekly_budget??null, pickinessLevel:data.pickiness_level??3,
-        trackingMode:data.tracking_mode||'ai_plan',
+        trackingMode:data.tracking_mode||'ai_plan', waterGoal:data.water_goal??8,
       };
       const hasStats = pBase.sex && pBase.age && pBase.weightLbs && pBase.heightFt != null && pBase.activity && pBase.goal;
       const freshMacros = hasStats ? calcMacros(pBase) : {target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat};

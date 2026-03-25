@@ -77,6 +77,7 @@ export async function saveProfile(userId, profile) {
     weekly_budget: profile.weeklyBudget ?? null,
     pickiness_level: profile.pickinessLevel ?? 3,
     tracking_mode: profile.trackingMode || 'ai_plan',
+    water_goal: profile.waterGoal ?? 8,
     updated_at: new Date().toISOString(),
   });
   return { error };
@@ -359,5 +360,84 @@ export async function saveCustomGroceryList(userId, items) {
     { user_id: userId, items: items, updated_at: new Date().toISOString() },
     { onConflict: "user_id" }
   );
+  return { error };
+}
+
+// ── WEIGHT LOG ──────────────────────────────────────────────────
+
+export async function getWeightLog(userId) {
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from("weight_log")
+    .select("*")
+    .eq("user_id", userId)
+    .order("logged_at", { ascending: true });
+  return data || [];
+}
+
+export async function addWeightEntry(userId, weightLbs) {
+  if (!supabase) return { data: null };
+  const { data, error } = await supabase
+    .from("weight_log")
+    .insert({ user_id: userId, weight_lbs: weightLbs })
+    .select()
+    .maybeSingle();
+  if (error) console.error("[addWeightEntry] failed", { code: error.code, message: error.message });
+  return { data, error };
+}
+
+export async function deleteWeightEntry(id) {
+  if (!supabase) return;
+  const { error } = await supabase.from("weight_log").delete().eq("id", id);
+  if (error) console.error("[deleteWeightEntry] failed", { code: error.code, message: error.message });
+  return { error };
+}
+
+// ── WATER LOG ───────────────────────────────────────────────────
+
+export async function getTodayWater(userId) {
+  if (!supabase) return null;
+  const today = new Date().toISOString().split("T")[0];
+  const { data } = await supabase
+    .from("water_log")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("log_date", today)
+    .maybeSingle();
+  return data;
+}
+
+export async function upsertWaterLog(userId, glasses, goal) {
+  if (!supabase) return;
+  const today = new Date().toISOString().split("T")[0];
+  const { error } = await supabase.from("water_log").upsert(
+    { user_id: userId, glasses, goal, log_date: today },
+    { onConflict: "user_id,log_date" }
+  );
+  if (error) console.error("[upsertWaterLog] failed", { code: error.code, message: error.message });
+  return { error };
+}
+
+export async function getWaterHistory(userId) {
+  if (!supabase) return [];
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  const startDate = sevenDaysAgo.toISOString().split("T")[0];
+  const { data } = await supabase
+    .from("water_log")
+    .select("glasses, goal, log_date")
+    .eq("user_id", userId)
+    .gte("log_date", startDate)
+    .order("log_date", { ascending: true });
+  return data || [];
+}
+
+export async function updateWaterGoal(userId, goal) {
+  if (!supabase) return;
+  const { error } = await supabase
+    .from("profiles")
+    .update({ water_goal: goal, updated_at: new Date().toISOString() })
+    .eq("id", userId);
+  if (error) console.error("[updateWaterGoal] failed", { code: error.code, message: error.message });
   return { error };
 }
