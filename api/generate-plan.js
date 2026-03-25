@@ -299,8 +299,15 @@ export default async function handler(req, res) {
       1: "MEAL COMPLEXITY: Very adventurous eater. Suggest bold, creative, globally-inspired dishes with complex flavor profiles, unusual ingredient combinations, and restaurant-quality presentations. Be creative and surprising.",
       2: "MEAL COMPLEXITY: Adventurous eater. Suggest varied, flavorful dishes from diverse cuisines. Some complexity and creativity is welcome.",
       3: "MEAL COMPLEXITY: Balanced. Mix familiar comfort foods with some globally inspired options. Approachable but not boring.",
-      4: "MEAL COMPLEXITY: Somewhat picky eater. Stick to familiar, recognizable dishes. Avoid unusual ingredients or complex techniques. Simple preparations preferred.",
-      5: "MEAL COMPLEXITY: Very picky eater. Suggest only simple, familiar, everyday meals with common ingredients that most people know and enjoy. No exotic cuisines, unusual ingredients, or complex techniques. Think basic home cooking.",
+      4: "MEAL COMPLEXITY: Somewhat picky eater. Stick to familiar American and basic international dishes most people know. Simple preparations, recognizable ingredients. Examples: pasta with marinara, chicken tacos, stir fry with rice, burgers, grilled fish with vegetables. Avoid unusual ingredients or complex techniques. Maximum 7 ingredients per meal.",
+      5: `MEAL COMPLEXITY: Very picky eater. This person only eats simple, plain, familiar foods with minimal ingredients. Suggest meals like: grilled chicken with rice and broccoli, scrambled eggs with toast, ground beef with pasta, baked chicken breast with mashed potatoes, turkey sandwich, oatmeal with banana, rice and beans, plain grilled salmon with steamed vegetables.
+STRICT RULES for level 5:
+- Maximum 5 ingredients per meal
+- No ethnic cuisine names in the meal name (no bowls, no curries, no stews, no stir fry)
+- No exotic ingredients whatsoever
+- No quinoa, plantains, tahini, miso, kimchi, tempeh, lemongrass, or any ingredient a picky eater would not recognize at a basic grocery store
+- Cooking methods only: grilled, baked, scrambled, boiled, steamed, or pan-fried with basic seasoning
+- Meal names should be plain and descriptive: 'Grilled Chicken with Rice and Broccoli' not 'Herb-Marinated Chicken Bowl'`,
     };
     const complexityLine = complexityLines[pickinessLevel] || complexityLines[3];
 
