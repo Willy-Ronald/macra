@@ -1455,17 +1455,31 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
 
   // Convert USDA servingSize + servingSizeUnit → grams.
   // Returns null if the unit can't be resolved or the result is implausible.
+  // Convert USDA servingSize + servingSizeUnit → grams.
   const usdaServingGrams = (size, unit) => {
     if(!size || size<=0) return null;
     const u = (unit||"").toLowerCase().trim();
     let g;
-    if(u==="g"||u==="gram"||u==="grams")          g = size;
-    else if(u==="ml"||u.startsWith("millil"))      g = size;        // ml ≈ g
-    else if(u==="oz"||u.startsWith("ounce"))       g = size*28.3495;
-    else                                            g = size;        // heuristic: treat as grams
-    // Reject implausible weights (< 3g or > 3000g)
+    if(u==="g"||u==="gram"||u==="grams")     g = size;
+    else if(u==="ml"||u.startsWith("millil")) g = size;
+    else if(u==="oz"||u.startsWith("ounce")) g = size*28.3495;
+    else                                      g = size; // heuristic: treat as grams
     if(g<3||g>3000) return null;
     return Math.round(g);
+  };
+
+  // Keyword-based default serving size for fast food / restaurant items
+  // that have no servingSize in the USDA database.
+  const keywordServingGrams = (description) => {
+    const d = description.toLowerCase();
+    if(/\b(burger|sandwich|wrap|taco)\b/.test(d))        return {g:150, est:true};
+    if(/\b(fries|chips)\b/.test(d))                      return {g:117, est:true};
+    if(/\b(nuggets?|tenders?|strips?)\b/.test(d))        return {g:100, est:true};
+    if(/\bsalad\b/.test(d))                              return {g:300, est:true};
+    if(/\b(shake|smoothie|drink|beverage)\b/.test(d))    return {g:350, est:true};
+    if(/\b(cookie|muffin|donut|doughnut)\b/.test(d))     return {g:57,  est:true};
+    if(/\bpizza\b/.test(d))                              return {g:107, est:true};
+    return null;
   };
 
   const searchFoods = async (query) => {
@@ -1476,9 +1490,16 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
     abortRef.current = controller;
     const signal = controller.signal;
 
-    // Saved meals — instant local match
     const qLow = query.toLowerCase();
     const words = qLow.split(/\s+/).filter(Boolean);
+    // Brand search heuristic: any word starts with a capital letter in original query
+    const isBrandSearch = words.length>=2 && query.split(/\s+/).some(w=>/^[A-Z]/.test(w));
+    // For generic 2-word food queries (all lowercase): require only 1 word match
+    const minMatch = words.length<=1 ? 1
+                   : isBrandSearch   ? Math.min(2, words.length)
+                   : 1; // generic multi-word: relaxed — just need 1 word
+
+    // Saved meals — instant local match
     const localMatches = savedMeals.filter(m=>m.name.toLowerCase().includes(qLow)).slice(0,5).map(m=>({
       id:"saved-"+m.id, name:m.name, brand:"", servingLabel:"Per 1 meal", servingGrams:null,
       cal:m.totals.cal, protein:m.totals.p, carbs:m.totals.c, fat:m.totals.f,
@@ -1493,32 +1514,39 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
       if(signal.aborted) return;
       if(!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      const rawCount = (data.foods||[]).length;
 
       let items = (data.foods||[]).map(f=>{
         const getNut = (id) => {const n=f.foodNutrients?.find(n=>n.nutrientId===id);return n?Math.round(n.value*10)/10:0;};
         const base = {cal:getNut(1008), protein:getNut(1003), carbs:getNut(1005), fat:getNut(1004)};
 
-        // Build portions list: branded serving → foodMeasures → 100g fallback
+        // Build portions: branded serving → foodMeasures → keyword default → 100g
         const portions = [];
         const sg = usdaServingGrams(f.servingSize, f.servingSizeUnit);
         if(sg){
           const sizeLabel = `${Math.round((f.servingSize||sg)*10)/10}${f.servingSizeUnit||"g"}`;
-          portions.push({label:sizeLabel, gramWeight:sg});
+          portions.push({label:sizeLabel, gramWeight:sg, est:false});
         }
         (f.foodMeasures||[]).forEach(m=>{
           if(m.gramWeight>0 && m.disseminationText && m.disseminationText!=="Quantity not specified")
-            portions.push({label:m.disseminationText, gramWeight:Math.round(m.gramWeight)});
+            portions.push({label:m.disseminationText, gramWeight:Math.round(m.gramWeight), est:false});
         });
-        portions.push({label:"100g", gramWeight:100});
+        if(portions.length===0){
+          const kw = keywordServingGrams(f.description||"");
+          if(kw) portions.push({label:`est. ${kw.g}g`, gramWeight:kw.g, est:true});
+        }
+        portions.push({label:"100g", gramWeight:100, est:false});
 
-        const defP = portions[0]; // best available serving
+        const defP = portions[0];
         const mult = defP.gramWeight/100;
         const brand = f.brandOwner || f.brandName || "";
         const hasServing = defP.label!=="100g";
 
         return {
           id:"usda-"+f.fdcId, name:f.description||"", brand,
-          servingLabel: hasServing ? `Per serving (${defP.gramWeight}g)` : "Per 100g",
+          servingLabel: hasServing
+            ? (defP.est ? `Per serving (est. ${defP.gramWeight}g)` : `Per serving (${defP.gramWeight}g)`)
+            : "Per 100g",
           servingGrams: defP.gramWeight,
           cal:Math.round(base.cal*mult), protein:Math.round(base.protein*mult),
           carbs:Math.round(base.carbs*mult), fat:Math.round(base.fat*mult),
@@ -1528,35 +1556,34 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
       }).filter(f=>f.name);
 
       // Filter: remove zero-cal items
-      items = items.filter(f=>f.hasNutrition);
+      const afterCalFilter = items.filter(f=>f.hasNutrition);
+      items = afterCalFilter;
 
-      // Relevance scoring ──────────────────────────────────────────
-      // For multi-word queries (2+ words): require at least 2 words to match
-      // in name+brand. Single-word matches in 3+ word queries are excluded.
-      const minMatch = words.length>=2 ? Math.min(2, words.length) : 1;
-
+      // Relevance scoring
       const scoreItem = (item) => {
-        const name  = item.name.toLowerCase();
-        const brand = item.brand.toLowerCase();
+        const name     = item.name.toLowerCase();
+        const brand    = item.brand.toLowerCase();
         const combined = name+" "+brand;
         const matchCount = words.filter(w=>combined.includes(w)).length;
-        if(matchCount<minMatch) return Infinity; // below relevance threshold — exclude
-        if(name.startsWith(qLow))                              return 0; // exact prefix
-        if(words.every(w=>name.includes(w)))                   return 1; // all words in name
-        if(combined.includes(qLow))                            return 2; // full phrase in brand
-        if(matchCount===words.length)                          return 3; // all words in combined
-        if(matchCount/words.length>=0.75)                      return 4; // ≥75% words match
-        return 5; // partial match — shown but ranked low
+        if(matchCount<minMatch) return Infinity;
+        if(name.startsWith(qLow))                   return 0;
+        if(words.every(w=>name.includes(w)))         return 1;
+        if(combined.includes(qLow))                  return 2;
+        if(matchCount===words.length)                return 3;
+        if(matchCount/words.length>=0.75)            return 4;
+        return 5;
       };
 
-      items = items
+      const afterRelevance = items.filter(item=>scoreItem(item)<Infinity);
+      const final = afterRelevance
         .map(item=>({...item, _s:scoreItem(item)}))
-        .filter(item=>item._s<Infinity)
         .sort((a,b)=>a._s-b._s)
         .slice(0,8)
         .map(({_s,...item})=>item);
 
-      if(!signal.aborted) setUsdaResults(items);
+      console.log(`[usda] "${query}" — raw:${rawCount} after-cal:${afterCalFilter.length} after-relevance:${afterRelevance.length} shown:${final.length} | isBrand:${isBrandSearch} minMatch:${minMatch}`);
+
+      if(!signal.aborted) setUsdaResults(final);
     } catch(e){
       if(e.name==="AbortError"||signal.aborted) return;
       console.error("[usda] search error:", e.message);
