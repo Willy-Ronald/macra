@@ -785,7 +785,10 @@ const RecipeDetail = ({meal, savedMeals=[], onHeartMeal, onLogMeal, onBack}) => 
   const [logged, setLogged] = useState(false);
   const isSaved = savedMeals.some(s => s.name === meal.name);
   const instructions = meal.instructions || [];
-  const equipment = meal.equipment || [];
+  // equipment is a comma-separated string in new plans; old plans may have an array
+  const equipmentItems = Array.isArray(meal.equipment)
+    ? meal.equipment
+    : (meal.equipment ? meal.equipment.split(",").map(s => s.trim()).filter(Boolean) : []);
 
   const handleLog = async () => {
     if(onLogMeal){
@@ -865,10 +868,10 @@ const RecipeDetail = ({meal, savedMeals=[], onHeartMeal, onLogMeal, onBack}) => 
       </div>
 
       {/* Equipment */}
-      {equipment.length > 0 && <div style={{padding:"0 20px 20px"}}>
+      {equipmentItems.length > 0 && <div style={{padding:"0 20px 20px"}}>
         <p style={{fontSize:11,fontWeight:700,color:T.txM,margin:"0 0 12px",letterSpacing:"0.08em",textTransform:"uppercase"}}>You'll Need</p>
         <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-          {equipment.map((item,i)=>(
+          {equipmentItems.map((item,i)=>(
             <span key={i} style={{padding:"7px 14px",borderRadius:20,border:`1px solid ${T.bd}`,fontSize:12,color:T.tx2,background:T.sf,fontWeight:500}}>{item}</span>
           ))}
         </div>

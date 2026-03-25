@@ -288,75 +288,44 @@ export default async function handler(req, res) {
       dislikedCuisines.length > 0 ? `CUISINES TO NEVER USE: ${dislikedCuisines.join(", ")}` : "",
     ].filter(Boolean).join("\n");
 
-    // Computed macro accuracy ranges (3% tolerance shown in prompt)
-    const calLo  = Math.round(macros.target   * 0.97);
-    const calHi  = Math.round(macros.target   * 1.03);
-    const pLo    = Math.round(macros.proteinG * 0.97);
-    const pHi    = Math.round(macros.proteinG * 1.03);
-    const cLo    = Math.round(macros.carbG    * 0.97);
-    const cHi    = Math.round(macros.carbG    * 1.03);
-    const fLo    = Math.round(macros.fatG     * 0.97);
-    const fHi    = Math.round(macros.fatG     * 1.03);
     const avgMealProtein = Math.round(macros.proteinG / 4);
-    const minMealProtein = Math.round(macros.proteinG * 0.15);
 
-    const macroAccuracyBlock = `MACRO ACCURACY IS MANDATORY. The total macros across all 4 meals must hit these targets within 3%:
-- Calories: ${macros.target} cal (acceptable range: ${calLo} to ${calHi})
-- Protein: ${macros.proteinG}g (acceptable range: ${pLo} to ${pHi})
-- Carbs: ${macros.carbG}g (acceptable range: ${cLo} to ${cHi})
-- Fat: ${macros.fatG}g (acceptable range: ${fLo} to ${fHi})
+    const buildPrompt = (retryPrefix = "") => `${retryPrefix}Generate an A/B day meal plan. Goal: ${goal}.
 
-To hit protein targets, prioritize high-protein ingredients in every meal: chicken breast, turkey, eggs, Greek yogurt, cottage cheese, lean beef, fish, whey protein, tofu, tempeh, legumes. Every meal must contain a substantial protein source.
-Do not pad meals with extra carbs or fats to hit calorie targets — adjust portion sizes of the protein source instead.
-Before finalizing your response, mentally sum the cal, p, c, and f values across all 4 meals and verify each is within 3% of the target. If not, adjust portion sizes until they are.
-
-With a daily protein target of ${macros.proteinG}g across 4 meals, each meal should average ${avgMealProtein}g protein. No single meal should have less than ${minMealProtein}g protein.`;
-
-    const buildPrompt = (retryPrefix = "") => `${retryPrefix}Generate an A/B day meal plan that matches these daily macro targets:
-- Calories: ${macros.target} (within 3%)
-- Protein: ${macros.proteinG}g (within 3%)
-- Carbs: ${macros.carbG}g (within 3%)
-- Fat: ${macros.fatG}g (within 3%)
-- Goal: ${goal}
-
-${macroAccuracyBlock}
+HIT THESE MACROS WITHIN 3% — adjust portions not ingredients:
+Cal:${macros.target} P:${macros.proteinG}g C:${macros.carbG}g F:${macros.fatG}g
+Per-meal protein average: ${avgMealProtein}g. Include a lean protein source in every meal.
 
 ${hardConstraints}
 
-Cuisine assignment for this generation — each meal slot has its own unique style:
+Cuisine per slot:
 ${cuisineAssignmentLines}
 
-Each meal must reflect its assigned cuisine style in ingredients, seasoning, and preparation. The goal is a realistic mixed day of eating — the way people actually eat — not a single-cuisine day. Breakfast might be American, lunch Mexican, snack Mediterranean, dinner Japanese. Make each meal feel authentic to its assigned style.
-
-IMPORTANT — meal name rules: The "name" field must contain only the dish name itself (e.g. "Miso Glazed Salmon"). Never include the cuisine type, style label, or category prefix in the name field. The "cuisine" field stores the cuisine style string separately (e.g. "Japanese"). The cuisine style should only influence the ingredients and preparation, not appear in the name.
-
-Across Day A and Day B, use overlapping base ingredients where practical (same protein prepared differently, same vegetables used in different ways) so the weekly grocery list stays efficient and affordable to shop for.
-
-Never repeat the exact same meal across generations. Even if the cuisine style repeats, the specific dish must be different.
-
 Rules:
-- Day A and Day B must have completely different meals from each other
-- Each day has exactly 4 meals: BREAKFAST, LUNCH, SNACK, DINNER — in that order
-- Use realistic grocery store ingredients
-- Each meal needs an ingredients array, step-by-step instructions, and equipment list.
+- Day A and B have completely different meals
+- Each day: exactly 4 meals in order: BREAKFAST, LUNCH, SNACK, DINNER
+- "name" field = dish name only, never include cuisine label
+- Share base ingredients across A and B where practical
+- Never repeat the exact same meal across generations
 
-For instructions, write 5-8 detailed cooking steps. Each step should include: the action to take, the heat level or timing where relevant, what the food should look like or smell like when done, and any technique tips that help a beginner succeed. Example of a good step: 'Heat a non-stick skillet over medium-high heat until hot, then add 1 tsp olive oil and swirl to coat. Add the chicken and cook undisturbed for 4-5 minutes until golden brown on the bottom before flipping.' Never write a step shorter than one full descriptive sentence. For equipment, list only the essential items needed, maximum 4 items.
+Instructions: exactly 5 steps per meal. Each step under 12 words. Start with an action verb. Example: "Heat skillet over medium-high heat until hot."
+Equipment: comma-separated string, max 3 items. Example: "Skillet, chef knife, cutting board"
+desc: max 8 words.
 
-Return ONLY valid JSON. No markdown, no code blocks, no backticks, no explanation. Just the raw JSON object starting with { and ending with }.
+Return ONLY raw JSON starting with { and ending with }.
 
-The JSON must follow this exact structure:
 {
   "A": [
-    {"type":"BREAKFAST","cuisine":"American","name":"Meal name","desc":"Short description","cal":400,"p":30,"c":45,"f":12,"time":"10 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"cup"}],"instructions":["Step 1: Do this first.","Step 2: Then do this.","Step 3: Continue until done."],"equipment":["Non-stick skillet","Cutting board"]},
-    {"type":"LUNCH","cuisine":"Mexican","name":"Meal name","desc":"Short description","cal":600,"p":50,"c":55,"f":18,"time":"20 min","ingredients":[{"name":"ingredient name","qty":"6","unit":"oz"}],"instructions":["Step 1: Do this first.","Step 2: Then do this."],"equipment":["Large pot","Colander"]},
-    {"type":"SNACK","cuisine":"Mediterranean","name":"Meal name","desc":"Short description","cal":300,"p":25,"c":20,"f":10,"time":"5 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"serving"}],"instructions":["Step 1: Do this first.","Step 2: Then do this."],"equipment":["Bowl"]},
-    {"type":"DINNER","cuisine":"Japanese","name":"Meal name","desc":"Short description","cal":700,"p":55,"c":50,"f":22,"time":"30 min","ingredients":[{"name":"ingredient name","qty":"8","unit":"oz"}],"instructions":["Step 1: Do this first.","Step 2: Then do this.","Step 3: Continue until done.","Step 4: Finish and serve."],"equipment":["Wok","Chef knife","Cutting board"]}
+    {"type":"BREAKFAST","cuisine":"American","name":"Dish name","desc":"Eight words max describing dish","cal":400,"p":30,"c":45,"f":12,"time":"10 min","ingredients":[{"name":"chicken breast","qty":"6","unit":"oz"}],"instructions":["Heat skillet over medium-high until hot.","Season chicken with salt and pepper.","Cook chicken 5 minutes each side.","Rest 2 minutes then slice thinly.","Plate with sides and serve warm."],"equipment":"Skillet, chef knife, cutting board"},
+    {"type":"LUNCH","cuisine":"Mexican","name":"Dish name","desc":"Eight words max describing dish","cal":600,"p":50,"c":55,"f":18,"time":"20 min","ingredients":[{"name":"ground turkey","qty":"6","unit":"oz"}],"instructions":["Brown turkey in skillet over medium heat.","Add spices and stir to combine.","Warm tortillas in dry pan 30 seconds.","Fill tortillas with turkey and toppings.","Squeeze lime over finished tacos."],"equipment":"Skillet, cutting board"},
+    {"type":"SNACK","cuisine":"Mediterranean","name":"Dish name","desc":"Eight words max describing dish","cal":300,"p":25,"c":20,"f":10,"time":"5 min","ingredients":[{"name":"Greek yogurt","qty":"1","unit":"cup"}],"instructions":["Spoon yogurt into bowl.","Add honey and stir gently.","Top with nuts and fruit.","Sprinkle cinnamon over the top.","Serve immediately."],"equipment":"Bowl, spoon"},
+    {"type":"DINNER","cuisine":"Japanese","name":"Dish name","desc":"Eight words max describing dish","cal":700,"p":55,"c":50,"f":22,"time":"30 min","ingredients":[{"name":"salmon fillet","qty":"8","unit":"oz"}],"instructions":["Preheat oven to 400°F.","Mix miso, mirin, and soy sauce.","Coat salmon with miso glaze evenly.","Bake 12-15 minutes until flaky.","Garnish with sesame seeds and serve."],"equipment":"Baking sheet, small bowl"}
   ],
   "B": [
-    {"type":"BREAKFAST","cuisine":"Greek","name":"Different meal","desc":"Short description","cal":400,"p":30,"c":45,"f":12,"time":"10 min","ingredients":[{"name":"ingredient name","qty":"2","unit":"piece"}],"instructions":["Step 1: Do this first.","Step 2: Then do this."],"equipment":["Non-stick pan"]},
-    {"type":"LUNCH","cuisine":"Korean","name":"Different meal","desc":"Short description","cal":600,"p":50,"c":55,"f":18,"time":"20 min","ingredients":[{"name":"ingredient name","qty":"0.5","unit":"cup"}],"instructions":["Step 1: Do this first.","Step 2: Then do this.","Step 3: Continue until done."],"equipment":["Skillet","Tongs"]},
-    {"type":"SNACK","cuisine":"Indian","name":"Different meal","desc":"Short description","cal":300,"p":25,"c":20,"f":10,"time":"5 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"oz"}],"instructions":["Step 1: Do this first.","Step 2: Then do this."],"equipment":["Bowl","Spoon"]},
-    {"type":"DINNER","cuisine":"Italian","name":"Different meal","desc":"Short description","cal":700,"p":55,"c":50,"f":22,"time":"30 min","ingredients":[{"name":"ingredient name","qty":"1","unit":"lbs"}],"instructions":["Step 1: Do this first.","Step 2: Then do this.","Step 3: Continue until done.","Step 4: Finish and serve."],"equipment":["Large pot","Colander","Sauce pan"]}
+    {"type":"BREAKFAST","cuisine":"Greek","name":"Dish name","desc":"Eight words max describing dish","cal":400,"p":30,"c":45,"f":12,"time":"10 min","ingredients":[{"name":"eggs","qty":"3","unit":"large"}],"instructions":["Whisk eggs with salt and pepper.","Heat olive oil in skillet over medium.","Pour eggs in and cook undisturbed 2 minutes.","Fold omelette in half and plate.","Top with feta and fresh herbs."],"equipment":"Skillet, whisk"},
+    {"type":"LUNCH","cuisine":"Korean","name":"Dish name","desc":"Eight words max describing dish","cal":600,"p":50,"c":55,"f":18,"time":"20 min","ingredients":[{"name":"beef sirloin","qty":"6","unit":"oz"}],"instructions":["Slice beef thinly against the grain.","Mix soy, garlic, sesame oil as marinade.","Marinate beef 10 minutes minimum.","Cook beef in hot skillet 2 minutes.","Serve over rice with kimchi."],"equipment":"Skillet, cutting board"},
+    {"type":"SNACK","cuisine":"Indian","name":"Dish name","desc":"Eight words max describing dish","cal":300,"p":25,"c":20,"f":10,"time":"5 min","ingredients":[{"name":"cottage cheese","qty":"1","unit":"cup"}],"instructions":["Spoon cottage cheese into bowl.","Add cucumber and tomato pieces.","Sprinkle cumin and chili powder.","Drizzle with lemon juice.","Stir gently and serve cold."],"equipment":"Bowl, spoon"},
+    {"type":"DINNER","cuisine":"Italian","name":"Dish name","desc":"Eight words max describing dish","cal":700,"p":55,"c":50,"f":22,"time":"30 min","ingredients":[{"name":"ground beef","qty":"8","unit":"oz"}],"instructions":["Brown ground beef over medium-high heat.","Drain fat and add marinara sauce.","Simmer 10 minutes until sauce thickens.","Cook pasta according to package directions.","Plate pasta, top with meat sauce."],"equipment":"Large pot, skillet, colander"}
   ]
 }`;
 
@@ -375,8 +344,8 @@ The JSON must follow this exact structure:
     if (firstParsed.truncated) {
       console.warn("[truncation] First response cut off — retrying with conciseness cap");
       const truncRetryPrefix =
-        "Your previous response was cut off before completing. Please provide the complete plan " +
-        "with all 8 meals, keeping instructions concise — maximum 5 steps per meal, each step under 20 words. ";
+        "Your previous response was cut off. Provide the complete plan with all 8 meals. " +
+        "Keep instructions to exactly 5 steps per meal, each under 12 words. ";
       const truncRetry = await callClaude(apiKey, buildPrompt(truncRetryPrefix));
       if (truncRetry.error) {
         console.error("Retry after truncation also failed:", truncRetry.error);
