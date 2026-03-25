@@ -261,7 +261,7 @@ Rules:
 - Use realistic grocery store ingredients
 - Each meal needs an ingredients array, step-by-step instructions, and equipment list.
 
-For instructions, write 4-8 clear step-by-step cooking directions. Each step should be one concise sentence starting with an action verb. For equipment, list only the essential items needed, maximum 4 items.
+For instructions, write 5-8 detailed cooking steps. Each step should include: the action to take, the heat level or timing where relevant, what the food should look like or smell like when done, and any technique tips that help a beginner succeed. Example of a good step: 'Heat a non-stick skillet over medium-high heat until hot, then add 1 tsp olive oil and swirl to coat. Add the chicken and cook undisturbed for 4-5 minutes until golden brown on the bottom before flipping.' Never write a step shorter than one full descriptive sentence. For equipment, list only the essential items needed, maximum 4 items.
 
 Return ONLY valid JSON. No markdown, no code blocks, no backticks, no explanation. Just the raw JSON object starting with { and ending with }.
 
