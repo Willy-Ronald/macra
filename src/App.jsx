@@ -259,15 +259,16 @@ const Onboarding = ({onComplete}) => {
   const [dir,setDir] = useState(1);
   const [profile,setProfile] = useState({
     name:"",sex:"male",age:28,weightLbs:185,heightFt:5,heightIn:11,
-    activity:"active",goal:"lean_bulk",diet:[],weeklyBudget:null
+    activity:"active",goal:"lean_bulk",diet:[],weeklyBudget:null,pickinessLevel:3
   });
   const [budgetInput,setBudgetInput] = useState("");
+  const [pickinessInput,setPickinessInput] = useState(3);
 
   const set = (k,v) => setProfile(p=>({...p,[k]:v}));
   const next = () => {setDir(1);setStep(s=>s+1)};
   const back = () => {setDir(-1);setStep(s=>s-1)};
 
-  const totalSteps = 7;
+  const totalSteps = 8;
   const pct = ((step+1)/totalSteps)*100;
 
   const inputStyle = {
@@ -290,7 +291,7 @@ const Onboarding = ({onComplete}) => {
     </button>
   );
 
-  const macros = step===6 ? calcMacros(profile) : null;
+  const macros = step===7 ? calcMacros(profile) : null;
 
   const steps = [
     // 0: Name + Sex
@@ -419,8 +420,31 @@ const Onboarding = ({onComplete}) => {
       </button>
     </div>,
 
-    // 6: Results
+    // 6: Pickiness / Meal Complexity
     <div key="6">
+      <h2 style={{fontSize:28,fontWeight:700,color:T.tx,margin:"0 0 6px",letterSpacing:"-0.02em"}}>How adventurous are you with food?</h2>
+      <p style={{fontSize:14,color:T.txM,margin:"0 0 28px",lineHeight:1.5}}>This helps us tailor meal suggestions to your taste preferences.</p>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {[
+          {v:1,l:"Very adventurous",d:"Love trying new cuisines and bold flavors"},
+          {v:2,l:"Somewhat adventurous",d:"Enjoy variety and global flavors"},
+          {v:3,l:"Balanced",d:"Mix of familiar and new"},
+          {v:4,l:"Somewhat picky",d:"Prefer mostly familiar dishes"},
+          {v:5,l:"Very picky",d:"Prefer simple, familiar everyday meals"},
+        ].map(o=>(
+          <SelectBtn key={o.v} label={o.l} sub={o.d} selected={pickinessInput===o.v} onClick={()=>setPickinessInput(o.v)}/>
+        ))}
+      </div>
+      {pickinessInput>=4&&<div style={{marginTop:16,padding:"12px 14px",borderRadius:T.r,border:`1px solid ${T.acc}40`,background:T.accM}}>
+        <p style={{fontSize:12,color:T.tx2,margin:0,lineHeight:1.6}}>For the best experience, we recommend visiting the <strong style={{color:T.acc}}>You tab</strong> after setup to add any foods you don't eat. This helps us avoid suggesting meals you won't enjoy.</p>
+      </div>}
+      <button onClick={()=>{setPickinessInput(3);next();}} style={{width:"100%",padding:12,borderRadius:T.r,border:`1px solid ${T.bd}`,background:"transparent",color:T.tx2,fontSize:14,fontWeight:500,cursor:"pointer",fontFamily:T.font,marginTop:20}}>
+        Skip (default: Balanced)
+      </button>
+    </div>,
+
+    // 7: Results
+    <div key="7">
       <h2 style={{fontSize:28,fontWeight:700,color:T.tx,margin:"0 0 6px",letterSpacing:"-0.02em"}}>Your Targets</h2>
       <p style={{fontSize:14,color:T.txM,margin:"0 0 8px",lineHeight:1.5}}>
         {profile.name ? `${profile.name}, here's` : "Here's"} your personalized daily nutrition plan.
@@ -489,10 +513,14 @@ const Onboarding = ({onComplete}) => {
           const val = budgetInput ? parseInt(budgetInput, 10) : null;
           set("weeklyBudget", val && val > 0 ? val : null);
           next();
+        } else if(step === 6){
+          // Pickiness step — save and advance
+          set("pickinessLevel", pickinessInput);
+          next();
         } else if(step < totalSteps - 1){
           next();
         } else {
-          onComplete({...profile,macros:calcMacros(profile)});
+          onComplete({...profile, pickinessLevel: profile.pickinessLevel ?? pickinessInput, macros:calcMacros(profile)});
         }
       }} style={{
         width:"100%",padding:16,borderRadius:T.r,border:"none",
@@ -2223,6 +2251,7 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
   const [draftActivity, setDraftActivity] = useState("moderate");
   const [draftGoal, setDraftGoal] = useState("maintain");
   const [draftBudget, setDraftBudget] = useState("");
+  const [draftPickiness, setDraftPickiness] = useState(3);
 
   const showSaved = () => { setSavedToast(true); setTimeout(()=>setSavedToast(false),2000); };
 
@@ -2252,6 +2281,7 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
       const b = profile?.weeklyBudget;
       setDraftBudget(b && b !== "null" && Number(b) > 0 ? String(b) : "");
     }
+    if(v==="pickiness") setDraftPickiness(profile?.pickinessLevel ?? 3);
     setView(v);
   };
 
@@ -2499,6 +2529,31 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
     </div>;
   }
 
+  // ── Pickiness sub-view ──
+  if(view==="pickiness"){
+    const PICKINESS_OPTS = [
+      {v:1,l:"Very adventurous",d:"Love trying new cuisines and bold flavors"},
+      {v:2,l:"Somewhat adventurous",d:"Enjoy variety and global flavors"},
+      {v:3,l:"Balanced",d:"Mix of familiar and new"},
+      {v:4,l:"Somewhat picky",d:"Prefer mostly familiar dishes"},
+      {v:5,l:"Very picky",d:"Prefer simple, familiar everyday meals"},
+    ];
+    return <div style={{padding:"0 20px 24px"}}>
+      <BackBtn onBack={()=>setView(null)}/>
+      <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 6px",letterSpacing:"-0.02em"}}>Meal Complexity</h1>
+      <p style={{fontSize:13,color:T.txM,margin:"0 0 20px",lineHeight:1.5}}>How adventurous are you with food?</p>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {PICKINESS_OPTS.map(o=>(
+          <SelBtn key={o.v} label={o.l} desc={o.d} selected={draftPickiness===o.v} onClick={()=>setDraftPickiness(o.v)}/>
+        ))}
+      </div>
+      {draftPickiness>=4&&<div style={{marginTop:16,padding:"12px 14px",borderRadius:T.r,border:`1px solid ${T.acc}40`,background:T.accM}}>
+        <p style={{fontSize:12,color:T.tx2,margin:0,lineHeight:1.6}}>For the best experience, visit <strong style={{color:T.acc}}>Foods I Don't Eat</strong> below to add anything you'd like to avoid. This helps us skip meals you won't enjoy.</p>
+      </div>}
+      <SaveBtn onClick={()=>saveField({pickinessLevel:draftPickiness},null)}/>
+    </div>;
+  }
+
   // ── Main profile view ──
   const foodsCount = (profile?.dislikedFoods||[]).length;
   const cuisinesCount = (profile?.dislikedCuisines||[]).length;
@@ -2557,8 +2612,17 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
       <div><p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>Foods I Don't Eat</p><p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{foodsCount>0?`${foodsCount} item${foodsCount!==1?"s":""} excluded`:"None added"}</p></div>
       <Chevron/>
     </Card>
-    <Card onClick={()=>enterView("cuisines")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:20,cursor:"pointer"}}>
+    <Card onClick={()=>enterView("cuisines")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,cursor:"pointer"}}>
       <div><p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>Cuisines I Don't Want</p><p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{cuisinesCount>0?`${cuisinesCount} cuisine${cuisinesCount!==1?"s":""} excluded`:"All cuisines enabled"}</p></div>
+      <Chevron/>
+    </Card>
+    <Card onClick={()=>enterView("pickiness")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:20,cursor:"pointer"}}>
+      <div>
+        <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>Meal Complexity</p>
+        <p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>
+          {(()=>{const lvl=profile?.pickinessLevel??3;const labels={1:"Very adventurous",2:"Somewhat adventurous",3:"Balanced",4:"Somewhat picky",5:"Very picky"};return `Level ${lvl} — ${labels[lvl]||"Balanced"}`;})()}
+        </p>
+      </div>
       <Chevron/>
     </Card>
 
@@ -2782,7 +2846,7 @@ export default function App() {
             weightLbs:data.weight_lbs, heightFt:data.height_ft, heightIn:data.height_in,
             activity:data.activity, goal:data.goal, diet:data.diet||[],
             dislikedFoods:data.disliked_foods||[], dislikedCuisines:data.disliked_cuisines||[],
-            weeklyBudget:data.weekly_budget??null,
+            weeklyBudget:data.weekly_budget??null, pickinessLevel:data.pickiness_level??3,
           };
           const hasStats = pBase.sex && pBase.age && pBase.weightLbs && pBase.heightFt != null && pBase.activity && pBase.goal;
           const freshMacros = hasStats ? calcMacros(pBase) : {target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat};

@@ -294,7 +294,19 @@ export default async function handler(req, res) {
       ? `BUDGET GUIDANCE: Target a weekly grocery cost of approximately $${weeklyBudget} for this full meal plan (both Day A and Day B combined). Prioritize affordable protein sources such as eggs, canned fish, chicken thighs, ground turkey, and legumes. Avoid expensive specialty ingredients, exotic produce, or premium cuts unless essential. This is a best-effort estimate — prices vary by location.`
       : "";
 
+    const pickinessLevel = profile.pickinessLevel ?? 3;
+    const complexityLines = {
+      1: "MEAL COMPLEXITY: Very adventurous eater. Suggest bold, creative, globally-inspired dishes with complex flavor profiles, unusual ingredient combinations, and restaurant-quality presentations. Be creative and surprising.",
+      2: "MEAL COMPLEXITY: Adventurous eater. Suggest varied, flavorful dishes from diverse cuisines. Some complexity and creativity is welcome.",
+      3: "MEAL COMPLEXITY: Balanced. Mix familiar comfort foods with some globally inspired options. Approachable but not boring.",
+      4: "MEAL COMPLEXITY: Somewhat picky eater. Stick to familiar, recognizable dishes. Avoid unusual ingredients or complex techniques. Simple preparations preferred.",
+      5: "MEAL COMPLEXITY: Very picky eater. Suggest only simple, familiar, everyday meals with common ingredients that most people know and enjoy. No exotic cuisines, unusual ingredients, or complex techniques. Think basic home cooking.",
+    };
+    const complexityLine = complexityLines[pickinessLevel] || complexityLines[3];
+
     const buildPrompt = (retryPrefix = "") => `${retryPrefix}Generate an A/B day meal plan. Goal: ${goal}.${budgetLine ? `\n\n${budgetLine}` : ""}
+
+${complexityLine}
 
 HIT THESE MACROS WITHIN 3% — adjust portions not ingredients:
 Cal:${macros.target} P:${macros.proteinG}g C:${macros.carbG}g F:${macros.fatG}g

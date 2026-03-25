@@ -75,6 +75,7 @@ export async function saveProfile(userId, profile) {
     disliked_foods: profile.dislikedFoods || [],
     disliked_cuisines: profile.dislikedCuisines || [],
     weekly_budget: profile.weeklyBudget ?? null,
+    pickiness_level: profile.pickinessLevel ?? 3,
     updated_at: new Date().toISOString(),
   });
   return { error };
