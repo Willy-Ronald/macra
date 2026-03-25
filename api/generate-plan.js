@@ -300,14 +300,28 @@ export default async function handler(req, res) {
       2: "MEAL COMPLEXITY: Adventurous eater. Suggest varied, flavorful dishes from diverse cuisines. Some complexity and creativity is welcome.",
       3: "MEAL COMPLEXITY: Balanced. Mix familiar comfort foods with some globally inspired options. Approachable but not boring.",
       4: "MEAL COMPLEXITY: Somewhat picky eater. Stick to familiar American and basic international dishes most people know. Simple preparations, recognizable ingredients. Examples: pasta with marinara, chicken tacos, stir fry with rice, burgers, grilled fish with vegetables. Avoid unusual ingredients or complex techniques. Maximum 7 ingredients per meal.",
-      5: `MEAL COMPLEXITY: Very picky eater. This person only eats simple, plain, familiar foods with minimal ingredients. Suggest meals like: grilled chicken with rice and broccoli, scrambled eggs with toast, ground beef with pasta, baked chicken breast with mashed potatoes, turkey sandwich, oatmeal with banana, rice and beans, plain grilled salmon with steamed vegetables.
+      5: `MEAL COMPLEXITY: Very picky eater with a child-like palate. Think of meals a fussy 10-year-old would actually get excited about eating — simple, familiar, comforting, and tasty.
+Good examples for level 5:
+- Scrambled eggs with toast and fruit
+- Grilled chicken breast with mac and cheese
+- Spaghetti with ground beef marinara sauce
+- Cheeseburger bowl with ground beef, rice and cheese
+- Chicken tenders with mashed potatoes and corn
+- Pepperoni pizza eggs (eggs cooked with pepperoni and mozzarella)
+- Grilled cheese sandwich with turkey and tomato soup
+- Pancakes with eggs and turkey bacon
+- Pasta with butter, parmesan and grilled chicken
+- Quesadilla with chicken and cheddar cheese
 STRICT RULES for level 5:
-- Maximum 5 ingredients per meal
-- No ethnic cuisine names in the meal name (no bowls, no curries, no stews, no stir fry)
-- No exotic ingredients whatsoever
-- No quinoa, plantains, tahini, miso, kimchi, tempeh, lemongrass, or any ingredient a picky eater would not recognize at a basic grocery store
-- Cooking methods only: grilled, baked, scrambled, boiled, steamed, or pan-fried with basic seasoning
-- Meal names should be plain and descriptive: 'Grilled Chicken with Rice and Broccoli' not 'Herb-Marinated Chicken Bowl'`,
+- Every ingredient must be something a picky child would recognize and not refuse
+- No fish or seafood of any kind
+- No beans, lentils, chickpeas, or legumes
+- No leafy greens (spinach, kale, arugula)
+- No ethnic cuisine names or foreign-sounding dishes
+- No barley, quinoa, farro, or unusual grains
+- Stick to: chicken, ground beef, ground turkey, eggs, cheese, pasta, rice, potatoes, bread, corn, carrots, broccoli, peas, apples, bananas
+- Cooking methods: baked, grilled, scrambled, pan-fried with basic seasoning (salt, pepper, garlic powder only)
+- Meal names must sound appetizing and familiar to a child: 'Cheesy Chicken and Rice' not 'Spanish Chicken Bowl'`,
     };
     const complexityLine = complexityLines[pickinessLevel] || complexityLines[3];
 
@@ -317,7 +331,14 @@ ${complexityLine}
 
 HIT THESE MACROS WITHIN 3% — adjust portions not ingredients:
 Cal:${macros.target} P:${macros.proteinG}g C:${macros.carbG}g F:${macros.fatG}g
-Per-meal protein average: ${avgMealProtein}g. Include a lean protein source in every meal.
+
+MACRO DISTRIBUTION: Hit the daily totals within 3%. Distribute macros naturally across meals — breakfast can be lighter, dinner heavier. Do not force identical macros on every meal.
+Acceptable natural distribution example for a ${macros.target} cal day:
+- Breakfast: ~${Math.round(macros.target*0.2)}-${Math.round(macros.target*0.22)} cal
+- Lunch: ~${Math.round(macros.target*0.26)}-${Math.round(macros.target*0.28)} cal
+- Snack: ~${Math.round(macros.target*0.14)}-${Math.round(macros.target*0.16)} cal
+- Dinner: ~${Math.round(macros.target*0.34)}-${Math.round(macros.target*0.36)} cal
+Protein appears in every meal but varies naturally by meal type. The DAILY TOTAL must hit targets within 3%, not each individual meal.
 
 ${hardConstraints}
 
