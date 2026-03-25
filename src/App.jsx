@@ -28,6 +28,8 @@ const T = {
   r:14,font:"'Outfit',sans-serif",mono:"'DM Mono',monospace"
 };
 
+const MEAL_CATS = ['breakfast','lunch','snack','dinner'];
+
 const Card=({children,style:s={},onClick})=><div onClick={onClick} style={{background:T.sf,borderRadius:T.r,border:`1px solid ${T.bd}`,...s}}>{children}</div>;
 const Lbl=({children})=><span style={{fontSize:10,fontWeight:600,color:T.txM,letterSpacing:"0.1em",textTransform:"uppercase"}}>{children}</span>;
 
@@ -1085,12 +1087,13 @@ const WaterSettingsView = ({userId, defaultGoal=8, onBack, onGoalChange}) => {
 };
 
 // ─── DASHBOARD ─────────────────────────────────────────────────
-const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[],weekPlans={},userId,savedMeals=[],onHeartMeal}) => {
+const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[],weekPlans={},userId,savedMeals=[],onHeartMeal}) => {
   const [viewDate,setViewDate]=useState(()=>new Date());
   const [historyLog,setHistoryLog]=useState(null); // null = showing today
   const [loggingId,setLoggingId]=useState(null);
   const [progressView,setProgressView]=useState(null); // null | 'weight' | 'water'
   const [showCalendar,setShowCalendar]=useState(false);
+  const [collapsed,setCollapsed]=useState({});
   const m = profile?.macros || {target:2200,proteinG:180,carbG:240,fatG:70};
 
   const todayStr = new Date().toISOString().split("T")[0];
@@ -1281,34 +1284,64 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
       </>}
 
       {/* ── Eaten / Meals Logged ── */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"20px 0 14px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"20px 0 8px"}}>
         <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>{isToday?"Eaten Today":"Meals Logged"}</h2>
         <span style={{fontSize:12,color:T.txM,fontFamily:T.mono}}>{displayLog.length} meal{displayLog.length!==1?"s":""}</span>
       </div>
-      {displayLog.length===0&&<Card style={{padding:"16px",textAlign:"center",marginBottom:6}}>
-        <p style={{fontSize:13,color:T.txM,margin:0}}>{isFuture?"No data yet for this date.":isToday?"Nothing logged yet. Tap a meal above or go to the Log tab.":"No meals logged on this day."}</p>
+      {displayLog.length===0&&!isToday&&<Card style={{padding:"16px",textAlign:"center",marginBottom:6}}>
+        <p style={{fontSize:13,color:T.txM,margin:0}}>{isFuture?"No data yet for this date.":"No meals logged on this day."}</p>
       </Card>}
-      {displayLog.map((x)=><SwipeableRow key={x.id} onDelete={()=>handleUnlogForDate(x.id)}>
-        <Card style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:0}}>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:7,height:7,borderRadius:"50%",background:T.ok,boxShadow:`0 0 8px ${T.ok}40`}}/>
-            <div>
-              <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{x.name}</p>
-              <div style={{display:"flex",gap:8,marginTop:3}}>
-                {[{v:x.calories||0,l:"cal",c:T.acc},{v:x.protein||0,l:"P",c:T.pro,u:"g"},{v:x.carbs||0,l:"C",c:T.carb,u:"g"},{v:x.fat||0,l:"F",c:T.fat,u:"g"}].map(z=>
-                  <span key={z.l} style={{fontSize:10,fontFamily:T.mono,color:z.c}}>{z.v}{z.u||""}<span style={{color:T.txM,fontSize:8}}> {z.l}</span></span>
-                )}
+      {(()=>{
+        const grouped={breakfast:[],lunch:[],snack:[],dinner:[],other:[]};
+        displayLog.forEach(x=>{
+          const t=(x.meal_type||'').toLowerCase();
+          if(MEAL_CATS.includes(t)) grouped[t].push(x); else grouped.other.push(x);
+        });
+        const catsToShow=isToday?MEAL_CATS:MEAL_CATS.filter(c=>grouped[c].length>0);
+        const showOther=grouped.other.length>0;
+        return <>{[...catsToShow,...(showOther?['other']:[])].map(cat=>{
+          const items=grouped[cat];
+          const catLabel=cat.charAt(0).toUpperCase()+cat.slice(1);
+          const catCal=items.reduce((s,x)=>s+(x.calories||0),0);
+          const isCollapsed=!!collapsed[cat];
+          return <div key={cat} style={{marginBottom:2}}>
+            <div onClick={()=>setCollapsed(p=>({...p,[cat]:!p[cat]}))} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 2px",cursor:"pointer",userSelect:"none"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{transform:isCollapsed?"rotate(-90deg)":"rotate(0deg)",transition:"transform 0.2s",flexShrink:0}}><path d="M6 9l6 6 6-6"/></svg>
+                <Lbl>{catLabel}</Lbl>
+                {items.length>0&&<span style={{fontSize:10,color:T.txM,fontFamily:T.mono}}>({items.length})</span>}
               </div>
+              {catCal>0&&<span style={{fontSize:11,fontFamily:T.mono,color:T.acc}}>{catCal} cal</span>}
             </div>
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <button onClick={(e)=>{e.stopPropagation();onHeartMeal&&onHeartMeal({name:x.name,cal:x.calories,p:x.protein,c:x.carbs,f:x.fat},'manual');}} style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex",alignItems:"center"}}>
-              <HeartIcon filled={savedMeals.some(s=>s.name===x.name)}/>
-            </button>
-            <span style={{fontSize:10,color:T.txM,letterSpacing:"0.05em"}}>swipe ←</span>
-          </div>
-        </Card>
-      </SwipeableRow>)}
+            {!isCollapsed&&<>
+              {items.map(x=><SwipeableRow key={x.id} onDelete={()=>handleUnlogForDate(x.id)}>
+                <Card style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:12}}>
+                    <div style={{width:7,height:7,borderRadius:"50%",background:T.ok,boxShadow:`0 0 8px ${T.ok}40`}}/>
+                    <div>
+                      <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{x.name}</p>
+                      <div style={{display:"flex",gap:8,marginTop:3}}>
+                        {[{v:x.calories||0,l:"cal",c:T.acc},{v:x.protein||0,l:"P",c:T.pro,u:"g"},{v:x.carbs||0,l:"C",c:T.carb,u:"g"},{v:x.fat||0,l:"F",c:T.fat,u:"g"}].map(z=>
+                          <span key={z.l} style={{fontSize:10,fontFamily:T.mono,color:z.c}}>{z.v}{z.u||""}<span style={{color:T.txM,fontSize:8}}> {z.l}</span></span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <button onClick={(e)=>{e.stopPropagation();onHeartMeal&&onHeartMeal({name:x.name,cal:x.calories,p:x.protein,c:x.carbs,f:x.fat},'manual');}} style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex",alignItems:"center"}}>
+                      <HeartIcon filled={savedMeals.some(s=>s.name===x.name)}/>
+                    </button>
+                    <span style={{fontSize:10,color:T.txM,letterSpacing:"0.05em"}}>swipe ←</span>
+                  </div>
+                </Card>
+              </SwipeableRow>)}
+              {isToday&&cat!=='other'&&<button onClick={()=>onLogCategory&&onLogCategory(cat)} style={{width:"100%",padding:"10px 0",borderRadius:T.r,border:`1px dashed ${T.bd}`,background:"transparent",color:T.txM,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:T.font,marginBottom:8}}>
+                + Log {catLabel}
+              </button>}
+            </>}
+          </div>;
+        })}</>;
+      })()}
 
       {isToday&&<Card style={{padding:"14px 16px",marginTop:16,background:T.accG,border:`1px solid ${T.accM}`,display:"flex",alignItems:"flex-start",gap:10}}>
         <span style={{fontSize:14}}>✦</span>
@@ -1334,6 +1367,10 @@ const PRO_MONTHLY_LIMIT  = 30; // calendar month
 // ─── RECIPE DETAIL ─────────────────────────────────────────────
 const RecipeDetail = ({meal, savedMeals=[], onHeartMeal, onLogMeal, onBack}) => {
   const [logged, setLogged] = useState(false);
+  const [mealType, setMealType] = useState(() => {
+    const t = (meal.type||'').toLowerCase();
+    return MEAL_CATS.includes(t) ? t : getDefaultMealType();
+  });
   const isSaved = savedMeals.some(s => s.name === meal.name);
   const instructions = meal.instructions || [];
   // equipment is a comma-separated string in new plans; old plans may have an array
@@ -1343,7 +1380,7 @@ const RecipeDetail = ({meal, savedMeals=[], onHeartMeal, onLogMeal, onBack}) => 
 
   const handleLog = async () => {
     if(onLogMeal){
-      await onLogMeal({type:meal.type||"meal",name:meal.name,cal:meal.cal,p:meal.p||0,c:meal.c||0,f:meal.f||0});
+      await onLogMeal({type:mealType,name:meal.name,cal:meal.cal,p:meal.p||0,c:meal.c||0,f:meal.f||0});
     }
     setLogged(true);
     setTimeout(()=>onBack(), 900);
@@ -1430,7 +1467,8 @@ const RecipeDetail = ({meal, savedMeals=[], onHeartMeal, onLogMeal, onBack}) => 
     </div>
 
     {/* Fixed footer — Log This Meal */}
-    <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,padding:"14px 20px 30px",background:T.bg,borderTop:`1px solid ${T.bd}`}}>
+    <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,padding:"12px 20px 28px",background:T.bg,borderTop:`1px solid ${T.bd}`}}>
+      <MealTypePicker value={mealType} onChange={setMealType}/>
       <button onClick={handleLog} disabled={logged} style={{width:"100%",padding:16,borderRadius:T.r,border:"none",background:logged?T.ok:T.acc,color:T.bg,fontSize:15,fontWeight:700,cursor:logged?"default":"pointer",fontFamily:T.font,transition:"background 0.3s",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
         {logged?"✓  Logged!":"Log This Meal"}
       </button>
@@ -1891,7 +1929,37 @@ const MealCreator = ({onSave,onBack}) => {
   </div>;
 };
 
-const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDeleteSavedMeal}) => {
+const getDefaultMealType = () => {
+  const h = new Date().getHours();
+  if(h>=5&&h<10) return 'breakfast';
+  if(h>=10&&h<14) return 'lunch';
+  if(h>=14&&h<17) return 'snack';
+  if(h>=17&&h<22) return 'dinner';
+  return 'snack';
+};
+
+const MealTypePicker = ({value, onChange}) => (
+  <div style={{marginBottom:14}}>
+    <Lbl>Meal Type</Lbl>
+    <div style={{display:'flex',gap:6,marginTop:6}}>
+      {MEAL_CATS.map(t=>(
+        <button key={t} onClick={()=>onChange(t)} style={{
+          flex:1,padding:'8px 4px',borderRadius:8,
+          border:`1px solid ${value===t?T.acc:T.bd}`,
+          background:value===t?T.accM:'transparent',
+          color:value===t?T.acc:T.tx2,
+          fontSize:11,fontWeight:value===t?700:500,
+          cursor:'pointer',fontFamily:T.font,
+          textTransform:'capitalize'
+        }}>
+          {t.charAt(0).toUpperCase()+t.slice(1)}
+        </button>
+      ))}
+    </div>
+  </div>
+);
+
+const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDeleteSavedMeal,defaultMealType}) => {
   const [view,setView]=useState("main"); // main | create | manual | saved | custom
   const [loggedId,setLoggedId]=useState(null);
   const [manualForm,setManualForm]=useState({name:"",cal:"",p:"",c:"",f:""});
@@ -1900,6 +1968,7 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
   const [frequentMeals,setFrequentMeals]=useState([]);
   const [freqLoaded,setFreqLoaded]=useState(false);
   const [hiddenNames,setHiddenNames]=useState([]); // locally hidden from "Frequently Logged"
+  const [mealType,setMealType]=useState(()=>defaultMealType||getDefaultMealType());
 
   useEffect(()=>{
     if(!userId||freqLoaded) return;
@@ -1924,14 +1993,6 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
   const [searchLogSuccess,setSearchLogSuccess]=useState(false);
   const debounceRef = useRef(null);
   const abortRef = useRef(null);
-
-  const getMealTypeByTime = () => {
-    const h = new Date().getHours();
-    if(h<10) return "breakfast";
-    if(h<13) return "lunch";
-    if(h<16) return "snack";
-    return "dinner";
-  };
 
   // Parse gram weight from a serving_size string like "215g", "1 burger (215g)", "150 ml"
   const parseServingGrams = (str) => {
@@ -2157,24 +2218,21 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
   const logSearchedFood = () => {
     if(!selectedFood||!onLogMeal) return;
     const fm = getFinalMacros();
-    const type = getMealTypeByTime();
-    onLogMeal({type,name:selectedFood.name+(selectedFood.brand?` (${selectedFood.brand})`:""),cal:fm.cal,p:fm.p,c:fm.c,f:fm.f});
+    onLogMeal({type:mealType,name:selectedFood.name+(selectedFood.brand?` (${selectedFood.brand})`:""),cal:fm.cal,p:fm.p,c:fm.c,f:fm.f});
     setSearchLogSuccess(true);
     setTimeout(()=>{setSearchLogSuccess(false);setSelectedFood(null);setSelectedPortion(null);setSearchQuery("");setQtyValue("1");setQtyUnit("servings");setEditNutrition(null);setSavedResults([]);setUsdaResults([]);},1500);
   };
 
   const quickLog = (item, feedbackId) => {
     if(!onLogMeal) return;
-    const type = getMealTypeByTime();
-    onLogMeal({type,name:item.n||item.name,cal:item.cal||item.totals?.cal||0,p:item.p||item.totals?.p||0,c:item.c||item.totals?.c||0,f:item.f||item.totals?.f||0});
+    onLogMeal({type:mealType,name:item.n||item.name,cal:item.cal||item.totals?.cal||0,p:item.p||item.totals?.p||0,c:item.c||item.totals?.c||0,f:item.f||item.totals?.f||0});
     setLoggedId(feedbackId);
     setTimeout(()=>setLoggedId(null),1200);
   };
 
   const handleManualLog = () => {
     if(!manualForm.name||!manualForm.cal||!onLogMeal) return;
-    const type = getMealTypeByTime();
-    onLogMeal({type,name:manualForm.name,cal:+manualForm.cal||0,p:+manualForm.p||0,c:+manualForm.c||0,f:+manualForm.f||0});
+    onLogMeal({type:mealType,name:manualForm.name,cal:+manualForm.cal||0,p:+manualForm.p||0,c:+manualForm.c||0,f:+manualForm.f||0});
     setManualSuccess(true);
     setTimeout(()=>{setManualSuccess(false);setManualForm({name:"",cal:"",p:"",c:"",f:""});setView("main")},1500);
   };
@@ -2188,7 +2246,8 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
     return <div style={{padding:"0 20px 24px"}}>
       <BackBtn2/>
       <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 4px",letterSpacing:"-0.02em"}}>Saved Meals</h1>
-      <p style={{fontSize:13,color:T.txM,margin:"0 0 20px"}}>Hearted meals from your plan and logs.</p>
+      <p style={{fontSize:13,color:T.txM,margin:"0 0 12px"}}>Hearted meals from your plan and logs.</p>
+      <MealTypePicker value={mealType} onChange={setMealType}/>
       {savedList.length===0 && <Card style={{padding:"24px 16px",textAlign:"center"}}>
         <p style={{fontSize:13,color:T.txM,margin:0}}>No saved meals yet. Heart a meal in the Plan tab or on a logged entry to save it here.</p>
       </Card>}
@@ -2231,7 +2290,8 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
         <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:0,letterSpacing:"-0.02em"}}>Custom Meals</h1>
         <button onClick={()=>setView("create")} style={{padding:"8px 16px",borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:T.font}}>+ Create New</button>
       </div>
-      <p style={{fontSize:13,color:T.txM,margin:"0 0 20px"}}>Your hand-built recipes and meal templates.</p>
+      <p style={{fontSize:13,color:T.txM,margin:"0 0 12px"}}>Your hand-built recipes and meal templates.</p>
+      <MealTypePicker value={mealType} onChange={setMealType}/>
       {customList.length===0 && <Card style={{padding:"24px 16px",textAlign:"center"}}>
         <p style={{fontSize:13,color:T.txM,margin:0}}>No custom meals yet. Tap Create New to build your own recipe.</p>
       </Card>}
@@ -2400,6 +2460,7 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
         {qtyUnit!=="servings" && ps.grams && <p style={{fontSize:10,color:T.txM,margin:"6px 0 0"}}>1 serving = {ps.grams}g</p>}
       </div>
 
+      <MealTypePicker value={mealType} onChange={setMealType}/>
       {(() => {
         const canLog = fm.cal > 0;
         return <button onClick={logSearchedFood} style={{width:"100%",padding:14,borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font,opacity:canLog?1:0.4,pointerEvents:canLog?"auto":"none"}}>
@@ -2454,13 +2515,14 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
             </div>
           )}
         </div>
-        <p style={{fontSize:11,color:T.txM,margin:"0 0 14px"}}>Type: <span style={{color:T.acc,fontWeight:600}}>{getMealTypeByTime()}</span> (based on current time)</p>
+        <MealTypePicker value={mealType} onChange={setMealType}/>
         <button onClick={handleManualLog} style={{width:"100%",padding:14,borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font,opacity:(manualForm.name&&manualForm.cal)?1:0.4,pointerEvents:(manualForm.name&&manualForm.cal)?"auto":"none"}}>
           Log It
         </button>
       </>}
     </Card>}
     {/* ── Frequently Logged ── */}
+    <MealTypePicker value={mealType} onChange={setMealType}/>
     <Lbl>Frequently Logged</Lbl>
     <div style={{marginTop:10}}>
       {frequentMeals.filter(m=>!hiddenNames.includes(m.name)).length === 0 && freqLoaded && (
@@ -3296,6 +3358,7 @@ export default function App() {
   const [todayLog,setTodayLog] = useState([]);
   const [todayPlan,setTodayPlan] = useState([]);
   const [weekPlans,setWeekPlans] = useState({});
+  const [defaultLogMealType,setDefaultLogMealType] = useState(null);
 
   // ── PWA install prompt ──────────────────────────────────────────
   const [pwaPrompt,setPwaPrompt] = useState(null); // null | 'native' | 'ios'
@@ -3558,7 +3621,13 @@ export default function App() {
 
   const switchTab = (t) => {
     if(t==="home") refreshTodayLog();
+    if(t!=="log") setDefaultLogMealType(null);
     setTab(t);
+  };
+
+  const goToLogWithCategory = (cat) => {
+    setDefaultLogMealType(cat);
+    setTab("log");
   };
 
   if(phase==="splash") return <Splash onFinish={checkAuth}/>;
@@ -3566,7 +3635,7 @@ export default function App() {
   if(phase==="onboarding") return <Onboarding onComplete={handleComplete}/>;
 
   const screens = {
-    home:<Dashboard setTab={switchTab} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal} onUnlogMeal={handleUnlogMeal} todayPlan={todayPlan} weekPlans={weekPlans} userId={user?.id} savedMeals={savedMeals} onHeartMeal={handleHeartToggle}/>,
+    home:<Dashboard setTab={switchTab} onLogCategory={goToLogWithCategory} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal} onUnlogMeal={handleUnlogMeal} todayPlan={todayPlan} weekPlans={weekPlans} userId={user?.id} savedMeals={savedMeals} onHeartMeal={handleHeartToggle}/>,
     plan:<Plan profile={profile} userId={user?.id} isPro={isPro} savedMeals={savedMeals} onHeartMeal={handleHeartToggle} onLogMeal={handleLogMeal} setTab={switchTab} onWeekPlanUpdate={(plans)=>{
       // plans = { 0: dayA[], 1: dayB[] }
       const wasEmpty = Object.keys(weekPlans).length === 0;
@@ -3578,7 +3647,7 @@ export default function App() {
       // Show PWA prompt on first plan generation (whichever trigger fires first)
       if(wasEmpty) triggerPwaEarly();
     }}/>,
-    log:<LogMeal savedMeals={savedMeals} onSaveMeal={handleSaveMeal} todayLog={todayLog} onLogMeal={handleLogMeal} userId={user?.id} onDeleteSavedMeal={handleDeleteSavedMeal}/>,
+    log:<LogMeal savedMeals={savedMeals} onSaveMeal={handleSaveMeal} todayLog={todayLog} onLogMeal={handleLogMeal} userId={user?.id} onDeleteSavedMeal={handleDeleteSavedMeal} defaultMealType={defaultLogMealType}/>,
     grocery:<Grocery isPro={isPro} setIsPro={handleSetIsPro} weekPlans={weekPlans} userId={user?.id}/>,
     profile:<ProfileScreen profile={profile} userId={user?.id} onProfileUpdate={p=>setProfile(p)} onSignOut={handleSignOut}/>
   };
