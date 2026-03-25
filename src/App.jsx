@@ -30,6 +30,14 @@ const T = {
 
 const MEAL_CATS = ['breakfast','lunch','snack','dinner'];
 
+const CAT_CONFIG = {
+  breakfast:{label:'Breakfast',icon:'☀️',pct:0.25},
+  lunch:    {label:'Lunch',    icon:'🥗',pct:0.30},
+  snack:    {label:'Snack',    icon:'🍎',pct:0.15},
+  dinner:   {label:'Dinner',   icon:'🍽️',pct:0.30},
+  other:    {label:'Other',    icon:'·', pct:0},
+};
+
 const Card=({children,style:s={},onClick})=><div onClick={onClick} style={{background:T.sf,borderRadius:T.r,border:`1px solid ${T.bd}`,...s}}>{children}</div>;
 const Lbl=({children})=><span style={{fontSize:10,fontWeight:600,color:T.txM,letterSpacing:"0.1em",textTransform:"uppercase"}}>{children}</span>;
 
@@ -557,7 +565,7 @@ const HeartIcon = ({filled, size=16}) => (
 // Reveals a red Delete button on left-swipe. Used for log entries and
 // frequently-logged items. Defined at module level so it's a stable
 // component reference and won't unmount/remount on parent re-renders.
-const SwipeableRow = ({onDelete, children}) => {
+const SwipeableRow = ({onDelete, children, style:outerStyle={}}) => {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startX = useRef(null);
@@ -588,7 +596,7 @@ const SwipeableRow = ({onDelete, children}) => {
   };
 
   return (
-    <div style={{position:"relative", overflow:"hidden", borderRadius:T.r, marginBottom:6}}>
+    <div style={{position:"relative", overflow:"hidden", borderRadius:T.r, marginBottom:6, ...outerStyle}}>
       {/* Delete button revealed on swipe */}
       <div style={{position:"absolute", top:0, right:0, bottom:0, width:REVEAL, background:"#EF4444", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer"}}
         onClick={() => { onDelete(); setOffset(0); }}>
@@ -1093,7 +1101,8 @@ const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMe
   const [loggingId,setLoggingId]=useState(null);
   const [progressView,setProgressView]=useState(null); // null | 'weight' | 'water'
   const [showCalendar,setShowCalendar]=useState(false);
-  const [collapsed,setCollapsed]=useState({});
+  const [pendingPlanMeal,setPendingPlanMeal]=useState(null);
+  const [pendingMealType,setPendingMealType]=useState('breakfast');
   const m = profile?.macros || {target:2200,proteinG:180,carbG:240,fatG:70};
 
   const todayStr = new Date().toISOString().split("T")[0];
@@ -1266,7 +1275,7 @@ const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMe
         </Card>}
         {unloggedPlan.map((pm,i)=>{
           const isLogging=loggingId===pm.name;
-          return <Card key={"plan-"+i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,border:`1px dashed ${T.bd}`,background:"transparent",cursor:"pointer"}} onClick={()=>handleLogForDate({type:pm.type||"meal",name:pm.name,cal:pm.cal,p:pm.p||0,c:pm.c||0,f:pm.f||0})}>
+          return <Card key={"plan-"+i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,border:`1px dashed ${T.bd}`,background:"transparent",cursor:"pointer"}} onClick={()=>{setPendingMealType(getDefaultMealType());setPendingPlanMeal({name:pm.name,cal:pm.cal,p:pm.p||0,c:pm.c||0,f:pm.f||0});}}>
             <div style={{display:"flex",alignItems:"center",gap:12}}>
               <div style={{width:7,height:7,borderRadius:"50%",background:T.txM}}/>
               <div>
@@ -1284,11 +1293,11 @@ const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMe
       </>}
 
       {/* ── Eaten / Meals Logged ── */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"20px 0 8px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"20px 0 12px"}}>
         <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>{isToday?"Eaten Today":"Meals Logged"}</h2>
         <span style={{fontSize:12,color:T.txM,fontFamily:T.mono}}>{displayLog.length} meal{displayLog.length!==1?"s":""}</span>
       </div>
-      {displayLog.length===0&&!isToday&&<Card style={{padding:"16px",textAlign:"center",marginBottom:6}}>
+      {!isToday&&displayLog.length===0&&<Card style={{padding:"16px",textAlign:"center",marginBottom:12}}>
         <p style={{fontSize:13,color:T.txM,margin:0}}>{isFuture?"No data yet for this date.":"No meals logged on this day."}</p>
       </Card>}
       {(()=>{
@@ -1300,44 +1309,58 @@ const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMe
         const catsToShow=isToday?MEAL_CATS:MEAL_CATS.filter(c=>grouped[c].length>0);
         const showOther=grouped.other.length>0;
         return <>{[...catsToShow,...(showOther?['other']:[])].map(cat=>{
+          const cfg=CAT_CONFIG[cat];
           const items=grouped[cat];
-          const catLabel=cat.charAt(0).toUpperCase()+cat.slice(1);
           const catCal=items.reduce((s,x)=>s+(x.calories||0),0);
-          const isCollapsed=!!collapsed[cat];
-          return <div key={cat} style={{marginBottom:2}}>
-            <div onClick={()=>setCollapsed(p=>({...p,[cat]:!p[cat]}))} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 2px",cursor:"pointer",userSelect:"none"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{transform:isCollapsed?"rotate(-90deg)":"rotate(0deg)",transition:"transform 0.2s",flexShrink:0}}><path d="M6 9l6 6 6-6"/></svg>
-                <Lbl>{catLabel}</Lbl>
-                {items.length>0&&<span style={{fontSize:10,color:T.txM,fontFamily:T.mono}}>({items.length})</span>}
+          const catTarget=cat!=='other'?Math.round(cfg.pct*m.target):0;
+          const hasItems=items.length>0;
+          return <div key={cat} style={{
+            background:T.sf,borderRadius:T.r,
+            border:hasItems?`1px solid ${T.bd}`:`1px dashed ${T.bd}`,
+            marginBottom:12,overflow:'hidden'
+          }}>
+            {/* Category header */}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 16px'}}>
+              <div style={{display:'flex',alignItems:'center',gap:10}}>
+                <span style={{fontSize:18,lineHeight:1,flexShrink:0}}>{cfg.icon}</span>
+                <div>
+                  <p style={{fontSize:14,fontWeight:700,color:hasItems?T.tx:T.tx2,margin:0}}>{cfg.label}</p>
+                  {hasItems&&<p style={{fontSize:11,color:T.acc,margin:"2px 0 0",fontFamily:T.mono,fontWeight:500}}>
+                    {catCal} cal{catTarget>0?` / ${catTarget} cal`:''}
+                  </p>}
+                </div>
               </div>
-              {catCal>0&&<span style={{fontSize:11,fontFamily:T.mono,color:T.acc}}>{catCal} cal</span>}
+              {isToday&&cat!=='other'&&<button onClick={()=>onLogCategory&&onLogCategory(cat)} style={{width:28,height:28,borderRadius:'50%',border:`1px solid ${T.bd}`,background:T.accM,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              </button>}
             </div>
-            {!isCollapsed&&<>
-              {items.map(x=><SwipeableRow key={x.id} onDelete={()=>handleUnlogForDate(x.id)}>
-                <Card style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6}}>
-                  <div style={{display:"flex",alignItems:"center",gap:12}}>
-                    <div style={{width:7,height:7,borderRadius:"50%",background:T.ok,boxShadow:`0 0 8px ${T.ok}40`}}/>
-                    <div>
-                      <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{x.name}</p>
-                      <div style={{display:"flex",gap:8,marginTop:3}}>
+            {/* Divider + meal entries */}
+            {hasItems&&<>
+              <div style={{height:1,background:T.bd}}/>
+              {items.map((x,idx)=>(
+                <SwipeableRow key={x.id} onDelete={()=>handleUnlogForDate(x.id)} style={{borderRadius:0,marginBottom:0}}>
+                  <div style={{
+                    display:'flex',alignItems:'center',justifyContent:'space-between',
+                    padding:'12px 16px',background:T.sf,
+                    borderBottom:idx<items.length-1?`1px solid ${T.bd}`:'none'
+                  }}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <p style={{fontSize:13,fontWeight:600,color:T.tx,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',paddingRight:8}}>{x.name}</p>
+                      <div style={{display:'flex',gap:8,marginTop:3}}>
                         {[{v:x.calories||0,l:"cal",c:T.acc},{v:x.protein||0,l:"P",c:T.pro,u:"g"},{v:x.carbs||0,l:"C",c:T.carb,u:"g"},{v:x.fat||0,l:"F",c:T.fat,u:"g"}].map(z=>
                           <span key={z.l} style={{fontSize:10,fontFamily:T.mono,color:z.c}}>{z.v}{z.u||""}<span style={{color:T.txM,fontSize:8}}> {z.l}</span></span>
                         )}
                       </div>
                     </div>
+                    <div style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
+                      <button onClick={(e)=>{e.stopPropagation();onHeartMeal&&onHeartMeal({name:x.name,cal:x.calories,p:x.protein,c:x.carbs,f:x.fat},'manual');}} style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex",alignItems:"center"}}>
+                        <HeartIcon filled={savedMeals.some(s=>s.name===x.name)}/>
+                      </button>
+                      <span style={{fontSize:9,color:T.txM,letterSpacing:"0.05em"}}>swipe ←</span>
+                    </div>
                   </div>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <button onClick={(e)=>{e.stopPropagation();onHeartMeal&&onHeartMeal({name:x.name,cal:x.calories,p:x.protein,c:x.carbs,f:x.fat},'manual');}} style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex",alignItems:"center"}}>
-                      <HeartIcon filled={savedMeals.some(s=>s.name===x.name)}/>
-                    </button>
-                    <span style={{fontSize:10,color:T.txM,letterSpacing:"0.05em"}}>swipe ←</span>
-                  </div>
-                </Card>
-              </SwipeableRow>)}
-              {isToday&&cat!=='other'&&<button onClick={()=>onLogCategory&&onLogCategory(cat)} style={{width:"100%",padding:"10px 0",borderRadius:T.r,border:`1px dashed ${T.bd}`,background:"transparent",color:T.txM,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:T.font,marginBottom:8}}>
-                + Log {catLabel}
-              </button>}
+                </SwipeableRow>
+              ))}
             </>}
           </div>;
         })}</>;
@@ -1355,6 +1378,24 @@ const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMe
         <WaterTrackerWidget userId={userId} defaultGoal={profile?.waterGoal||8} onViewFull={()=>setProgressView('water')}/>
       </>}
     </>}
+
+    {/* ── Plan meal type picker bottom sheet ── */}
+    {pendingPlanMeal&&(
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setPendingPlanMeal(null)}>
+        <div style={{width:"100%",maxWidth:430,background:T.sf,borderRadius:"20px 20px 0 0",padding:"20px 20px 38px",border:`1px solid ${T.bd}`}} onClick={e=>e.stopPropagation()}>
+          <div style={{width:36,height:4,borderRadius:2,background:T.bd,margin:"0 auto 20px"}}/>
+          <p style={{fontSize:11,fontWeight:600,color:T.txM,margin:"0 0 4px",letterSpacing:"0.08em",textTransform:"uppercase"}}>Log meal</p>
+          <p style={{fontSize:15,fontWeight:600,color:T.tx,margin:"0 0 18px",lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pendingPlanMeal.name}</p>
+          <MealTypePicker value={pendingMealType} onChange={setPendingMealType}/>
+          <button onClick={()=>{handleLogForDate({...pendingPlanMeal,type:pendingMealType});setPendingPlanMeal(null);}} style={{width:"100%",padding:14,borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font,marginTop:4}}>
+            Confirm &amp; Log
+          </button>
+          <button onClick={()=>setPendingPlanMeal(null)} style={{width:"100%",padding:10,marginTop:8,borderRadius:T.r,border:"none",background:"transparent",color:T.txM,fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:T.font}}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    )}
   </div>;
 };
 
