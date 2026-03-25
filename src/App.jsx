@@ -1453,6 +1453,21 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
     setSearchError("");setEditNutrition(null);setSearchLogSuccess(false);setSearchLoading(false);
   };
 
+  // Convert USDA servingSize + servingSizeUnit → grams.
+  // Returns null if the unit can't be resolved or the result is implausible.
+  const usdaServingGrams = (size, unit) => {
+    if(!size || size<=0) return null;
+    const u = (unit||"").toLowerCase().trim();
+    let g;
+    if(u==="g"||u==="gram"||u==="grams")          g = size;
+    else if(u==="ml"||u.startsWith("millil"))      g = size;        // ml ≈ g
+    else if(u==="oz"||u.startsWith("ounce"))       g = size*28.3495;
+    else                                            g = size;        // heuristic: treat as grams
+    // Reject implausible weights (< 3g or > 3000g)
+    if(g<3||g>3000) return null;
+    return Math.round(g);
+  };
+
   const searchFoods = async (query) => {
     if(!query||query.length<2){setSavedResults([]);setUsdaResults([]);setSearchError("");return;}
 
@@ -1461,9 +1476,10 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
     abortRef.current = controller;
     const signal = controller.signal;
 
-    // Always search saved meals locally first (instant)
-    const q = query.toLowerCase();
-    const localMatches = savedMeals.filter(m=>m.name.toLowerCase().includes(q)).slice(0,5).map(m=>({
+    // Saved meals — instant local match
+    const qLow = query.toLowerCase();
+    const words = qLow.split(/\s+/).filter(Boolean);
+    const localMatches = savedMeals.filter(m=>m.name.toLowerCase().includes(qLow)).slice(0,5).map(m=>({
       id:"saved-"+m.id, name:m.name, brand:"", servingLabel:"Per 1 meal", servingGrams:null,
       cal:m.totals.cal, protein:m.totals.p, carbs:m.totals.c, fat:m.totals.f,
       basePer100:null, hasNutrition:true, source:"saved",
@@ -1482,26 +1498,27 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
         const getNut = (id) => {const n=f.foodNutrients?.find(n=>n.nutrientId===id);return n?Math.round(n.value*10)/10:0;};
         const base = {cal:getNut(1008), protein:getNut(1003), carbs:getNut(1005), fat:getNut(1004)};
 
-        // Build portions: branded serving first, then foodMeasures, always include 100g
+        // Build portions list: branded serving → foodMeasures → 100g fallback
         const portions = [];
-        if(f.servingSize && f.servingSize>0 && f.servingSizeUnit){
-          const sg = f.servingSizeUnit.toLowerCase()==="g" ? f.servingSize
-                   : f.servingSizeUnit.toLowerCase()==="oz" ? f.servingSize*28.3495 : null;
-          if(sg) portions.push({label:`${Math.round(f.servingSize*10)/10}${f.servingSizeUnit}`,gramWeight:Math.round(sg)});
+        const sg = usdaServingGrams(f.servingSize, f.servingSizeUnit);
+        if(sg){
+          const sizeLabel = `${Math.round((f.servingSize||sg)*10)/10}${f.servingSizeUnit||"g"}`;
+          portions.push({label:sizeLabel, gramWeight:sg});
         }
         (f.foodMeasures||[]).forEach(m=>{
           if(m.gramWeight>0 && m.disseminationText && m.disseminationText!=="Quantity not specified")
             portions.push({label:m.disseminationText, gramWeight:Math.round(m.gramWeight)});
         });
-        portions.push({label:"100g",gramWeight:100});
+        portions.push({label:"100g", gramWeight:100});
 
-        const defP = portions[0]; // prefer branded serving > measures > 100g
+        const defP = portions[0]; // best available serving
         const mult = defP.gramWeight/100;
         const brand = f.brandOwner || f.brandName || "";
+        const hasServing = defP.label!=="100g";
 
         return {
           id:"usda-"+f.fdcId, name:f.description||"", brand,
-          servingLabel: defP.label==="100g" ? "Per 100g" : `${defP.label} (${defP.gramWeight}g)`,
+          servingLabel: hasServing ? `Per serving (${defP.gramWeight}g)` : "Per 100g",
           servingGrams: defP.gramWeight,
           cal:Math.round(base.cal*mult), protein:Math.round(base.protein*mult),
           carbs:Math.round(base.carbs*mult), fat:Math.round(base.fat*mult),
@@ -1510,19 +1527,34 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
         };
       }).filter(f=>f.name);
 
-      // Filter: remove 0-cal items and items with no macro data at all
-      items = items.filter(f=>f.hasNutrition && !(f.protein===0&&f.carbs===0&&f.fat===0));
+      // Filter: remove zero-cal items
+      items = items.filter(f=>f.hasNutrition);
 
-      // Rank: items whose name starts with the query term come first
-      const qLow = query.toLowerCase();
-      items.sort((a,b)=>{
-        const aS = a.name.toLowerCase().startsWith(qLow)?0:1;
-        const bS = b.name.toLowerCase().startsWith(qLow)?0:1;
-        return aS-bS;
-      });
+      // Relevance scoring ──────────────────────────────────────────
+      // For multi-word queries (2+ words): require at least 2 words to match
+      // in name+brand. Single-word matches in 3+ word queries are excluded.
+      const minMatch = words.length>=2 ? Math.min(2, words.length) : 1;
 
-      // Cap at 8 results
-      items = items.slice(0,8);
+      const scoreItem = (item) => {
+        const name  = item.name.toLowerCase();
+        const brand = item.brand.toLowerCase();
+        const combined = name+" "+brand;
+        const matchCount = words.filter(w=>combined.includes(w)).length;
+        if(matchCount<minMatch) return Infinity; // below relevance threshold — exclude
+        if(name.startsWith(qLow))                              return 0; // exact prefix
+        if(words.every(w=>name.includes(w)))                   return 1; // all words in name
+        if(combined.includes(qLow))                            return 2; // full phrase in brand
+        if(matchCount===words.length)                          return 3; // all words in combined
+        if(matchCount/words.length>=0.75)                      return 4; // ≥75% words match
+        return 5; // partial match — shown but ranked low
+      };
+
+      items = items
+        .map(item=>({...item, _s:scoreItem(item)}))
+        .filter(item=>item._s<Infinity)
+        .sort((a,b)=>a._s-b._s)
+        .slice(0,8)
+        .map(({_s,...item})=>item);
 
       if(!signal.aborted) setUsdaResults(items);
     } catch(e){
