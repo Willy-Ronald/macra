@@ -7,8 +7,9 @@
  * Generates an A/B day meal plan via Claude API with per-user rate limiting.
  *
  * Rate limits:
- *   Free  → 1/day · 2/week · 8/month
- *   Pro   → 3/day · 20/month
+ *   Free  → Intro: first 3 lifetime generations (no time restriction)
+ *           Ongoing: 1 per rolling 7-day window
+ *   Pro   → 2 per rolling 24 hours · 30 per calendar month
  *
  * Required Vercel env vars (in addition to ANTHROPIC_API_KEY):
  *   SUPABASE_URL          – your Supabase project URL
@@ -19,21 +20,20 @@ import { createClient } from "@supabase/supabase-js";
 import { randomBytes } from "crypto";
 
 // ── Rate limit constants ────────────────────────────────────────
-const FREE_DAILY_LIMIT   = 1;
-const FREE_WEEKLY_LIMIT  = 2;
-const FREE_MONTHLY_LIMIT = 8;
-const PRO_DAILY_LIMIT    = 3;
-const PRO_MONTHLY_LIMIT  = 20;
+const FREE_INTRO_LIMIT   = 3;  // first N lifetime gens, no time restriction
+const FREE_WEEKLY_LIMIT  = 1;  // per rolling 7-day window after intro
+const PRO_DAILY_LIMIT    = 2;  // per rolling 24 hours
+const PRO_MONTHLY_LIMIT  = 30; // calendar month
 
 // ── Time window helpers ─────────────────────────────────────────
-const startOfDay = (d = new Date()) =>
-  new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
-
 const startOfMonth = (d = new Date()) =>
   new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
 
 const sevenDaysAgo = () =>
   new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+const rollingDayStart = () =>
+  new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
 // ── Count helper ────────────────────────────────────────────────
 async function countLogs(sb, userId, since, label) {
@@ -184,44 +184,65 @@ export default async function handler(req, res) {
     const sb = createClient(sbUrl, sbKey);
 
     // ── Rate limiting ───────────────────────────────────────────
-    let dayCount = 0, weeklyCount = 0, monthCount = 0;
+    let lifetimeCount = 0, weeklyCount = 0, dayCount = 0, monthCount = 0;
+    let remaining = null;
 
     if (!isPro) {
-      [dayCount, weeklyCount, monthCount] = await Promise.all([
-        countLogs(sb, userId, startOfDay(),   "daily"),
-        countLogs(sb, userId, sevenDaysAgo(), "weekly"),
-        countLogs(sb, userId, startOfMonth(), "monthly"),
-      ]);
+      // Phase 1 — Intro: first FREE_INTRO_LIMIT lifetime gens, no time restriction
+      lifetimeCount = await countLogs(sb, userId, "1970-01-01T00:00:00Z", "lifetime");
+      console.log(`[rate-limit] FREE lifetime: ${lifetimeCount}`);
 
-      console.log(`[rate-limit] FREE check — day:${dayCount}/${FREE_DAILY_LIMIT} week:${weeklyCount}/${FREE_WEEKLY_LIMIT} month:${monthCount}/${FREE_MONTHLY_LIMIT}`);
+      if (lifetimeCount < FREE_INTRO_LIMIT) {
+        console.log(`[rate-limit] FREE INTRO phase (${lifetimeCount}/${FREE_INTRO_LIMIT}) — PASSED`);
+        remaining = { phase: "intro", introRemaining: Math.max(0, FREE_INTRO_LIMIT - lifetimeCount - 1) };
+      } else {
+        // Phase 2 — Ongoing: 1 per rolling 7-day window
+        weeklyCount = await countLogs(sb, userId, sevenDaysAgo(), "7-day");
+        console.log(`[rate-limit] FREE WEEKLY check — ${weeklyCount}/${FREE_WEEKLY_LIMIT}`);
 
-      if (dayCount >= FREE_DAILY_LIMIT) {
-        return res.status(429).json({ error: "You've used your free plan for today. Upgrade to Pro for more.", limitReached: true, isPro: false, remaining: { daily: 0, weekly: Math.max(0, FREE_WEEKLY_LIMIT - weeklyCount), monthly: Math.max(0, FREE_MONTHLY_LIMIT - monthCount) } });
-      }
-      if (weeklyCount >= FREE_WEEKLY_LIMIT) {
-        return res.status(429).json({ error: "You've used your 2 free plans this week. Upgrade to Pro for more.", limitReached: true, isPro: false, remaining: { daily: 0, weekly: 0, monthly: Math.max(0, FREE_MONTHLY_LIMIT - monthCount) } });
-      }
-      if (monthCount >= FREE_MONTHLY_LIMIT) {
-        return res.status(429).json({ error: "You've used your 8 free plans this month. Upgrade to Pro for more.", limitReached: true, isPro: false, remaining: { daily: 0, weekly: 0, monthly: 0 } });
-      }
+        if (weeklyCount >= FREE_WEEKLY_LIMIT) {
+          // Find when the most recent generation's 7-day window expires
+          const { data: lastRow } = await sb
+            .from("generation_log")
+            .select("generated_at")
+            .eq("user_id", userId)
+            .order("generated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
 
-      console.log("[rate-limit] FREE — PASSED");
+          const lastTime = lastRow?.generated_at ? new Date(lastRow.generated_at) : new Date();
+          const resetTime = new Date(lastTime.getTime() + 7 * 24 * 60 * 60 * 1000);
+          const resetDays = Math.max(1, Math.ceil((resetTime - Date.now()) / (1000 * 60 * 60 * 24)));
+          const d = resetDays === 1 ? "day" : "days";
+
+          const errMsg = lifetimeCount === FREE_INTRO_LIMIT
+            ? `You've used your free trial generations. Upgrade to Pro for more, or your weekly generation resets in ${resetDays} ${d}.`
+            : `Your free weekly generation resets in ${resetDays} ${d}. Upgrade to Pro for up to 2 generations per day.`;
+
+          return res.status(429).json({ error: errMsg, limitReached: true, isPro: false, remaining: { phase: "weekly", resetDays } });
+        }
+
+        console.log("[rate-limit] FREE WEEKLY — PASSED");
+        remaining = { phase: "weekly", resetDays: 7 }; // just used the slot; next resets in 7 days
+      }
     } else {
+      // Pro: 2 per rolling 24h, 30 per calendar month
       [dayCount, monthCount] = await Promise.all([
-        countLogs(sb, userId, startOfDay(),   "daily"),
-        countLogs(sb, userId, startOfMonth(), "monthly"),
+        countLogs(sb, userId, rollingDayStart(), "pro-daily"),
+        countLogs(sb, userId, startOfMonth(),    "pro-monthly"),
       ]);
 
       console.log(`[rate-limit] PRO check — day:${dayCount}/${PRO_DAILY_LIMIT} month:${monthCount}/${PRO_MONTHLY_LIMIT}`);
 
       if (dayCount >= PRO_DAILY_LIMIT) {
-        return res.status(429).json({ error: "You've reached your daily generation limit. Resets tomorrow.", limitReached: true, isPro: true, remaining: { daily: 0, monthly: Math.max(0, PRO_MONTHLY_LIMIT - monthCount) } });
+        return res.status(429).json({ error: "Daily limit reached. Resets tomorrow at midnight.", limitReached: true, isPro: true, remaining: { phase: "pro", daily: 0, monthly: Math.max(0, PRO_MONTHLY_LIMIT - monthCount) } });
       }
       if (monthCount >= PRO_MONTHLY_LIMIT) {
-        return res.status(429).json({ error: "You've reached your monthly generation limit. Resets next month.", limitReached: true, isPro: true, remaining: { daily: Math.max(0, PRO_DAILY_LIMIT - dayCount), monthly: 0 } });
+        return res.status(429).json({ error: "Monthly limit reached. Resets on the 1st of next month.", limitReached: true, isPro: true, remaining: { phase: "pro", daily: Math.max(0, PRO_DAILY_LIMIT - dayCount), monthly: 0 } });
       }
 
       console.log("[rate-limit] PRO — PASSED");
+      remaining = { phase: "pro", daily: Math.max(0, PRO_DAILY_LIMIT - dayCount - 1), monthly: Math.max(0, PRO_MONTHLY_LIMIT - monthCount - 1) };
     }
 
     // ── Build prompt ─────────────────────────────────────────────
@@ -479,21 +500,7 @@ Return ONLY raw JSON starting with { and ending with }.
       console.log(`[rate-limit] generation_log insert OK for user ${userId}`);
     }
 
-    // ── Compute remaining counts ─────────────────────────────────
-    let remaining = null;
-    if (!isPro) {
-      remaining = {
-        daily:   Math.max(0, FREE_DAILY_LIMIT   - (dayCount   + 1)),
-        weekly:  Math.max(0, FREE_WEEKLY_LIMIT  - (weeklyCount + 1)),
-        monthly: Math.max(0, FREE_MONTHLY_LIMIT - (monthCount  + 1)),
-      };
-    } else {
-      remaining = {
-        daily:   Math.max(0, PRO_DAILY_LIMIT   - (dayCount   + 1)),
-        monthly: Math.max(0, PRO_MONTHLY_LIMIT - (monthCount + 1)),
-      };
-    }
-
+    // remaining was computed during rate-limit phase above
     return res.json({ abPlan, remaining });
   } catch (err) {
     console.error("Generate plan error:", err);

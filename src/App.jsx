@@ -835,11 +835,9 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
 
 // ─── PLAN (AI-POWERED) ─────────────────────────────────────────
 // Must mirror the constants in api/generate-plan.js exactly
-const FREE_DAILY   = 1;
-const FREE_WEEKLY  = 2;
-const FREE_MONTHLY = 8;
-const PRO_DAILY    = 3;
-const PRO_MONTHLY  = 20;
+const FREE_INTRO_LIMIT   = 3;  // first N lifetime gens, no time restriction
+const PRO_DAILY_LIMIT    = 2;  // per rolling 24h
+const PRO_MONTHLY_LIMIT  = 30; // calendar month
 
 // ─── RECIPE DETAIL ─────────────────────────────────────────────
 const RecipeDetail = ({meal, savedMeals=[], onHeartMeal, onLogMeal, onBack}) => {
@@ -987,17 +985,28 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,o
       // Derive remaining from live usage (mirrors api/generate-plan.js limits)
       if(usage){
         if(!isPro){
-          const rem={
-            daily:   Math.max(0, FREE_DAILY   - usage.dailyCount),
-            weekly:  Math.max(0, FREE_WEEKLY  - usage.weeklyCount),
-            monthly: Math.max(0, FREE_MONTHLY - usage.monthlyCount),
-          };
-          setRemaining(rem);
-          if(rem.daily===0 || rem.weekly===0 || rem.monthly===0) setLimitHit(true);
+          if(usage.lifetimeCount < FREE_INTRO_LIMIT){
+            // Intro phase
+            const rem = { phase:"intro", introRemaining: Math.max(0, FREE_INTRO_LIMIT - usage.lifetimeCount) };
+            setRemaining(rem);
+            setLimitHit(rem.introRemaining <= 0);
+          } else {
+            // Weekly phase — compute days until the 7-day window expires
+            let resetDays = 7;
+            if(usage.lastGeneratedAt){
+              const lastTime = new Date(usage.lastGeneratedAt);
+              const resetTime = new Date(lastTime.getTime() + 7*24*60*60*1000);
+              resetDays = Math.max(1, Math.ceil((resetTime - Date.now()) / (1000*60*60*24)));
+            }
+            const rem = { phase:"weekly", resetDays };
+            setRemaining(rem);
+            setLimitHit(usage.weeklyCount >= 1);
+          }
         } else {
-          const rem={
-            daily:   Math.max(0, PRO_DAILY   - usage.dailyCount),
-            monthly: Math.max(0, PRO_MONTHLY - usage.monthlyCount),
+          const rem = {
+            phase:"pro",
+            daily:   Math.max(0, PRO_DAILY_LIMIT   - usage.dailyCount),
+            monthly: Math.max(0, PRO_MONTHLY_LIMIT - usage.monthlyCount),
           };
           setRemaining(rem);
           if(rem.daily===0||rem.monthly===0) setLimitHit(true);
@@ -1024,11 +1033,11 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,o
       setAbPlan(plan);
       if(result.remaining){
         setRemaining(result.remaining);
-        // Re-evaluate limitHit based on updated remaining counts
         const r = result.remaining;
-        const hit = isPro
-          ? (r.daily===0 || r.monthly===0)
-          : (r.daily===0 || r.weekly===0 || r.monthly===0);
+        const hit = r.phase==="intro"   ? r.introRemaining <= 0
+                  : r.phase==="weekly"  ? true  // slot just consumed; next resets in 7 days
+                  : r.phase==="pro"     ? (r.daily===0 || r.monthly===0)
+                  : false;
         setLimitHit(hit);
       }
       setGenCount(c=>c+1);
@@ -1064,27 +1073,28 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,o
   }),{cal:0,p:0,c:0,f:0});
 
   // ── Build the usage text shown below the button ──
-  // Always returns a string (never null) when remaining is set, so the
-  // counter stays visible even at 0 and alongside the limit-hit banner.
   const usageLine = () => {
     if(!remaining) return null;
-    if(!isPro){
-      // Show the most restrictive remaining count so the user always knows
-      // exactly how many generations they have left right now.
-      const d = remaining.daily   ?? 0;
-      const w = remaining.weekly  ?? 0;
-      const m = remaining.monthly ?? 0;
-      return `${d} of ${FREE_DAILY} today · ${w} of ${FREE_WEEKLY} this week · ${m} of ${FREE_MONTHLY} this month`;
+    if(remaining.phase==="intro"){
+      const r = remaining.introRemaining ?? 0;
+      return `${r} of ${FREE_INTRO_LIMIT} free trial generation${r!==1?"s":""} remaining`;
     }
-    // Pro
-    const dayTxt   = `${remaining.daily   ?? 0} of ${PRO_DAILY} left today`;
-    const monthTxt = `${remaining.monthly ?? 0} of ${PRO_MONTHLY} left this month`;
-    return `${dayTxt} · ${monthTxt}`;
+    if(remaining.phase==="weekly"){
+      const days = remaining.resetDays ?? 7;
+      const d = days===1?"day":"days";
+      return limitHit
+        ? `Next free generation in ${days} ${d}`
+        : `1 free generation per week — resets in ${days} ${d}`;
+    }
+    if(remaining.phase==="pro"){
+      return `${remaining.daily??0} of ${PRO_DAILY_LIMIT} left today · ${remaining.monthly??0} of ${PRO_MONTHLY_LIMIT} left this month`;
+    }
+    return null;
   };
 
   // Which specific limit did a Pro user hit?
   const proLimitKind = () => {
-    if(!remaining||isPro===false) return null;
+    if(!remaining||!isPro||remaining.phase!=="pro") return null;
     if(remaining.daily===0)   return "daily";
     if(remaining.monthly===0) return "monthly";
     return null;
@@ -1207,8 +1217,8 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,o
       {usageLine() && <p style={{fontSize:11,color:T.txM,textAlign:"center",margin:"10px 0 0",fontFamily:T.mono}}>
         {usageLine()}
       </p>}
-      {!isPro && !limitHit && remaining && remaining.weekly > 0 && <p style={{fontSize:11,color:T.txM,textAlign:"center",margin:"4px 0 0"}}>
-        Go Pro for 3/day · 20/month generations
+      {!isPro && !limitHit && <p style={{fontSize:11,color:T.txM,textAlign:"center",margin:"4px 0 0"}}>
+        Go Pro for 2/day · 30/month generations
       </p>}
     </>}
   </div>;

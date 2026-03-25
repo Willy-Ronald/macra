@@ -264,11 +264,15 @@ export async function getGenerationUsage(userId) {
   if (!supabase) return null;
   try {
     const now = new Date();
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const dayStart     = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-    const monthStart   = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const sevenDaysAgo  = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const rollingDayStart = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+    const monthStart    = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-    const [weeklyRes, dailyRes, monthlyRes] = await Promise.all([
+    const [lifetimeRes, weeklyRes, dailyRes, monthlyRes, lastRow] = await Promise.all([
+      supabase
+        .from("generation_log")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId),
       supabase
         .from("generation_log")
         .select("*", { count: "exact", head: true })
@@ -278,18 +282,27 @@ export async function getGenerationUsage(userId) {
         .from("generation_log")
         .select("*", { count: "exact", head: true })
         .eq("user_id", userId)
-        .gte("generated_at", dayStart),
+        .gte("generated_at", rollingDayStart),
       supabase
         .from("generation_log")
         .select("*", { count: "exact", head: true })
         .eq("user_id", userId)
         .gte("generated_at", monthStart),
+      supabase
+        .from("generation_log")
+        .select("generated_at")
+        .eq("user_id", userId)
+        .order("generated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     return {
-      weeklyCount:  weeklyRes.count  || 0,
-      dailyCount:   dailyRes.count   || 0,
-      monthlyCount: monthlyRes.count || 0,
+      lifetimeCount: lifetimeRes.count || 0,
+      weeklyCount:   weeklyRes.count   || 0,
+      dailyCount:    dailyRes.count    || 0,
+      monthlyCount:  monthlyRes.count  || 0,
+      lastGeneratedAt: lastRow.data?.generated_at || null,
     };
   } catch {
     return null;
