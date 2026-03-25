@@ -11,6 +11,12 @@ import {
 } from "./lib/supabase";
 import { generateMealPlan } from "./lib/claude";
 
+// USDA FoodData Central API key (set VITE_USDA_API_KEY in Vercel env vars)
+const USDA_API_KEY = import.meta.env.VITE_USDA_API_KEY || "DEMO_KEY";
+if (!import.meta.env.VITE_USDA_API_KEY) {
+  console.warn("[usda] VITE_USDA_API_KEY not set — using DEMO_KEY (30 req/hr limit). Set via Vercel env vars.");
+}
+
 const T = {
   bg:"#09090B",sf:"#121215",bd:"#1E1E22",acc:"#C8B88A",
   accM:"rgba(200,184,138,0.12)",accG:"rgba(200,184,138,0.06)",
@@ -1410,7 +1416,6 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
   const [searchQuery,setSearchQuery]=useState("");
   const [savedResults,setSavedResults]=useState([]);
   const [usdaResults,setUsdaResults]=useState([]);
-  const [offResults,setOffResults]=useState([]);
   const [searchLoading,setSearchLoading]=useState(false);
   const [searchError,setSearchError]=useState("");
   const [selectedFood,setSelectedFood]=useState(null);
@@ -1443,19 +1448,20 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
   const clearSearch = () => {
     if(abortRef.current) abortRef.current.abort();
     if(debounceRef.current) clearTimeout(debounceRef.current);
-    setSearchQuery("");setSavedResults([]);setUsdaResults([]);setOffResults([]);
+    setSearchQuery("");setSavedResults([]);setUsdaResults([]);
     setSelectedFood(null);setSelectedPortion(null);setQtyValue("1");setQtyUnit("servings");
     setSearchError("");setEditNutrition(null);setSearchLogSuccess(false);setSearchLoading(false);
   };
 
   const searchFoods = async (query) => {
-    if(!query||query.length<2){setSavedResults([]);setUsdaResults([]);setOffResults([]);setSearchError("");return;}
+    if(!query||query.length<2){setSavedResults([]);setUsdaResults([]);setSearchError("");return;}
 
     if(abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
     const signal = controller.signal;
 
+    // Always search saved meals locally first (instant)
     const q = query.toLowerCase();
     const localMatches = savedMeals.filter(m=>m.name.toLowerCase().includes(q)).slice(0,5).map(m=>({
       id:"saved-"+m.id, name:m.name, brand:"", servingLabel:"Per 1 meal", servingGrams:null,
@@ -1463,102 +1469,69 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
       basePer100:null, hasNutrition:true, source:"saved",
     }));
     setSavedResults(localMatches);
+    setSearchLoading(true); setSearchError("");
 
-    setSearchLoading(true);setSearchError("");
-    let usdaOk=false, offOk=false;
+    try {
+      const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(query)}&pageSize=25&dataType=Branded,SR%20Legacy,Foundation`;
+      const res = await fetch(url, {signal});
+      if(signal.aborted) return;
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
 
-    // USDA FoodData Central
-    const usdaFetch = async () => {
-      try {
-        const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=DEMO_KEY&query=${encodeURIComponent(query)}&pageSize=8&dataType=SR%20Legacy,Foundation`;
-        const res = await fetch(url, {signal});
-        if(signal.aborted) return;
-        if(!res.ok) throw new Error();
-        const data = await res.json();
-        const items = (data.foods||[]).map(f=>{
-          const getNut = (id) => {const n=f.foodNutrients?.find(n=>n.nutrientId===id);return n?Math.round(n.value*10)/10:0;};
-          const base = {cal:getNut(1008), protein:getNut(1003), carbs:getNut(1005), fat:getNut(1004)};
-          const portions = [{label:"100g",gramWeight:100}];
-          (f.foodMeasures||[]).forEach(m=>{
-            if(m.gramWeight && m.gramWeight>0 && m.disseminationText && m.disseminationText!=="Quantity not specified"){
-              portions.push({label:m.disseminationText, gramWeight:Math.round(m.gramWeight)});
-            }
-          });
-          const defP = portions.length>1 ? portions[1] : portions[0];
-          const mult = defP.gramWeight/100;
-          return {
-            id:"usda-"+f.fdcId, name:f.description||"", brand:f.brandName||"",
-            servingLabel:"Per "+defP.label+(defP.gramWeight!==100?" ("+defP.gramWeight+"g)":""),
-            servingGrams:defP.gramWeight,
-            cal:Math.round(base.cal*mult), protein:Math.round(base.protein*mult),
-            carbs:Math.round(base.carbs*mult), fat:Math.round(base.fat*mult),
-            basePer100:base, portions, activePortion:portions.indexOf(defP),
-            hasNutrition:base.cal>0, source:"usda",
-          };
-        }).filter(f=>f.name);
-        if(!signal.aborted){setUsdaResults(items);usdaOk=true;}
-      } catch(e){if(e.name!=="AbortError"&&!signal.aborted) setUsdaResults([]);}
-    };
+      let items = (data.foods||[]).map(f=>{
+        const getNut = (id) => {const n=f.foodNutrients?.find(n=>n.nutrientId===id);return n?Math.round(n.value*10)/10:0;};
+        const base = {cal:getNut(1008), protein:getNut(1003), carbs:getNut(1005), fat:getNut(1004)};
 
-    // OpenFoodFacts — 3-tier serving detection
-    const offFetch = async () => {
-      try {
-        const url = `https://us.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=8&lc=en&cc=us`;
-        const res = await fetch(url, {signal});
-        if(signal.aborted) return;
-        if(!res.ok) throw new Error();
-        const data = await res.json();
-        const items = (data.products||[]).map(p=>{
-          const n=p.nutriments||{};
-          const servSize = p.serving_size||"";
-          const servGrams = parseServingGrams(servSize);
-          const has100 = !!(n["energy-kcal_100g"]);
-          let cal,protein,carbs,fat,servingLabel;
+        // Build portions: branded serving first, then foodMeasures, always include 100g
+        const portions = [];
+        if(f.servingSize && f.servingSize>0 && f.servingSizeUnit){
+          const sg = f.servingSizeUnit.toLowerCase()==="g" ? f.servingSize
+                   : f.servingSizeUnit.toLowerCase()==="oz" ? f.servingSize*28.3495 : null;
+          if(sg) portions.push({label:`${Math.round(f.servingSize*10)/10}${f.servingSizeUnit}`,gramWeight:Math.round(sg)});
+        }
+        (f.foodMeasures||[]).forEach(m=>{
+          if(m.gramWeight>0 && m.disseminationText && m.disseminationText!=="Quantity not specified")
+            portions.push({label:m.disseminationText, gramWeight:Math.round(m.gramWeight)});
+        });
+        portions.push({label:"100g",gramWeight:100});
 
-          // Tier 1: per-serving nutrient values exist
-          if(n["energy-kcal_serving"] && n["energy-kcal_serving"]>0){
-            cal=Math.round(n["energy-kcal_serving"]);
-            protein=Math.round(n.proteins_serving||0);
-            carbs=Math.round(n.carbohydrates_serving||0);
-            fat=Math.round(n.fat_serving||0);
-            servingLabel=servSize ? "Per "+servSize : "Per serving";
-          }
-          // Tier 2: no per-serving values, but serving_size has grams + we have per-100g
-          else if(servGrams && has100){
-            const mult = servGrams/100;
-            cal=Math.round((n["energy-kcal_100g"]||0)*mult);
-            protein=Math.round((n.proteins_100g||0)*mult);
-            carbs=Math.round((n.carbohydrates_100g||0)*mult);
-            fat=Math.round((n.fat_100g||0)*mult);
-            servingLabel="Per "+servSize;
-          }
-          // Tier 3: fallback to per-100g
-          else {
-            cal=Math.round(n["energy-kcal_100g"]||0);
-            protein=Math.round(n.proteins_100g||0);
-            carbs=Math.round(n.carbohydrates_100g||0);
-            fat=Math.round(n.fat_100g||0);
-            servingLabel="Per 100g";
-          }
+        const defP = portions[0]; // prefer branded serving > measures > 100g
+        const mult = defP.gramWeight/100;
+        const brand = f.brandOwner || f.brandName || "";
 
-          return {
-            id:"off-"+(p._id||p.code), name:p.product_name||"", brand:p.brands||"",
-            servingLabel, servingGrams: servGrams||(servingLabel==="Per 100g"?100:null),
-            cal, protein, carbs, fat,
-            basePer100: has100 ? {cal:Math.round(n["energy-kcal_100g"]||0),protein:Math.round(n.proteins_100g||0),carbs:Math.round(n.carbohydrates_100g||0),fat:Math.round(n.fat_100g||0)} : null,
-            hasNutrition:cal>0, source:"off",
-          };
-        }).filter(p=>p.name);
-        if(!signal.aborted){setOffResults(items);offOk=true;}
-      } catch(e){if(e.name!=="AbortError"&&!signal.aborted) setOffResults([]);}
-    };
+        return {
+          id:"usda-"+f.fdcId, name:f.description||"", brand,
+          servingLabel: defP.label==="100g" ? "Per 100g" : `${defP.label} (${defP.gramWeight}g)`,
+          servingGrams: defP.gramWeight,
+          cal:Math.round(base.cal*mult), protein:Math.round(base.protein*mult),
+          carbs:Math.round(base.carbs*mult), fat:Math.round(base.fat*mult),
+          basePer100:base, portions, activePortion:0,
+          hasNutrition:base.cal>0, source:"usda",
+        };
+      }).filter(f=>f.name);
 
-    const withTimeout = (fn) => Promise.race([fn(), new Promise(r=>setTimeout(r,5000))]);
-    await Promise.allSettled([withTimeout(usdaFetch), withTimeout(offFetch)]);
+      // Filter: remove 0-cal items and items with no macro data at all
+      items = items.filter(f=>f.hasNutrition && !(f.protein===0&&f.carbs===0&&f.fat===0));
 
-    if(!signal.aborted){
-      setSearchLoading(false);
-      if(!usdaOk && !offOk && localMatches.length===0) setSearchError("Couldn't reach food databases. Try manual entry instead.");
+      // Rank: items whose name starts with the query term come first
+      const qLow = query.toLowerCase();
+      items.sort((a,b)=>{
+        const aS = a.name.toLowerCase().startsWith(qLow)?0:1;
+        const bS = b.name.toLowerCase().startsWith(qLow)?0:1;
+        return aS-bS;
+      });
+
+      // Cap at 8 results
+      items = items.slice(0,8);
+
+      if(!signal.aborted) setUsdaResults(items);
+    } catch(e){
+      if(e.name==="AbortError"||signal.aborted) return;
+      console.error("[usda] search error:", e.message);
+      setUsdaResults([]);
+      if(localMatches.length===0) setSearchError("Food search temporarily unavailable. Try manual entry.");
+    } finally {
+      if(!signal.aborted) setSearchLoading(false);
     }
   };
 
@@ -1567,23 +1540,23 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
     const dedup = (items) => items.filter(r => {
       const key = r.name.toLowerCase().replace(/\s+/g," ").trim();
       if(seen.has(key)) return false;
-      seen.add(key);return true;
+      seen.add(key); return true;
     });
-    return {saved:dedup(savedResults), usda:dedup(usdaResults), off:dedup(offResults)};
+    return {saved:dedup(savedResults), usda:dedup(usdaResults)};
   })();
-  const hasResults = allResults.saved.length>0||allResults.usda.length>0||allResults.off.length>0;
+  const hasResults = allResults.saved.length>0||allResults.usda.length>0;
 
   const handleSearchInput = (val) => {
     setSearchQuery(val);
     setSelectedFood(null);setSelectedPortion(null);setSearchLogSuccess(false);
     if(!val||val.length<2){
       if(abortRef.current) abortRef.current.abort();
-      setSavedResults([]);setUsdaResults([]);setOffResults([]);setSearchError("");setSearchLoading(false);
+      setSavedResults([]);setUsdaResults([]);setSearchError("");setSearchLoading(false);
       if(debounceRef.current) clearTimeout(debounceRef.current);
       return;
     }
     if(debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(()=>searchFoods(val),300);
+    debounceRef.current = setTimeout(()=>searchFoods(val),500);
   };
 
   const selectFood = (food) => {
@@ -1630,7 +1603,7 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
     const type = getMealTypeByTime();
     onLogMeal({type,name:selectedFood.name+(selectedFood.brand?` (${selectedFood.brand})`:""),cal:fm.cal,p:fm.p,c:fm.c,f:fm.f});
     setSearchLogSuccess(true);
-    setTimeout(()=>{setSearchLogSuccess(false);setSelectedFood(null);setSelectedPortion(null);setSearchQuery("");setQtyValue("1");setQtyUnit("servings");setEditNutrition(null);setSavedResults([]);setUsdaResults([]);setOffResults([])},1500);
+    setTimeout(()=>{setSearchLogSuccess(false);setSelectedFood(null);setSelectedPortion(null);setSearchQuery("");setQtyValue("1");setQtyUnit("servings");setEditNutrition(null);setSavedResults([]);setUsdaResults([]);},1500);
   };
 
   const quickLog = (item, feedbackId) => {
@@ -1755,31 +1728,40 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
         <p style={{fontSize:13,color:T.txM,margin:0}}>{searchError}</p>
       </Card>}
 
-      {/* Search results grouped by source */}
-      {hasResults && !selectedFood && <div style={{marginTop:4,maxHeight:380,overflowY:"auto",borderRadius:T.r,border:`1px solid ${T.bd}`,background:T.sf}}>
-        {[{label:"Your Meals",items:allResults.saved,color:T.ok},{label:"Foods",items:allResults.usda,color:T.acc},{label:"Branded Products",items:allResults.off,color:T.tx2}].map(group=>
+      {/* Search results */}
+      {hasResults && !selectedFood && <div style={{marginTop:4,maxHeight:400,overflowY:"auto",borderRadius:T.r,border:`1px solid ${T.bd}`,background:T.sf}}>
+        {[{label:"Your Meals",items:allResults.saved,color:T.ok},{label:"Foods",items:allResults.usda,color:T.acc}].map(group=>
           group.items.length>0 && <div key={group.label}>
-            <div style={{padding:"8px 16px 4px",background:T.bg,borderBottom:`1px solid ${T.bd}`,position:"sticky",top:0,zIndex:1}}>
+            <div style={{padding:"7px 16px 5px",background:T.bg,borderBottom:`1px solid ${T.bd}`,position:"sticky",top:0,zIndex:1}}>
               <span style={{fontSize:10,fontWeight:700,color:group.color,letterSpacing:"0.1em",textTransform:"uppercase"}}>{group.label}</span>
             </div>
-            {group.items.map((r,i)=><div key={r.id} onClick={()=>selectFood(r)} style={{padding:"11px 16px",borderBottom:`1px solid ${T.bd}`,cursor:"pointer"}}>
-              <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0,lineHeight:1.3}}>{r.name}</p>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:3}}>
-                <span style={{fontSize:11,color:T.txM}}>{r.brand||""}{r.brand&&r.servingLabel?" · ":""}<span style={{color:T.txM}}>{r.servingLabel||""}</span></span>
-                <span style={{fontSize:12,fontFamily:T.mono,color:r.hasNutrition?T.acc:T.txM,fontWeight:600}}>{r.hasNutrition?`${r.cal} cal`:"No cal data"}</span>
+            {group.items.map(r=><div key={r.id} onClick={()=>selectFood(r)} style={{padding:"12px 16px",borderBottom:`1px solid ${T.bd}`,cursor:"pointer"}}>
+              <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:"0 0 2px",lineHeight:1.3}}>{r.name}</p>
+              {r.brand && <p style={{fontSize:11,color:T.txM,margin:"0 0 5px"}}>{r.brand}</p>}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                  {[{v:`${r.protein}g`,l:"P",c:T.pro},{v:`${r.carbs}g`,l:"C",c:T.carb},{v:`${r.fat}g`,l:"F",c:T.fat}].map(x=>
+                    <span key={x.l} style={{fontSize:10,fontFamily:T.mono,color:x.c,display:"flex",alignItems:"center",gap:2}}>
+                      <span style={{width:4,height:4,borderRadius:"50%",background:x.c,flexShrink:0,display:"inline-block"}}/>
+                      {x.v}<span style={{color:T.txM,fontSize:8}}> {x.l}</span>
+                    </span>
+                  )}
+                  {r.servingLabel && <span style={{fontSize:10,color:T.txM}}>· {r.servingLabel}</span>}
+                </div>
+                <span style={{fontSize:12,fontFamily:T.mono,color:r.hasNutrition?T.acc:T.txM,fontWeight:700,flexShrink:0,marginLeft:8}}>{r.hasNutrition?`${r.cal} cal`:"No data"}</span>
               </div>
             </div>)}
           </div>
         )}
         {searchLoading && <div style={{padding:"10px 16px",display:"flex",alignItems:"center",gap:8}}>
           <div style={{width:14,height:14,borderRadius:"50%",border:`2px solid ${T.bd}`,borderTopColor:T.acc,animation:"spin 1s linear infinite"}}/>
-          <span style={{fontSize:12,color:T.txM}}>Loading more results...</span>
+          <span style={{fontSize:12,color:T.txM}}>Searching...</span>
         </div>}
       </div>}
 
       {/* No results after search completes */}
       {searchQuery.length>=2 && !searchLoading && !hasResults && !searchError && !selectedFood && <Card style={{padding:"14px 16px",marginTop:4}}>
-        <p style={{fontSize:13,color:T.txM,margin:0}}>No results found. Try a different term or use manual entry.</p>
+        <p style={{fontSize:13,color:T.txM,margin:0}}>No results found for "{searchQuery}". Try a different name or use manual entry.</p>
       </Card>}
     </div>
 
