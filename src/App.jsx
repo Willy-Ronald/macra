@@ -290,7 +290,7 @@ const Onboarding = ({onComplete}) => {
     </button>
   );
 
-  const macros = step===5 ? calcMacros(profile) : null;
+  const macros = step===6 ? calcMacros(profile) : null;
 
   const steps = [
     // 0: Name + Sex
@@ -440,9 +440,9 @@ const Onboarding = ({onComplete}) => {
       {/* Macro breakdown */}
       <div style={{display:"flex",gap:10,marginBottom:24}}>
         {[
-          {l:"Protein",v:`${macros?.proteinG}g`,c:T.pro,sub:`${macros?macros.proteinG*4:0} cal`},
-          {l:"Carbs",v:`${macros?.carbG}g`,c:T.carb,sub:`${macros?macros.carbG*4:0} cal`},
-          {l:"Fat",v:`${macros?.fatG}g`,c:T.fat,sub:`${macros?macros.fatG*9:0} cal`},
+          {l:"Protein",v:`${macros?.proteinG??0}g`,c:T.pro,sub:`${(macros?.proteinG??0)*4} cal`},
+          {l:"Carbs",v:`${macros?.carbG??0}g`,c:T.carb,sub:`${(macros?.carbG??0)*4} cal`},
+          {l:"Fat",v:`${macros?.fatG??0}g`,c:T.fat,sub:`${(macros?.fatG??0)*9} cal`},
         ].map(m=>(
           <Card key={m.l} style={{flex:1,padding:"18px 12px",textAlign:"center"}}>
             <div style={{width:8,height:8,borderRadius:"50%",background:m.c,margin:"0 auto 8px"}}/>
@@ -2222,6 +2222,7 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
   const [draftHeightIn, setDraftHeightIn] = useState(11);
   const [draftActivity, setDraftActivity] = useState("moderate");
   const [draftGoal, setDraftGoal] = useState("maintain");
+  const [draftBudget, setDraftBudget] = useState("");
 
   const showSaved = () => { setSavedToast(true); setTimeout(()=>setSavedToast(false),2000); };
 
@@ -2247,6 +2248,10 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
     if(v==="height"){ setDraftHeightFt(profile?.heightFt||5); setDraftHeightIn(profile?.heightIn||11); }
     if(v==="activity") setDraftActivity(profile?.activity||"moderate");
     if(v==="goal") setDraftGoal(profile?.goal||"maintain");
+    if(v==="budget"){
+      const b = profile?.weeklyBudget;
+      setDraftBudget(b && b !== "null" && Number(b) > 0 ? String(b) : "");
+    }
     setView(v);
   };
 
@@ -2477,21 +2482,20 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
 
   // ── Budget sub-view ──
   if(view==="budget"){
-    const [budgetDraft,setBudgetDraft]=useState(profile?.weeklyBudget?String(profile.weeklyBudget):"");
     return <div style={{padding:"0 20px 24px"}}>
       <BackBtn onBack={()=>setView(null)}/>
       <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Weekly Grocery Budget</h1>
       <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:8}}>
         <span style={{padding:"14px 0 14px 16px",borderRadius:`${T.r} 0 0 ${T.r}`,border:`1px solid ${T.bd}`,borderRight:"none",background:T.sf,color:T.txM,fontSize:16,fontWeight:600,display:"flex",alignItems:"center"}}>$</span>
-        <input type="number" inputMode="numeric" placeholder="e.g. 100" value={budgetDraft} onChange={e=>setBudgetDraft(e.target.value.replace(/[^0-9]/g,""))} style={{flex:1,padding:"14px 16px",borderRadius:`0 ${T.r} ${T.r} 0`,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,fontFamily:T.font,fontWeight:500,outline:"none",boxSizing:"border-box"}}/>
+        <input type="number" inputMode="numeric" placeholder="e.g. 100" value={draftBudget} onChange={e=>setDraftBudget(e.target.value.replace(/[^0-9]/g,""))} style={{flex:1,padding:"14px 16px",borderRadius:`0 ${T.r} ${T.r} 0`,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,fontFamily:T.font,fontWeight:500,outline:"none",boxSizing:"border-box"}}/>
       </div>
       <p style={{fontSize:12,color:T.txM,margin:"0 0 10px",lineHeight:1.6}}>This helps us tailor your meal plans to fit your budget. Without a budget set, suggested meals and ingredients may be more extensive or costly.</p>
       <p style={{fontSize:10,color:T.txM,margin:"0 0 24px",lineHeight:1.6,opacity:0.7}}>Note: Macra cannot guarantee exact budget accuracy. Grocery prices vary by location, store, and season. Budget guidance is approximate and intended as a helpful starting point only.</p>
       <SaveBtn onClick={()=>{
-        const val=budgetDraft?parseInt(budgetDraft,10):null;
-        saveField({weeklyBudget:val&&val>0?val:null},null);
+        const val = draftBudget ? parseInt(draftBudget, 10) : null;
+        saveField({weeklyBudget: val && val > 0 ? val : null}, null);
       }}/>
-      <button onClick={()=>{saveField({weeklyBudget:null},null);}} style={{width:"100%",padding:12,borderRadius:T.r,border:`1px solid ${T.bd}`,background:"transparent",color:T.tx2,fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:T.font,marginTop:10}}>Clear Budget</button>
+      <button onClick={()=>saveField({weeklyBudget:null},null)} style={{width:"100%",padding:12,borderRadius:T.r,border:`1px solid ${T.bd}`,background:"transparent",color:T.tx2,fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:T.font,marginTop:10}}>Clear Budget</button>
     </div>;
   }
 
