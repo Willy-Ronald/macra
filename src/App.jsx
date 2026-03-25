@@ -10,6 +10,7 @@ import {
   getCustomGroceryList, saveCustomGroceryList,
   getWeightLog, addWeightEntry, deleteWeightEntry,
   getTodayWater, upsertWaterLog, getWaterHistory, updateWaterGoal,
+  getLoggedDatesInRange,
 } from "./lib/supabase";
 import { generateMealPlan } from "./lib/claude";
 
@@ -607,6 +608,167 @@ const BackBtn = ({onBack}) => (
   </button>
 );
 
+// ─── WEEK STRIP ─────────────────────────────────────────────────
+const STRIP_DAY_ABB = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+const WeekStrip = ({viewDate, onSelectDate, onOpenCalendar}) => {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const viewStr  = viewDate.toISOString().split('T')[0];
+  const containerRef = useRef(null);
+  const selectedRef  = useRef(null);
+
+  // Monday of viewDate's week
+  const viewMon = new Date(viewDate);
+  const dow = viewDate.getDay();
+  viewMon.setDate(viewDate.getDate() + (dow === 0 ? -6 : 1 - dow));
+
+  // 3 weeks: prev, current, next (21 days)
+  const days = [];
+  for(let i = -7; i < 14; i++){
+    const d = new Date(viewMon);
+    d.setDate(viewMon.getDate() + i);
+    days.push(d);
+  }
+
+  // Scroll selected day into horizontal centre without triggering page scroll
+  useEffect(()=>{
+    const container = containerRef.current;
+    const el = selectedRef.current;
+    if(!container || !el) return;
+    const target = el.offsetLeft - (container.offsetWidth - el.offsetWidth) / 2;
+    container.scrollLeft = target;
+  }, [viewStr]);
+
+  return <div style={{display:'flex',alignItems:'center',gap:4,margin:'4px 0 8px'}}>
+    <style>{`.ws-strip::-webkit-scrollbar{display:none}`}</style>
+    <div className="ws-strip" ref={containerRef}
+      style={{flex:1,display:'flex',overflowX:'auto',scrollbarWidth:'none',msOverflowStyle:'none',gap:0,WebkitOverflowScrolling:'touch'}}>
+      {days.map(d=>{
+        const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const isToday2=ds===todayStr, isSel=ds===viewStr;
+        return <div key={ds} ref={isSel?selectedRef:null}
+          onClick={()=>onSelectDate(new Date(ds+'T12:00:00'))}
+          style={{flexShrink:0,width:44,display:'flex',flexDirection:'column',alignItems:'center',gap:3,padding:'3px 0',cursor:'pointer',userSelect:'none'}}>
+          <span style={{fontSize:9,letterSpacing:'0.06em',fontWeight:isToday2?700:400,color:isToday2?T.acc:T.txM}}>
+            {STRIP_DAY_ABB[d.getDay()].toUpperCase()}
+          </span>
+          <div style={{width:30,height:30,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',
+            background:isSel?T.acc:'transparent',
+            boxShadow:isToday2&&!isSel?`0 0 0 1.5px ${T.acc}`:'none',
+            transition:'background 0.15s'}}>
+            <span style={{fontSize:13,fontWeight:isSel||isToday2?700:400,color:isSel?T.bg:isToday2?T.acc:T.tx2,fontFamily:T.mono}}>
+              {d.getDate()}
+            </span>
+          </div>
+        </div>;
+      })}
+    </div>
+    <button onClick={onOpenCalendar} style={{flexShrink:0,padding:'6px 8px',background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center'}}>
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={T.tx2} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+      </svg>
+    </button>
+  </div>;
+};
+
+// ─── CALENDAR OVERLAY ───────────────────────────────────────────
+const CAL_MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const CAL_DAY_ABB = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+
+const CalendarOverlay = ({viewDate, onSelectDate, onClose, userId}) => {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const viewStr  = viewDate.toISOString().split('T')[0];
+  const curYear  = new Date().getFullYear();
+
+  const [calMonth, setCalMonth] = useState(()=>new Date(viewDate.getFullYear(), viewDate.getMonth(), 1));
+  const [loggedDates, setLoggedDates] = useState(new Set());
+  const [showYearPicker, setShowYearPicker] = useState(false);
+  const touchStartY = useRef(null);
+
+  const yr = calMonth.getFullYear(), mo = calMonth.getMonth();
+
+  useEffect(()=>{
+    if(!userId) return;
+    const start = `${yr}-${String(mo+1).padStart(2,'0')}-01`;
+    const last = new Date(yr, mo+1, 0).getDate();
+    const end   = `${yr}-${String(mo+1).padStart(2,'0')}-${String(last).padStart(2,'0')}`;
+    getLoggedDatesInRange(userId, start, end).then(dates=>setLoggedDates(new Set(dates)));
+  },[yr, mo, userId]);
+
+  // Mon-first grid
+  const firstDow = ((new Date(yr,mo,1).getDay()+6)%7); // 0=Mon
+  const daysInMo = new Date(yr,mo+1,0).getDate();
+  const cells = [...Array(firstDow).fill(null), ...Array.from({length:daysInMo},(_,i)=>i+1)];
+  while(cells.length%7) cells.push(null);
+
+  // Swipe-down to dismiss
+  const onTS = e => { touchStartY.current = e.touches[0].clientY; };
+  const onTE = e => {
+    if(touchStartY.current===null) return;
+    if(e.changedTouches[0].clientY - touchStartY.current > 80) onClose();
+    touchStartY.current = null;
+  };
+
+  const years = Array.from({length:6},(_,i)=>curYear-4+i); // curYear-4 to curYear+1
+
+  return <div onTouchStart={onTS} onTouchEnd={onTE} style={{padding:'0 20px 40px',background:T.bg,minHeight:'100vh'}}>
+    {/* Top bar */}
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',paddingTop:4,paddingBottom:4}}>
+      <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:6,padding:'8px 0',color:T.acc,fontSize:14,fontWeight:600,fontFamily:T.font}}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>Close
+      </button>
+      <button onClick={()=>setCalMonth(new Date(curYear, new Date().getMonth(), 1))} style={{padding:'6px 14px',borderRadius:8,border:`1px solid ${T.acc}`,background:'transparent',color:T.acc,fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:T.font}}>Today</button>
+    </div>
+
+    {/* Month nav */}
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',margin:'12px 0 16px'}}>
+      <button onClick={()=>setCalMonth(new Date(yr,mo-1,1))} style={{background:'none',border:'none',cursor:'pointer',padding:8,color:T.tx2,display:'flex'}}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.tx2} strokeWidth="2" strokeLinecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <button onClick={()=>setShowYearPicker(p=>!p)} style={{background:'none',border:'none',cursor:'pointer',fontFamily:T.font,textAlign:'center'}}>
+        <p style={{fontSize:18,fontWeight:700,color:T.tx,margin:0,letterSpacing:'-0.02em'}}>{CAL_MONTH_NAMES[mo]}</p>
+        <p style={{fontSize:12,color:T.acc,margin:'2px 0 0',fontWeight:600}}>{yr} {showYearPicker?'▲':'▼'}</p>
+      </button>
+      <button onClick={()=>setCalMonth(new Date(yr,mo+1,1))} style={{background:'none',border:'none',cursor:'pointer',padding:8,color:T.tx2,display:'flex'}}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.tx2} strokeWidth="2" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+    </div>
+
+    {/* Year picker */}
+    {showYearPicker&&<Card style={{padding:'12px',marginBottom:16}}>
+      <div style={{display:'flex',flexWrap:'wrap',gap:8,justifyContent:'center'}}>
+        {years.map(y=><button key={y} onClick={()=>{setCalMonth(new Date(y,mo,1));setShowYearPicker(false);}} style={{padding:'8px 18px',borderRadius:8,border:`1px solid ${y===yr?T.acc:T.bd}`,background:y===yr?T.accM:'transparent',color:y===yr?T.acc:T.tx2,fontSize:14,fontWeight:y===yr?700:400,cursor:'pointer',fontFamily:T.font}}>{y}</button>)}
+      </div>
+    </Card>}
+
+    {/* Day header row */}
+    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',marginBottom:6}}>
+      {CAL_DAY_ABB.map(d=><div key={d} style={{textAlign:'center',padding:'2px 0'}}>
+        <span style={{fontSize:9,color:T.txM,fontWeight:600,letterSpacing:'0.08em'}}>{d}</span>
+      </div>)}
+    </div>
+
+    {/* Date grid */}
+    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',rowGap:2}}>
+      {cells.map((d,i)=>{
+        if(!d) return <div key={'e'+i}/>;
+        const ds=`${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        const isToday2=ds===todayStr, isSel=ds===viewStr;
+        const hasData=loggedDates.has(ds), isFut=ds>todayStr;
+        return <div key={ds} onClick={()=>onSelectDate(new Date(ds+'T12:00:00'))}
+          style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2,padding:'3px 0',cursor:'pointer',opacity:isFut?0.4:1}}>
+          <div style={{width:34,height:34,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',
+            background:isSel?T.acc:'transparent',
+            boxShadow:isToday2&&!isSel?`0 0 0 1.5px ${T.acc}`:'none'}}>
+            <span style={{fontSize:14,fontWeight:isSel||isToday2?700:400,color:isSel?T.bg:isToday2?T.acc:T.tx,fontFamily:T.mono}}>{d}</span>
+          </div>
+          <div style={{width:4,height:4,borderRadius:'50%',background:T.acc,opacity:hasData&&!isSel?1:0}}/>
+        </div>;
+      })}
+    </div>
+  </div>;
+};
+
 // ─── SPARKLINE ──────────────────────────────────────────────────
 const Sparkline = ({values, w=72, h=26}) => {
   if(!values||values.length===0) return null;
@@ -928,6 +1090,7 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
   const [historyLog,setHistoryLog]=useState(null); // null = showing today
   const [loggingId,setLoggingId]=useState(null);
   const [progressView,setProgressView]=useState(null); // null | 'weight' | 'water'
+  const [showCalendar,setShowCalendar]=useState(false);
   const m = profile?.macros || {target:2200,proteinG:180,carbG:240,fatG:70};
 
   const todayStr = new Date().toISOString().split("T")[0];
@@ -977,16 +1140,10 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
     ? `You've reached your ${m.target} cal target for today. Great job!`
     : `${remaining} calories remaining. Keep it up!`;
 
-  const dayNames = ["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
-  const monthNames = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
-  const dateStr = `${dayNames[viewDate.getDay()]}, ${monthNames[viewDate.getMonth()]} ${viewDate.getDate()}`;
-
-  const goDay = (delta) => {
-    const d = new Date(viewDate);
-    d.setDate(d.getDate()+delta);
-    if(d > new Date()) return; // can't go to future
-    setViewDate(d);
-  };
+  const S_DAYS  = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const S_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const viewingLabel = `${S_DAYS[viewDate.getDay()]}, ${S_MONTHS[viewDate.getMonth()]} ${viewDate.getDate()}`;
+  const isFuture = viewStr > todayStr;
 
   // Log a meal — handles both today and past days
   const handleLogForDate = async (meal) => {
@@ -1012,41 +1169,29 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
 
   if(progressView==='weight') return <WeightHistoryView userId={userId} onBack={()=>setProgressView(null)}/>;
   if(progressView==='water') return <WaterSettingsView userId={userId} defaultGoal={profile?.waterGoal||8} onBack={()=>setProgressView(null)}/>;
+  if(showCalendar) return <CalendarOverlay viewDate={viewDate} onSelectDate={d=>{setViewDate(d);setShowCalendar(false);}} onClose={()=>setShowCalendar(false)} userId={userId}/>;
 
   return <div style={{padding:"0 20px 24px"}}>
-    {/* Date navigation bar */}
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:4,marginBottom:isToday?0:8}}>
-      <button onClick={()=>goDay(-1)} style={{background:"none",border:"none",color:T.tx2,fontSize:18,cursor:"pointer",padding:"8px 12px 8px 0"}}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.tx2} strokeWidth="2" strokeLinecap="round"><path d="M15 18l-6-6 6-6"/></svg>
-      </button>
-      <div style={{textAlign:"center"}}>
-        <p style={{fontSize:11,color:isToday?T.txM:T.acc,fontWeight:600,margin:0,letterSpacing:"0.08em"}}>{isToday?"TODAY":dateStr}</p>
-        {isToday && <p style={{fontSize:11,color:T.txM,fontWeight:500,margin:"2px 0 0",letterSpacing:"0.08em"}}>{dateStr}</p>}
-      </div>
-      <button onClick={()=>goDay(1)} style={{background:"none",border:"none",color:isToday?T.bd:T.tx2,fontSize:18,cursor:isToday?"default":"pointer",padding:"8px 0 8px 12px"}}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={isToday?T.bd:T.tx2} strokeWidth="2" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
-      </button>
-    </div>
+    {/* ── Week strip ── */}
+    <WeekStrip viewDate={viewDate} onSelectDate={setViewDate} onOpenCalendar={()=>setShowCalendar(true)}/>
 
-    {/* Back to Today button */}
-    {!isToday && <button onClick={()=>setViewDate(new Date())} style={{width:"100%",padding:10,borderRadius:10,border:`1px solid ${T.acc}40`,background:T.accG,color:T.acc,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:T.font,marginBottom:12}}>
-      ← Back to Today
-    </button>}
-
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:28}}>
+    {/* ── Header: name + avatar ── */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:isEmpty?4:20}}>
       <div>
-        <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"6px 0 0",letterSpacing:"-0.02em"}}>
-          {isEmpty
-            ? (profile?.name ? `Welcome, ${profile.name}.` : "Welcome.")
-            : isToday ? (profile?.name ? `Hey, ${profile.name}` : "Daily Overview") : "Day Review"}
+        <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"2px 0 0",letterSpacing:"-0.02em"}}>
+          {isEmpty?(profile?.name?`Welcome, ${profile.name}.`:"Welcome."):isToday?(profile?.name?`Hey, ${profile.name}`:"Daily Overview"):"Day Review"}
         </h1>
-        {isEmpty && <p style={{fontSize:14,color:T.tx2,margin:"4px 0 0",fontWeight:400}}>Let's get started.</p>}
+        {isEmpty&&<p style={{fontSize:14,color:T.tx2,margin:"4px 0 0",fontWeight:400}}>Let's get started.</p>}
       </div>
       <div style={{width:38,height:38,borderRadius:"50%",background:T.acc,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
         <span style={{fontSize:14,fontWeight:700,color:T.bg}}>{(profile?.name||"U")[0]}</span>
       </div>
     </div>
 
+    {/* ── Viewing label (past/future only) ── */}
+    {!isToday&&<p style={{fontSize:11,color:T.acc,fontWeight:600,textAlign:'center',margin:'-12px 0 12px',letterSpacing:'0.07em'}}>VIEWING · {viewingLabel}</p>}
+
+    {/* ── Macro ring card ── */}
     <Card style={{padding:"28px 24px",marginBottom:16}}>
       <div style={{display:"flex",alignItems:"center",gap:28}}>
         <Ring pct={(cal.cur/cal.tgt)*100} r={50} stroke={T.acc} w={5}>
@@ -1072,16 +1217,7 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
       </div>
     </Card>
 
-    {/* ── Progress section ── */}
-    {isToday&&<>
-      <Lbl>Progress</Lbl>
-      <div style={{marginTop:8,marginBottom:4}}>
-        <WeightTrackerWidget userId={userId} onViewFull={()=>setProgressView('weight')}/>
-        <WaterTrackerWidget userId={userId} defaultGoal={profile?.waterGoal||8} onViewFull={()=>setProgressView('water')}/>
-      </div>
-    </>}
-
-    {/* ── Empty state: no log + no plan yet ── */}
+    {/* ── Empty state (today, nothing logged, no plan) ── */}
     {isEmpty ? <>
       <p style={{fontSize:13,color:T.txM,textAlign:"center",margin:"20px 0 20px",fontWeight:500}}>Log meals to track your progress</p>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -1108,25 +1244,25 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
       </div>
     </> : <>
       {/* ── Manual mode banner ── */}
-      {profile?.trackingMode==='manual' && <Card style={{padding:"16px 18px",marginBottom:16,textAlign:"center",border:`1px solid ${T.bd}`}}>
+      {profile?.trackingMode==='manual'&&<Card style={{padding:"16px 18px",marginBottom:16,textAlign:"center",border:`1px solid ${T.bd}`}}>
         <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:"0 0 4px"}}>Manual Track Mode</p>
         <p style={{fontSize:12,color:T.tx2,margin:0}}>Log your meals in the Log tab to track your macros.</p>
       </Card>}
 
-      {/* ── Day's Plan ── */}
-      {profile?.trackingMode!=='manual' && dayPlanMeals.length > 0 && <>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"24px 0 14px"}}>
+      {/* ── Today's / Day's Plan ── */}
+      {profile?.trackingMode!=='manual'&&dayPlanMeals.length>0&&<>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"0 0 14px"}}>
           <div>
             <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>{isToday?"Today's Plan":"Day's Plan"}</h2>
             <span style={{fontSize:10,color:T.txM,fontWeight:500}}>{planLabel}</span>
           </div>
           <span onClick={()=>setTab("plan")} style={{fontSize:12,color:T.acc,fontWeight:500,cursor:"pointer"}}>View Plan</span>
         </div>
-        {unloggedPlan.length === 0 && <Card style={{padding:"16px",textAlign:"center",marginBottom:6}}>
+        {unloggedPlan.length===0&&<Card style={{padding:"16px",textAlign:"center",marginBottom:6}}>
           <p style={{fontSize:13,color:T.txM,margin:0}}>All planned meals logged! Nice work.</p>
         </Card>}
         {unloggedPlan.map((pm,i)=>{
-          const isLogging = loggingId === pm.name;
+          const isLogging=loggingId===pm.name;
           return <Card key={"plan-"+i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,border:`1px dashed ${T.bd}`,background:"transparent",cursor:"pointer"}} onClick={()=>handleLogForDate({type:pm.type||"meal",name:pm.name,cal:pm.cal,p:pm.p||0,c:pm.c||0,f:pm.f||0})}>
             <div style={{display:"flex",alignItems:"center",gap:12}}>
               <div style={{width:7,height:7,borderRadius:"50%",background:T.txM}}/>
@@ -1145,12 +1281,12 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
       </>}
 
       {/* ── Eaten / Meals Logged ── */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"24px 0 14px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"20px 0 14px"}}>
         <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>{isToday?"Eaten Today":"Meals Logged"}</h2>
         <span style={{fontSize:12,color:T.txM,fontFamily:T.mono}}>{displayLog.length} meal{displayLog.length!==1?"s":""}</span>
       </div>
-      {displayLog.length === 0 && <Card style={{padding:"16px",textAlign:"center",marginBottom:6}}>
-        <p style={{fontSize:13,color:T.txM,margin:0}}>{isToday?"Nothing logged yet. Tap a meal above or go to the Log tab.":"No meals logged on this day. Tap any planned meal above to log it."}</p>
+      {displayLog.length===0&&<Card style={{padding:"16px",textAlign:"center",marginBottom:6}}>
+        <p style={{fontSize:13,color:T.txM,margin:0}}>{isFuture?"No data yet for this date.":isToday?"Nothing logged yet. Tap a meal above or go to the Log tab.":"No meals logged on this day."}</p>
       </Card>}
       {displayLog.map((x)=><SwipeableRow key={x.id} onDelete={()=>handleUnlogForDate(x.id)}>
         <Card style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:0}}>
@@ -1174,10 +1310,17 @@ const Dashboard = ({setTab,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[
         </Card>
       </SwipeableRow>)}
 
-      {isToday && <Card style={{padding:"14px 16px",marginTop:16,background:T.accG,border:`1px solid ${T.accM}`,display:"flex",alignItems:"flex-start",gap:10}}>
+      {isToday&&<Card style={{padding:"14px 16px",marginTop:16,background:T.accG,border:`1px solid ${T.accM}`,display:"flex",alignItems:"flex-start",gap:10}}>
         <span style={{fontSize:14}}>✦</span>
         <p style={{fontSize:13,color:T.tx2,margin:0,lineHeight:1.5}}>{insightText}</p>
       </Card>}
+
+      {/* ── Progress (weight + water) — below eaten ── */}
+      {isToday&&<>
+        <div style={{marginTop:24,marginBottom:8}}><Lbl>Progress</Lbl></div>
+        <WeightTrackerWidget userId={userId} onViewFull={()=>setProgressView('weight')}/>
+        <WaterTrackerWidget userId={userId} defaultGoal={profile?.waterGoal||8} onViewFull={()=>setProgressView('water')}/>
+      </>}
     </>}
   </div>;
 };

@@ -432,6 +432,17 @@ export async function getWaterHistory(userId) {
   return data || [];
 }
 
+export async function getLoggedDatesInRange(userId, startDate, endDate) {
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from("meal_log")
+    .select("date")
+    .eq("user_id", userId)
+    .gte("date", startDate)
+    .lte("date", endDate);
+  return [...new Set((data || []).map(r => r.date))];
+}
+
 export async function updateWaterGoal(userId, goal) {
   if (!supabase) return;
   const { error } = await supabase
