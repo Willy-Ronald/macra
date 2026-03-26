@@ -24,6 +24,9 @@ if (!import.meta.env.VITE_USDA_API_KEY) {
   console.warn("[usda] VITE_USDA_API_KEY not set — using DEMO_KEY (30 req/hr limit). Set via Vercel env vars.");
 }
 
+// Admin account — only this email sees the dev panel in the Profile tab
+const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || "macrasupport@gmail.com";
+
 const T = {
   bg:"#09090B",sf:"#121215",bd:"#1E1E22",acc:"#C8B88A",
   accM:"rgba(200,184,138,0.12)",accG:"rgba(200,184,138,0.06)",
@@ -3142,11 +3145,13 @@ const CUISINE_LIST = [
 ];
 const DIET_OPTIONS = ["None","Vegan","Vegetarian","Keto","Carnivore","Gluten-Free","Dairy-Free","Halal","Kosher","Paleo","High Protein","High Fiber"];
 
-const ProfileScreen = ({profile, userId, isPro, onProfileUpdate, onSignOut, onUpgrade}) => {
+const ProfileScreen = ({profile, userId, userEmail, isPro, onProfileUpdate, onSignOut, onUpgrade, onSetIsPro}) => {
   const m = profile?.macros;
+  const isAdmin = userEmail === ADMIN_EMAIL;
   // view: null | "diet" | "foods" | "cuisines" | "name" | "sex" | "age" | "weight" | "height" | "activity" | "goal" | "macrosplit"
   const [view, setView] = useState(null);
   const [savedToast, setSavedToast] = useState(false);
+  const [adminToast, setAdminToast] = useState(null);
   // Drafts for preference sub-views
   const [draftDiet, setDraftDiet] = useState([]);
   const [draftFoods, setDraftFoods] = useState([]);
@@ -3171,6 +3176,32 @@ const ProfileScreen = ({profile, userId, isPro, onProfileUpdate, onSignOut, onUp
   const [draftIsCustom, setDraftIsCustom] = useState(false);
 
   const showSaved = () => { setSavedToast(true); setTimeout(()=>setSavedToast(false),2000); };
+  const showAdminToast = (msg) => { setAdminToast(msg); setTimeout(()=>setAdminToast(null),2500); };
+
+  const handleToggleProMode = async () => {
+    const newIsPro = !isPro;
+    try {
+      const { error } = await supabase.from("profiles").update({ is_pro: newIsPro }).eq("id", userId);
+      if (error) throw error;
+      await onSetIsPro(newIsPro);
+      showAdminToast(`Switched to ${newIsPro ? "PRO" : "FREE"} tier — reloading…`);
+      setTimeout(() => window.location.reload(), 800);
+    } catch (err) {
+      console.error("[admin] toggle pro error:", err);
+      showAdminToast("Toggle failed — check console");
+    }
+  };
+
+  const handleResetGenerations = async () => {
+    try {
+      const { error } = await supabase.from("generation_log").delete().eq("user_id", userId);
+      if (error) throw error;
+      showAdminToast("Generation log cleared — 3 intro gens restored");
+    } catch (err) {
+      console.error("[admin] reset generations error:", err);
+      showAdminToast("Reset failed — check console");
+    }
+  };
 
   const saveField = async (updates, returnTo=null) => {
     const merged = {...profile, ...updates};
@@ -3644,9 +3675,14 @@ const ProfileScreen = ({profile, userId, isPro, onProfileUpdate, onSignOut, onUp
     <Card style={{padding:20,marginBottom:20,display:"flex",alignItems:"center",gap:16}}>
       <div style={{width:52,height:52,borderRadius:"50%",background:T.acc,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:700,color:T.bg,flexShrink:0}}>{(profile?.name||"U")[0].toUpperCase()}</div>
       <div style={{flex:1}}>
-        <h2 style={{fontSize:18,fontWeight:600,color:T.tx,margin:"0 0 2px"}}>{profile?.name||"User"}</h2>
-        <span style={{fontSize:12,color:T.txM}}>Macra Free</span>
-        <span onClick={onUpgrade} style={{fontSize:12,color:T.acc,marginLeft:8,fontWeight:500,cursor:"pointer"}}>Go Pro →</span>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+          <h2 style={{fontSize:18,fontWeight:600,color:T.tx,margin:0}}>{profile?.name||"User"}</h2>
+          {isAdmin&&<span style={{fontSize:9,fontWeight:700,color:"#fff",background:"#C4714A",borderRadius:4,padding:"2px 6px",letterSpacing:"0.08em"}}>ADMIN</span>}
+        </div>
+        {isPro
+          ? <span style={{fontSize:12,color:T.acc,fontWeight:600}}>Macra Pro</span>
+          : <><span style={{fontSize:12,color:T.txM}}>Macra Free</span><span onClick={onUpgrade} style={{fontSize:12,color:T.acc,marginLeft:8,fontWeight:500,cursor:"pointer"}}>Go Pro →</span></>
+        }
       </div>
     </Card>
 
@@ -3742,6 +3778,20 @@ const ProfileScreen = ({profile, userId, isPro, onProfileUpdate, onSignOut, onUp
       </div>
       <Chevron/>
     </Card>
+    {/* Admin panel — only visible to admin email */}
+    {isAdmin&&<div style={{marginTop:28,padding:"16px 18px",border:"1.5px solid #C4714A",borderRadius:T.r,background:"rgba(196,113,74,0.08)"}}>
+      <p style={{fontSize:10,fontWeight:700,color:"#C4714A",letterSpacing:"0.12em",textTransform:"uppercase",margin:"0 0 4px"}}>🔧 Dev Admin Panel</p>
+      <p style={{fontSize:12,color:T.tx2,margin:"0 0 14px"}}>Current tier: <strong style={{color:T.tx}}>{isPro?"Pro":"Free"}</strong></p>
+      <button onClick={handleToggleProMode} style={{width:"100%",padding:"11px",borderRadius:T.r,border:"none",background:isPro?"#5A8A5E":"#C4714A",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:T.font,marginBottom:8}}>
+        {isPro?"Switch to Free Tier":"Switch to Pro Tier"}
+      </button>
+      <button onClick={handleResetGenerations} style={{width:"100%",padding:"10px",borderRadius:T.r,border:`1px solid #C9A84C`,background:"transparent",color:"#C9A84C",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:T.font}}>
+        Reset Generation Limits
+      </button>
+    </div>}
+
+    {adminToast&&<div style={{position:"fixed",bottom:100,left:"50%",transform:"translateX(-50%)",background:"#C4714A",color:"#fff",padding:"10px 20px",borderRadius:12,fontSize:12,fontWeight:700,zIndex:200,whiteSpace:"nowrap",boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>{adminToast}</div>}
+
     {onSignOut&&<button onClick={onSignOut} style={{width:"100%",padding:14,borderRadius:T.r,border:`1px solid rgba(239,68,68,0.3)`,background:"rgba(239,68,68,0.08)",color:"#EF4444",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:T.font,marginTop:20}}>Sign Out</button>}
   </div>;
 };
@@ -4485,7 +4535,7 @@ export default function App() {
     log:<LogMeal savedMeals={savedMeals} onSaveMeal={handleSaveMeal} todayLog={todayLog} onLogMeal={handleLogMeal} userId={user?.id} onDeleteSavedMeal={handleDeleteSavedMeal} defaultMealType={defaultLogMealType}/>,
     stats:<StatsTab profile={profile} userId={user?.id} isPro={isPro}/>,
     grocery:<Grocery isPro={isPro} setIsPro={handleSetIsPro} weekPlans={weekPlans} userId={user?.id} onUpgrade={()=>setShowPricingModal(true)}/>,
-    profile:<ProfileScreen profile={profile} userId={user?.id} isPro={isPro} onProfileUpdate={p=>setProfile(p)} onSignOut={handleSignOut} onUpgrade={()=>setShowPricingModal(true)}/>
+    profile:<ProfileScreen profile={profile} userId={user?.id} userEmail={user?.email} isPro={isPro} onProfileUpdate={p=>setProfile(p)} onSignOut={handleSignOut} onUpgrade={()=>setShowPricingModal(true)} onSetIsPro={handleSetIsPro}/>
   };
 
   return <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:T.bg,fontFamily:T.font,position:"relative"}}>
