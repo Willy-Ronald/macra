@@ -1,6 +1,25 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./lib/supabase";
+
+function FaqItem({ q, ans, bd, tx2, gold }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{borderBottom:"1px solid "+bd,padding:"18px 0"}}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{width:"100%",background:"none",border:"none",padding:0,display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,cursor:"pointer",textAlign:"left"}}
+      >
+        <span style={{fontSize:15,fontWeight:600,color:"#FAFAF9",fontFamily:"'Outfit',sans-serif",lineHeight:1.4}}>{q}</span>
+        <span style={{fontSize:18,color:gold,flexShrink:0,transform:open?"rotate(45deg)":"none",transition:"transform 0.2s",lineHeight:1}}>+</span>
+      </button>
+      {open && (
+        <p style={{fontSize:14,color:tx2,lineHeight:1.65,margin:"12px 0 0",fontFamily:"'Outfit',sans-serif"}}>{ans}</p>
+      )}
+    </div>
+  );
+}
+
 const Landing = () => {
   const navigate = useNavigate();
   const [authChecked, setAuthChecked] = useState(false);
@@ -380,7 +399,7 @@ const Landing = () => {
 
       <section style={{padding:"40px 24px",textAlign:"center",borderTop:"1px solid "+bd,borderBottom:"1px solid "+bd}}>
         <div style={{display:"flex",justifyContent:"center",gap:isMobile?24:48,flexWrap:"wrap"}}>
-          {[{n:"60 sec",l:"From signup to your first meal plan"},{n:"1,000+",l:"Foods & brands in search database"},{n:"$4.99",l:"Per month for all Pro features"}].map((s,i)=>
+          {[{n:"60 sec",l:"From signup to your first meal plan"},{n:"1,000+",l:"Foods & brands in search database"},{n:"$6.99",l:"Per month for all Pro features"}].map((s,i)=>
             <div key={i} style={{textAlign:"center"}}>
               <p style={{fontSize:isMobile?22:28,fontWeight:800,color:a,margin:"0 0 4px",fontFamily:"'DM Mono',monospace"}}>{s.n}</p>
               <p style={{fontSize:11,color:txM,margin:0,fontWeight:500,letterSpacing:"0.04em"}}>{s.l}</p>
@@ -394,11 +413,10 @@ const Landing = () => {
           <h2 style={{fontSize:"clamp(28px, 5vw, 44px)",fontWeight:800,letterSpacing:"-0.02em",margin:0}}>Your nutrition,<br/><span style={{color:a}}>engineered.</span></h2>
         </div>
         {[
-          {num:"01",title:"Tell us about you",desc:"Age, weight, height, activity level, and goal. Macra calculates your precise daily targets using the Mifflin-St Jeor equation — the gold standard in sports nutrition.",detail:"Personalized calories, protein, carbs, and fat — in 60 seconds."},
-          {num:"02",title:"AI builds your meal plan",desc:"One tap generates a full day of meals matched to your exact macros and dietary preferences. Mediterranean, keto, carnivore, high-protein — it adapts to how you eat.",detail:"Breakfast, lunch, snack, dinner — with prep times and real ingredients."},
-          {num:"03",title:"Track what you actually eat",desc:"Search thousands of real foods and brands instantly, log saved meals with one tap, or enter anything manually. Your macro dashboard updates in real time.",detail:"No more guessing portions. Search it, tap it, done."},
-          {num:"04",title:"Auto-generate your grocery list",desc:"Your meal plan turns into a smart shopping list, organized by aisle with exact quantities. Share it with your partner before hitting the store.",detail:"A Pro feature that saves hours every week. No more forgotten ingredients.",isPro:true},
-          {num:"05",title:"Track together as a household",desc:"Sync with your partner and manage nutrition for the whole household from one app. Different goals, different macros, one shared meal plan.",detail:"Coming in Pro — built for couples and families who eat together.",isPro:true},
+          {num:"01",title:"Tell Us About You",desc:"Enter your age, weight, height, activity level, and goal. Macra calculates your precise daily targets using the Mifflin-St Jeor equation — the gold standard in sports nutrition.",detail:"Personalized calories, protein, carbs, and fat — in 60 seconds."},
+          {num:"02",title:"Make It Yours",desc:"Set your dietary preferences, cuisine style, budget, and pickiness level. Dial in your macro split with custom percentage sliders — high-protein, keto, balanced, whatever fits your life.",detail:"Your preferences. Your macros. Your rules."},
+          {num:"03",title:"Get Two Days of Meals",desc:"One tap generates an A/B day meal plan — breakfast, lunch, snack, and dinner — precisely matched to your targets. Alternate days keep things fresh without the mental load.",detail:"Breakfast, lunch, snack, dinner — with prep times and real ingredients."},
+          {num:"04",title:"Shop Once, Eat All Week",desc:"Your meal plan becomes a smart grocery list, auto-organized by store section with exact quantities. Share it before you leave the house — no forgotten ingredients.",detail:"A Pro feature that saves hours every week.",isPro:true},
         ].map((f,i)=>
           <div key={i} style={{display:"flex",gap:isMobile?16:32,marginBottom:isMobile?40:56,alignItems:"flex-start",animation:`featIn 0.6s cubic-bezier(0.22,1,0.36,1) ${i*0.1}s both`}}>
             <span style={{fontSize:isMobile?32:48,fontWeight:900,color:bd,fontFamily:"'DM Mono',monospace",lineHeight:1,flexShrink:0,minWidth:isMobile?44:70}}>{f.num}</span>
@@ -412,37 +430,88 @@ const Landing = () => {
           </div>
         )}
       </section>
-      <section style={{padding:"80px 20px",maxWidth:1020,margin:"0 auto"}}>
+
+      {/* ── Why Macra? ─────────────────────────────────────────── */}
+      <section style={{padding:isMobile?"60px 20px":"100px 24px",background:sf,borderTop:"1px solid "+bd,borderBottom:"1px solid "+bd}}>
+        <div style={{maxWidth:960,margin:"0 auto"}}>
+          <div style={{textAlign:"center",marginBottom:isMobile?40:60}}>
+            <p style={{fontSize:13,fontWeight:600,color:a,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:16}}>Why Macra?</p>
+            <h2 style={{fontSize:"clamp(28px, 5vw, 44px)",fontWeight:800,letterSpacing:"-0.02em",margin:"0 0 12px"}}>Built around <span style={{color:a}}>how you actually eat.</span></h2>
+            <p style={{fontSize:16,color:tx2,margin:0,maxWidth:480,marginLeft:"auto",marginRight:"auto",lineHeight:1.6}}>Most nutrition apps treat everyone the same. Macra adapts to your budget, taste, and goals.</p>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:16}}>
+            {[
+              {icon:"💰",title:"Budget-Aware Meal Planning",desc:"Set a weekly food budget and Macra builds plans that stay within it. Eat well without overspending."},
+              {icon:"🌶️",title:"Pickiness Scale",desc:"Rate your cuisine adventurousness from 1 to 5. Picky eaters get familiar comfort foods. Foodies get bold global flavors."},
+              {icon:"🛒",title:"Smart Grocery Lists",desc:"Every meal plan auto-generates a categorized grocery list with exact quantities. Share with one tap before hitting the store."},
+              {icon:"🎯",title:"Macro Accuracy",desc:"AI plans are validated against your daily targets before delivery. Protein, carbs, and fat land within 3% of your goals — every time."},
+              {icon:"🌍",title:"20+ Global Cuisines",desc:"Mediterranean, Japanese, Mexican, Indian, Middle Eastern, and more. Real recipes from real cuisines — not just chicken and rice."},
+              {icon:"🏆",title:"Achievements & Streaks",desc:"Stay motivated with streak tracking, daily check-ins, and milestones. Building habits is easier when progress is visible."},
+            ].map((f,i)=>(
+              <div key={i} style={{padding:"22px 20px",borderRadius:16,border:"1px solid "+bd,background:bg}}>
+                <div style={{fontSize:28,marginBottom:12}}>{f.icon}</div>
+                <h3 style={{fontSize:16,fontWeight:700,margin:"0 0 8px",letterSpacing:"-0.01em"}}>{f.title}</h3>
+                <p style={{fontSize:13,color:tx2,margin:0,lineHeight:1.6}}>{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+      <section style={{padding:"80px 20px",maxWidth:1100,margin:"0 auto"}}>
         <div style={{textAlign:"center",marginBottom:48}}>
           <p style={{fontSize:13,fontWeight:600,color:a,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:16}}>Pricing</p>
           <h2 style={{fontSize:"clamp(28px, 5vw, 40px)",fontWeight:800,letterSpacing:"-0.02em",margin:"0 0 8px"}}>Start free. Go Pro when ready.</h2>
           <p style={{fontSize:15,color:txM,margin:0}}>7-day free Pro trial on every new account. No credit card required.</p>
         </div>
-        <div style={{display:"flex",gap:14,justifyContent:"center",flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:14,justifyContent:"center",flexWrap:"wrap",alignItems:"stretch"}}>
           {[
-            {tier:"Free",price:"$0",per:"/mo",desc:"Everything to get started",features:["Personalized macro targets","1 AI meal plan per week","Food database search","Manual meal logging","Custom meal builder"],cta:"Get Started Free",ctaStyle:{border:"1px solid "+bd,color:"#FAFAF9",background:"transparent"},highlight:false},
-            {tier:"Pro Monthly",price:"$4.99",per:"/mo",desc:"For serious trackers",features:["Everything in Free","5 AI plans/week · 20/month","Smart grocery lists","Household mode","Meal prep & batch cooking","Weekly macro trends","Cancel anytime"],cta:"Start 7-Day Free Trial",ctaStyle:{border:"none",background:a,color:bg,boxShadow:"0 4px 16px rgba(200,184,138,0.15)"},highlight:true,badge:"POPULAR"},
-            {tier:"Pro Annual",price:"$34.99",per:"/yr",desc:"Best value — $2.92/mo",features:["Everything in Pro Monthly","5 AI plans/week · 20/month","All future Pro features included","Supports indie development"],cta:"Start 7-Day Free Trial",ctaStyle:{border:"1px solid "+a,color:a,background:"transparent"},highlight:false,save:"SAVE 42%"},
+            {tier:"Free",price:"$0",per:"forever",desc:"Everything to get started",features:["Personalized macro targets","3 intro AI meal plans","1 AI plan per week after","Food database search","Manual meal logging"],cta:"Get Started Free",ctaStyle:{border:"1px solid "+bd,color:"#FAFAF9",background:"transparent"},highlight:false},
+            {tier:"Pro Monthly",price:"$6.99",per:"/month",desc:"7-day free trial · cancel anytime",features:["Everything in Free","2 AI plans per day · 30/month","Smart grocery lists","Custom macro split sliders","Budget-aware meal generation","20+ global cuisine styles","All achievements & streaks"],cta:"Start Free Trial",ctaStyle:{border:"none",background:a,color:bg,boxShadow:"0 4px 16px rgba(200,184,138,0.15)"},highlight:false},
+            {tier:"Pro Annual",price:"$59.99",per:"/year",desc:"$5/month · Save 29%",features:["Everything in Pro Monthly","2 AI plans per day · 30/month","All future Pro features","Priority support"],cta:"Subscribe",ctaStyle:{border:"none",background:a,color:bg,boxShadow:"0 4px 16px rgba(200,184,138,0.15)"},highlight:true,badge:"BEST VALUE",save:"SAVE 29%"},
+            {tier:"Lifetime",price:"$99",per:"one-time",desc:"First 200 users only — then gone",features:["Everything in Pro, forever","2 AI plans per day · 30/month","All future Pro features","No subscription ever","Founding member status"],cta:"Get Lifetime Access",ctaStyle:{border:"1.5px solid #E05252",color:"#E05252",background:"transparent"},highlight:false,badge:"LIMITED",badgeColor:"#E05252"},
           ].map((p,i)=>
-            <div key={i} style={{flex:"1 1 250px",maxWidth:320,padding:28,borderRadius:20,border:p.highlight?"1.5px solid "+a+"40":"1px solid "+bd,background:sf,position:"relative",overflow:"hidden"}}>
+            <div key={i} style={{flex:"1 1 220px",maxWidth:260,padding:24,borderRadius:20,border:p.highlight?"1.5px solid "+a:"1px solid "+bd,background:p.highlight?"rgba(200,184,138,0.06)":sf,position:"relative",overflow:"hidden",display:"flex",flexDirection:"column"}}>
               {p.highlight&&<div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"linear-gradient(90deg, transparent, "+a+", transparent)"}}/>}
-              {p.save&&<div style={{position:"absolute",top:16,right:16}}><span style={{fontSize:10,fontWeight:700,color:ok,background:"rgba(107,203,119,0.1)",padding:"4px 10px",borderRadius:6,border:"1px solid rgba(107,203,119,0.2)"}}>{p.save}</span></div>}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                <p style={{fontSize:12,fontWeight:600,color:p.highlight?a:txM,letterSpacing:"0.1em",textTransform:"uppercase",margin:0}}>{p.tier}</p>
-                {p.badge&&<span style={{fontSize:9,fontWeight:700,color:bg,background:a,padding:"3px 8px",borderRadius:4}}>{p.badge}</span>}
+              {p.save&&<div style={{position:"absolute",top:14,right:12}}><span style={{fontSize:10,fontWeight:700,color:ok,background:"rgba(107,203,119,0.1)",padding:"3px 8px",borderRadius:6,border:"1px solid rgba(107,203,119,0.2)"}}>{p.save}</span></div>}
+              {p.badge&&!p.save&&<div style={{position:"absolute",top:14,right:12}}><span style={{fontSize:9,fontWeight:700,color:p.badgeColor?p.badgeColor:bg,background:p.badgeColor?"rgba(224,82,82,0.1)":a,padding:"3px 8px",borderRadius:6,border:p.badgeColor?"1px solid rgba(224,82,82,0.25)":"none"}}>{p.badge}</span></div>}
+              <div style={{marginBottom:8}}>
+                <p style={{fontSize:12,fontWeight:600,color:p.highlight?a:txM,letterSpacing:"0.1em",textTransform:"uppercase",margin:"0 0 8px"}}>{p.tier}</p>
               </div>
-              <p style={{fontSize:34,fontWeight:800,margin:"0 0 4px"}}>{p.price}<span style={{fontSize:15,fontWeight:400,color:txM}}> {p.per}</span></p>
-              <p style={{fontSize:13,color:txM,margin:"0 0 24px"}}>{p.desc}</p>
-              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <p style={{fontSize:32,fontWeight:800,margin:"0 0 2px"}}>{p.price}<span style={{fontSize:13,fontWeight:400,color:txM}}> {p.per}</span></p>
+              <p style={{fontSize:12,color:txM,margin:"0 0 20px",lineHeight:1.4}}>{p.desc}</p>
+              <div style={{display:"flex",flexDirection:"column",gap:9,flex:1}}>
                 {p.features.map((f,j)=>
-                  <div key={j} style={{display:"flex",alignItems:"center",gap:10}}><Check/><span style={{fontSize:13,color:p.highlight?"#FAFAF9":tx2}}>{f}</span></div>
+                  <div key={j} style={{display:"flex",alignItems:"flex-start",gap:9}}>
+                    <Check/>
+                    <span style={{fontSize:12,color:p.highlight?"#FAFAF9":tx2,lineHeight:1.45}}>{f}</span>
+                  </div>
                 )}
               </div>
-              <a href="/app" style={{display:"block",textAlign:"center",marginTop:24,padding:"13px",borderRadius:12,fontSize:14,fontWeight:p.highlight?700:600,textDecoration:"none",...p.ctaStyle}}>{p.cta}</a>
+              <a href="/app" style={{display:"block",textAlign:"center",marginTop:20,padding:"12px",borderRadius:12,fontSize:13,fontWeight:700,textDecoration:"none",...p.ctaStyle}}>{p.cta}</a>
             </div>
           )}
         </div>
       </section>
+      {/* ── FAQ ─────────────────────────────────────────────────── */}
+      <section style={{padding:isMobile?"60px 20px":"100px 24px",maxWidth:720,margin:"0 auto"}}>
+        <div style={{textAlign:"center",marginBottom:isMobile?40:56}}>
+          <p style={{fontSize:13,fontWeight:600,color:a,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:16}}>FAQ</p>
+          <h2 style={{fontSize:"clamp(26px, 5vw, 38px)",fontWeight:800,letterSpacing:"-0.02em",margin:0}}>Common questions</h2>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:2}}>
+          {[
+            {q:"What can I do on the free plan?",a:"Free gives you 3 intro AI meal plans to get started, then 1 per week after that. You can search foods, log meals manually, and track your daily macros — forever, no card required."},
+            {q:"What does Pro include?",a:"Pro unlocks 2 AI meal plans per day (up to 30/month), smart grocery lists auto-organized by category, custom macro percentage sliders, budget-aware meal generation, and access to 20+ global cuisine styles."},
+            {q:"Can I cancel my subscription?",a:"Yes, anytime. Pro Monthly cancels immediately and you keep access until the end of your billing period. Pro Annual cancels at renewal. No hidden fees, no runaround."},
+            {q:"What is Lifetime access?",a:"Pay once, use Macra Pro forever. No recurring charges. Lifetime is limited to the first 200 members — after that, it's gone. Early supporters get all future Pro features included at no extra cost."},
+            {q:"Is my data private?",a:"Yes. Your nutrition data stays in your account and is never sold or shared. We use Supabase for secure storage with row-level security — only you can access your data."},
+            {q:"Does Macra work offline or as an app?",a:"Macra is a Progressive Web App (PWA). You can install it to your home screen on iOS and Android for a native app experience. Core logging works even with spotty internet — AI generation requires a connection."},
+          ].map((item,i)=>(
+            <FaqItem key={i} q={item.q} ans={item.a} bd={bd} tx2={tx2} gold={a}/>
+          ))}
+        </div>
+      </section>
+
       <section style={{padding:"100px 24px 60px",textAlign:"center",position:"relative"}}>
         <div style={{position:"absolute",bottom:"20%",left:"50%",transform:"translateX(-50%)",width:500,height:500,borderRadius:"50%",background:"radial-gradient(circle, rgba(200,184,138,0.04) 0%, transparent 70%)",pointerEvents:"none"}}/>
         <h2 style={{fontSize:"clamp(32px, 6vw, 52px)",fontWeight:800,letterSpacing:"-0.03em",margin:"0 0 16px"}}>Your macros won't<br/><span style={{fontFamily:"'Playfair Display', serif",fontStyle:"italic",fontWeight:400,color:a}}>track themselves.</span></h2>
