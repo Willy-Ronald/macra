@@ -12,6 +12,7 @@ import {
   getTodayWater, upsertWaterLog, getWaterHistory, updateWaterGoal,
   getLoggedDatesInRange,
   getMealLogRange, getMealLogSummary, getAchievements, unlockAchievement,
+  startFast, endFast, getFastingLog,
 } from "./lib/supabase";
 import { generateMealPlan } from "./lib/claude";
 
@@ -1095,8 +1096,181 @@ const WaterSettingsView = ({userId, defaultGoal=8, onBack, onGoalChange}) => {
   </div>;
 };
 
+// ─── FASTING DETAIL VIEW ────────────────────────────────────────
+const FAST_GOALS = [12, 14, 16, 18, 24];
+const fmtFastTime = secs => `${Math.floor(secs/3600)}h ${Math.floor((secs%3600)/60)}m`;
+
+const FastingDetailView = ({isFasting, fastStartedAt, fastingGoal, onStart, onEnd, userId, onBack}) => {
+  const [elapsed, setElapsed] = useState(0);
+  const [goal, setGoal] = useState(fastingGoal || 16);
+  const [fastHistory, setFastHistory] = useState([]);
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [ending, setEnding] = useState(false);
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    if (isFasting && fastStartedAt) {
+      const tick = () => setElapsed(Math.floor((Date.now() - new Date(fastStartedAt).getTime()) / 1000));
+      tick();
+      timerRef.current = setInterval(tick, 1000);
+    }
+    return () => clearInterval(timerRef.current);
+  }, [isFasting, fastStartedAt]);
+
+  useEffect(() => {
+    if (userId) getFastingLog(userId).then(setFastHistory);
+  }, [userId]);
+
+  const goalSecs = goal * 3600;
+  const pct = isFasting ? Math.min((elapsed / goalSecs) * 100, 100) : 0;
+  const goalReached = isFasting && elapsed >= goalSecs;
+  const ringR = 90, ringW = 8, ringSize = (ringR + ringW) * 2;
+  const circumference = 2 * Math.PI * ringR;
+
+  const handleStart = async () => {
+    const now = new Date().toISOString();
+    await onStart(goal, now);
+  };
+
+  const handleEnd = async () => {
+    if (!confirmEnd) { setConfirmEnd(true); return; }
+    setEnding(true);
+    const now = new Date().toISOString();
+    await onEnd(fastStartedAt, now, goal, elapsed >= goalSecs);
+    setEnding(false);
+    setConfirmEnd(false);
+    getFastingLog(userId).then(setFastHistory);
+  };
+
+  const lastFast = fastHistory[0];
+  const lastFastDur = lastFast?.ended_at ? Math.floor((new Date(lastFast.ended_at) - new Date(lastFast.started_at)) / 3600000) : null;
+  const lastFastMin = lastFast?.ended_at ? Math.floor(((new Date(lastFast.ended_at) - new Date(lastFast.started_at)) % 3600000) / 60000) : null;
+
+  return <div style={{position:"fixed",inset:0,background:T.bg,zIndex:200,overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
+    <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
+    <div style={{maxWidth:430,margin:"0 auto",padding:"52px 20px 120px"}}>
+
+      {/* Back */}
+      <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:6,padding:0,color:T.acc,fontSize:14,fontWeight:600,fontFamily:T.font,marginBottom:28}}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        Back
+      </button>
+
+      <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"0 0 4px",letterSpacing:"-0.02em"}}>
+        {isFasting ? 'Fasting' : 'Start a Fast'}
+      </h1>
+      <p style={{fontSize:13,color:T.tx2,margin:"0 0 32px"}}>
+        {isFasting
+          ? `Started ${new Date(fastStartedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`
+          : 'Track your intermittent fasting window'}
+      </p>
+
+      {/* ── Timer ring (active) ── */}
+      {isFasting && <div style={{display:'flex',flexDirection:'column',alignItems:'center',marginBottom:32}}>
+        <div style={{position:'relative',width:ringSize,height:ringSize}}>
+          <svg width={ringSize} height={ringSize} viewBox={`0 0 ${ringSize} ${ringSize}`}>
+            <circle cx={ringSize/2} cy={ringSize/2} r={ringR} fill="none" stroke={T.bd} strokeWidth={ringW}/>
+            <circle cx={ringSize/2} cy={ringSize/2} r={ringR} fill="none"
+              stroke={goalReached ? T.acc : T.pro} strokeWidth={ringW} strokeLinecap="round"
+              strokeDasharray={circumference} strokeDashoffset={circumference - (pct/100)*circumference}
+              transform={`rotate(-90 ${ringSize/2} ${ringSize/2})`}
+              style={{transition:'stroke-dashoffset 1s ease'}}/>
+          </svg>
+          <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
+            <span style={{fontSize:36,fontWeight:700,color:goalReached?T.acc:T.tx,fontFamily:T.mono,lineHeight:1}}>{fmtFastTime(elapsed)}</span>
+            <span style={{fontSize:11,color:T.txM,marginTop:4,letterSpacing:'0.08em',textTransform:'uppercase'}}>of {goal}h goal</span>
+            {goalReached && <span style={{fontSize:14,marginTop:8}}>🎉 Goal reached!</span>}
+          </div>
+        </div>
+        {/* Progress bar */}
+        <div style={{width:'100%',maxWidth:280,marginTop:20}}>
+          <div style={{height:4,borderRadius:2,background:T.bd,overflow:'hidden'}}>
+            <div style={{height:'100%',borderRadius:2,background:goalReached?T.acc:T.pro,width:`${pct}%`,transition:'width 1s linear'}}/>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',marginTop:6}}>
+            <span style={{fontSize:10,color:T.txM}}>0h</span>
+            <span style={{fontSize:10,color:T.txM}}>{Math.round(pct)}%</span>
+            <span style={{fontSize:10,color:T.txM}}>{goal}h</span>
+          </div>
+        </div>
+      </div>}
+
+      {/* ── Goal selector (inactive only) ── */}
+      {!isFasting && <>
+        <Lbl>Fasting Goal</Lbl>
+        <div style={{display:'flex',gap:8,marginTop:8,marginBottom:28}}>
+          {FAST_GOALS.map(h=>(
+            <button key={h} onClick={()=>setGoal(h)} style={{
+              flex:1,padding:'10px 4px',borderRadius:T.r,
+              border:`1px solid ${goal===h?T.acc:T.bd}`,
+              background:goal===h?T.accM:'transparent',
+              color:goal===h?T.acc:T.tx2,
+              fontSize:12,fontWeight:goal===h?700:500,
+              cursor:'pointer',fontFamily:T.font,
+            }}>{h}h</button>
+          ))}
+        </div>
+      </>}
+
+      {/* ── Last fast summary (inactive) ── */}
+      {!isFasting && lastFast && <Card style={{padding:'14px 16px',marginBottom:24}}>
+        <Lbl>Last Fast</Lbl>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:8}}>
+          <span style={{fontSize:13,color:T.tx2}}>{new Date(lastFast.started_at).toLocaleDateString([],{month:'short',day:'numeric'})}</span>
+          <span style={{fontSize:14,fontWeight:600,color:lastFast.completed?T.acc:T.tx2,fontFamily:T.mono}}>
+            {lastFastDur!==null?`${lastFastDur}h ${lastFastMin}m`:'—'} {lastFast.completed?'✓':''}
+          </span>
+        </div>
+      </Card>}
+
+      {/* ── Start / End button ── */}
+      {!isFasting
+        ? <button onClick={handleStart} style={{width:'100%',padding:16,borderRadius:T.r,border:'none',background:T.acc,color:T.bg,fontSize:15,fontWeight:700,cursor:'pointer',fontFamily:T.font,marginBottom:32}}>
+            🌙 Start {goal}h Fast
+          </button>
+        : <div style={{marginBottom:32}}>
+            {!confirmEnd
+              ? <button onClick={handleEnd} style={{width:'100%',padding:14,borderRadius:T.r,border:`1px solid ${T.bd}`,background:'transparent',color:T.tx2,fontSize:14,fontWeight:600,cursor:'pointer',fontFamily:T.font}}>
+                  End Fast
+                </button>
+              : <div style={{display:'flex',gap:8}}>
+                  <button onClick={()=>setConfirmEnd(false)} style={{flex:1,padding:14,borderRadius:T.r,border:`1px solid ${T.bd}`,background:'transparent',color:T.tx2,fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:T.font}}>Cancel</button>
+                  <button onClick={handleEnd} disabled={ending} style={{flex:1,padding:14,borderRadius:T.r,border:'none',background:'#EF4444',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:T.font,opacity:ending?0.6:1}}>
+                    {ending?'Ending…':'Confirm End'}
+                  </button>
+                </div>
+            }
+          </div>
+      }
+
+      {/* ── History list ── */}
+      {fastHistory.length > 0 && <>
+        <Lbl>History</Lbl>
+        <Card style={{marginTop:10,overflow:'hidden'}}>
+          {fastHistory.slice(0,7).map((f,i,arr)=>{
+            const durH = f.ended_at ? Math.floor((new Date(f.ended_at)-new Date(f.started_at))/3600000) : null;
+            const durM = f.ended_at ? Math.floor(((new Date(f.ended_at)-new Date(f.started_at))%3600000)/60000) : null;
+            return <div key={f.id||i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 16px',borderBottom:i<arr.length-1?`1px solid ${T.bd}`:'none'}}>
+              <div>
+                <p style={{fontSize:13,color:T.tx,fontWeight:500,margin:'0 0 2px'}}>{new Date(f.started_at).toLocaleDateString([],{month:'short',day:'numeric'})}</p>
+                <p style={{fontSize:11,color:T.txM,margin:0}}>Goal: {f.goal_hours}h</p>
+              </div>
+              <div style={{textAlign:'right'}}>
+                <p style={{fontSize:14,fontWeight:600,color:f.completed?T.acc:T.tx2,margin:'0 0 2px',fontFamily:T.mono}}>
+                  {durH!==null?`${durH}h ${durM}m`:'In progress'}
+                </p>
+                <p style={{fontSize:10,color:f.completed?T.acc:T.txM,margin:0}}>{f.completed?'✓ Completed':'Partial'}</p>
+              </div>
+            </div>;
+          })}
+        </Card>
+      </>}
+    </div>
+  </div>;
+};
+
 // ─── DASHBOARD ─────────────────────────────────────────────────
-const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[],weekPlans={},userId,savedMeals=[],onHeartMeal}) => {
+const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[],weekPlans={},userId,savedMeals=[],onHeartMeal,isFasting=false,fastStartedAt=null,fastingGoal=16,onStartFast,onEndFast}) => {
   const [viewDate,setViewDate]=useState(()=>new Date());
   const [historyLog,setHistoryLog]=useState(null); // null = showing today
   const [loggingId,setLoggingId]=useState(null);
@@ -1104,7 +1278,19 @@ const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMe
   const [showCalendar,setShowCalendar]=useState(false);
   const [pendingPlanMeal,setPendingPlanMeal]=useState(null);
   const [pendingMealType,setPendingMealType]=useState('breakfast');
+  const [showFasting,setShowFasting]=useState(false);
+  const [fastElapsedSecs,setFastElapsedSecs]=useState(0);
   const m = profile?.macros || {target:2200,proteinG:180,carbG:240,fatG:70};
+
+  // Live fasting timer for Dashboard header display (updates every minute)
+  useEffect(()=>{
+    if(!isFasting||!fastStartedAt) return;
+    const tick=()=>setFastElapsedSecs(Math.floor((Date.now()-new Date(fastStartedAt).getTime())/1000));
+    tick();
+    const id=setInterval(tick,60000);
+    return ()=>clearInterval(id);
+  },[isFasting,fastStartedAt]);
+  const fastHeaderStr=`${Math.floor(fastElapsedSecs/3600)}h ${Math.floor((fastElapsedSecs%3600)/60)}m`;
 
   const todayStr = new Date().toISOString().split("T")[0];
   const viewStr = viewDate.toISOString().split("T")[0];
@@ -1183,12 +1369,14 @@ const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMe
   if(progressView==='weight') return <WeightHistoryView userId={userId} onBack={()=>setProgressView(null)}/>;
   if(progressView==='water') return <WaterSettingsView userId={userId} defaultGoal={profile?.waterGoal||8} onBack={()=>setProgressView(null)}/>;
   if(showCalendar) return <CalendarOverlay viewDate={viewDate} onSelectDate={d=>{setViewDate(d);setShowCalendar(false);}} onClose={()=>setShowCalendar(false)} userId={userId}/>;
+  if(showFasting) return <FastingDetailView isFasting={isFasting} fastStartedAt={fastStartedAt} fastingGoal={fastingGoal} onStart={onStartFast} onEnd={onEndFast} userId={userId} onBack={()=>setShowFasting(false)}/>;
 
   return <div style={{padding:"0 20px 24px"}}>
     {/* ── Week strip ── */}
     <WeekStrip viewDate={viewDate} onSelectDate={setViewDate} onOpenCalendar={()=>setShowCalendar(true)}/>
 
-    {/* ── Header: name + avatar ── */}
+    {/* ── Header: name + fasting toggle + avatar ── */}
+    <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.35}}`}</style>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:isEmpty?4:20}}>
       <div>
         <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"2px 0 0",letterSpacing:"-0.02em"}}>
@@ -1196,8 +1384,20 @@ const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMe
         </h1>
         {isEmpty&&<p style={{fontSize:14,color:T.tx2,margin:"4px 0 0",fontWeight:400}}>Let's get started.</p>}
       </div>
-      <div style={{width:38,height:38,borderRadius:"50%",background:T.acc,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-        <span style={{fontSize:14,fontWeight:700,color:T.bg}}>{(profile?.name||"U")[0]}</span>
+      <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+        {isFasting
+          ? <button onClick={()=>setShowFasting(true)} style={{display:'flex',alignItems:'center',gap:6,padding:'6px 12px',borderRadius:20,border:`1px solid ${T.acc}50`,background:T.accG,cursor:'pointer',fontFamily:T.font}}>
+              <div style={{width:7,height:7,borderRadius:'50%',background:T.acc,animation:'pulse 2s infinite'}}/>
+              <span style={{fontSize:11,fontWeight:600,color:T.acc,whiteSpace:'nowrap'}}>Fasting · {fastHeaderStr}</span>
+            </button>
+          : <button onClick={()=>setShowFasting(true)} style={{display:'flex',alignItems:'center',gap:5,padding:'6px 12px',borderRadius:20,border:`1px solid ${T.bd}`,background:'transparent',cursor:'pointer',fontFamily:T.font}}>
+              <span style={{fontSize:13}}>🌙</span>
+              <span style={{fontSize:11,fontWeight:500,color:T.tx2}}>Fast</span>
+            </button>
+        }
+        <div style={{width:38,height:38,borderRadius:"50%",background:T.acc,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <span style={{fontSize:14,fontWeight:700,color:T.bg}}>{(profile?.name||"U")[0]}</span>
+        </div>
       </div>
     </div>
 
@@ -3404,6 +3604,12 @@ const ACHIEVEMENTS_DEF = [
   {key:'water_week',    name:'Water Week',    desc:'Hit water goal 7 days in a row',        icon:'🌊', cat:'Health',   total:7,   prog:d=>Math.min(d.waterStreak,7),   chk:d=>d.waterStreak>=7},
   {key:'weight_watcher',name:'Weight Watcher',desc:'Log your weight 7 times',               icon:'📊', cat:'Health',   total:7,   prog:d=>Math.min(d.weightEntries,7), chk:d=>d.weightEntries>=7},
   {key:'transformation',name:'Transformation',desc:'Log weight 30 times',                   icon:'🌟', cat:'Health',   total:30,  prog:d=>Math.min(d.weightEntries,30),chk:d=>d.weightEntries>=30},
+  // Fasting
+  {key:'first_fast',     name:'First Fast',     desc:'Complete your first fast',             icon:'🌙', cat:'Fasting',  total:1,   prog:d=>Math.min(d.totalFasts,1),         chk:d=>d.totalFasts>=1},
+  {key:'half_day',       name:'Half Day',       desc:'Complete a 12-hour fast',              icon:'⏰', cat:'Fasting',  total:1,   prog:d=>d.has12hFast?1:0,                chk:d=>d.has12hFast},
+  {key:'extended_fast',  name:'Extended Fast',  desc:'Complete an 18-hour fast',             icon:'🌟', cat:'Fasting',  total:1,   prog:d=>d.has18hFast?1:0,                chk:d=>d.has18hFast},
+  {key:'fasting_streak', name:'Fasting Streak', desc:'Fast 7 days in a row',                 icon:'⚡', cat:'Fasting',  total:7,   prog:d=>Math.min(d.bestFastingStreak,7),  chk:d=>d.bestFastingStreak>=7},
+  {key:'fasting_master', name:'Fasting Master', desc:'Complete 30 total fasts',              icon:'🏅', cat:'Fasting',  total:30,  prog:d=>Math.min(d.totalFasts,30),        chk:d=>d.totalFasts>=30},
   // Milestone
   {key:'early_adopter', name:'Early Adopter', desc:'One of the first Macra users',          icon:'⭐', cat:'Milestone',total:1,   prog:d=>1,                           chk:d=>true},
   {key:'pro_member',    name:'Pro Member',    desc:'Upgraded to Macra Pro',                 icon:'👑', cat:'Milestone',total:1,   prog:d=>d.isPro?1:0,                 chk:d=>d.isPro},
@@ -3425,13 +3631,14 @@ const StatsTab = ({profile, userId, isPro}) => {
     const start90 = d90.toISOString().split('T')[0];
     const start30 = d30.toISOString().split('T')[0];
 
-    const [logData, summary, waterHist, weightLog, dbAch, genUsage] = await Promise.all([
+    const [logData, summary, waterHist, weightLog, dbAch, genUsage, fastingLog] = await Promise.all([
       getMealLogRange(userId, start90, todayStr),
       getMealLogSummary(userId),
       getWaterHistory(userId),
       getWeightLog(userId),
       getAchievements(userId),
       getGenerationUsage(userId),
+      getFastingLog(userId),
     ]);
 
     // Group 90-day log by date
@@ -3505,6 +3712,35 @@ const StatsTab = ({profile, userId, isPro}) => {
     const weightEntries = weightLog.length;
     const weightProgress = weightLog.length>=2 ? weightLog[weightLog.length-1].weight_lbs - weightLog[0].weight_lbs : null;
 
+    // Fasting stats
+    const completedFasts = fastingLog.filter(f => f.completed);
+    const totalFasts = completedFasts.length;
+    const fastDurations = completedFasts.map(f => f.ended_at ? (new Date(f.ended_at) - new Date(f.started_at)) / 3600000 : 0);
+    const avgFastHours = fastDurations.length > 0 ? fastDurations.reduce((s,v)=>s+v,0)/fastDurations.length : 0;
+    const longestFastHours = fastDurations.length > 0 ? Math.max(...fastDurations) : 0;
+    const has12hFast = fastDurations.some(h=>h>=12);
+    const has18hFast = fastDurations.some(h=>h>=18);
+    // Fasting streak: consecutive calendar days (by started_at date) with a completed fast
+    const fastByDate = {};
+    completedFasts.forEach(f=>{ const dd=f.started_at.split('T')[0]; fastByDate[dd]=true; });
+    let fastingStreak=0;
+    for(let i=dates.length-1;i>=0;i--){
+      if(fastByDate[dates[i]]){fastingStreak++;}
+      else if(dates[i]===todayStr){continue;}
+      else{break;}
+    }
+    let bestFastingStreak=0,curFS=0;
+    dates.forEach(ds=>{ if(fastByDate[ds]){curFS++;bestFastingStreak=Math.max(bestFastingStreak,curFS);}else{curFS=0;} });
+    // 7-day fasting bar chart
+    const fastBarData=[];
+    for(let i=6;i>=0;i--){
+      const d2=new Date(now); d2.setDate(d2.getDate()-i);
+      const ds=d2.toISOString().split('T')[0];
+      const dayFasts=completedFasts.filter(f=>f.started_at.split('T')[0]===ds);
+      const maxH=dayFasts.length>0?Math.max(...dayFasts.map(f=>f.ended_at?(new Date(f.ended_at)-new Date(f.started_at))/3600000:0)):0;
+      fastBarData.push({date:ds,hours:maxH});
+    }
+
     const computed = {
       totalMeals:summary.totalMeals, totalDays:summary.totalDays, avgCal,
       loggingStreak, macroStreak, planStreak, precisionStreak:precStreak,
@@ -3512,6 +3748,8 @@ const StatsTab = ({profile, userId, isPro}) => {
       hasPrecision:bestPrecision>=1,
       lifetimeGens:genUsage?.lifetimeCount||0,
       waterGoalHit, waterStreak, weightEntries, weightProgress, isPro,
+      totalFasts, avgFastHours, longestFastHours, has12hFast, has18hFast,
+      fastingStreak, bestFastingStreak, fastBarData,
     };
 
     // Unlock new achievements
@@ -3555,13 +3793,14 @@ const StatsTab = ({profile, userId, isPro}) => {
 
     {/* ── Streaks ── */}
     <Lbl>Streaks</Lbl>
-    <div style={{display:'grid',gridTemplateColumns:profile?.trackingMode==='manual'?'1fr 1fr':'1fr 1fr 1fr',gap:8,marginTop:10,marginBottom:28}}>
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:10,marginBottom:28}}>
       {[
-        {label:'Logging',val:statsData.loggingStreak,best:statsData.bestLogging},
-        {label:'Macros', val:statsData.macroStreak,  best:statsData.bestMacros},
-        ...(profile?.trackingMode!=='manual'?[{label:'Plan',val:statsData.planStreak,best:statsData.bestPlan}]:[]),
+        {label:'Logging', val:statsData.loggingStreak, best:statsData.bestLogging,  icon:'🔥'},
+        {label:'Macros',  val:statsData.macroStreak,   best:statsData.bestMacros,   icon:'🎯'},
+        ...(profile?.trackingMode!=='manual'?[{label:'Plan', val:statsData.planStreak, best:statsData.bestPlan, icon:'📋'}]:[]),
+        {label:'Fasting', val:statsData.fastingStreak, best:statsData.bestFastingStreak, icon:'🌙'},
       ].map(s=><Card key={s.label} style={{padding:'16px 8px',textAlign:'center',border:s.val>0?`1px solid ${T.acc}40`:`1px solid ${T.bd}`}}>
-        <div style={{fontSize:22,marginBottom:6}}>🔥</div>
+        <div style={{fontSize:22,marginBottom:6}}>{s.icon}</div>
         <p style={{fontSize:28,fontWeight:700,color:s.val>0?T.acc:T.txM,margin:'0 0 3px',fontFamily:T.mono,lineHeight:1}}>{s.val}</p>
         <p style={{fontSize:10,fontWeight:600,color:T.txM,margin:'0 0 5px',letterSpacing:'0.05em',textTransform:'uppercase'}}>{s.label}</p>
         <p style={{fontSize:9,color:T.txM,margin:0}}>Best: {s.best}d</p>
@@ -3622,6 +3861,44 @@ const StatsTab = ({profile, userId, isPro}) => {
         </span>
       </div>}
     </Card>
+
+    {/* ── Fasting History ── */}
+    {statsData.totalFasts > 0 && (()=>{
+      const todayForChart = new Date().toISOString().split('T')[0];
+      const FDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      const maxH = Math.max(...statsData.fastBarData.map(b=>b.hours), 1);
+      const BAR_H = 60;
+      return <>
+        <div style={{marginTop:28,marginBottom:10}}><Lbl>Fasting</Lbl></div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:12}}>
+          {[
+            {label:'Total Fasts',  val:String(statsData.totalFasts)},
+            {label:'Avg Duration', val:statsData.avgFastHours>0?`${statsData.avgFastHours.toFixed(1)}h`:'—'},
+            {label:'Longest Fast', val:statsData.longestFastHours>0?`${statsData.longestFastHours.toFixed(1)}h`:'—'},
+          ].map(s=><Card key={s.label} style={{padding:'12px 8px',textAlign:'center'}}>
+            <p style={{fontSize:18,fontWeight:700,color:T.acc,margin:'0 0 3px',fontFamily:T.mono}}>{s.val}</p>
+            <p style={{fontSize:9,fontWeight:600,color:T.txM,margin:0,letterSpacing:'0.05em',textTransform:'uppercase'}}>{s.label}</p>
+          </Card>)}
+        </div>
+        <Card style={{padding:'16px',marginBottom:28}}>
+          <p style={{fontSize:10,fontWeight:600,color:T.txM,margin:'0 0 12px',letterSpacing:'0.08em',textTransform:'uppercase'}}>Last 7 Days</p>
+          <div style={{display:'flex',alignItems:'flex-end',gap:4,justifyContent:'space-between'}}>
+            {statsData.fastBarData.map((b)=>{
+              const barH = (b.hours/maxH)*BAR_H;
+              const dayIdx = new Date(b.date+'T12:00:00').getDay();
+              const isTodayBar = b.date===todayForChart;
+              return <div key={b.date} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
+                <div style={{width:'100%',height:BAR_H,display:'flex',alignItems:'flex-end',justifyContent:'center'}}>
+                  <div style={{width:'70%',height:Math.max(barH,2),borderRadius:'3px 3px 0 0',background:isTodayBar?T.acc:`${T.acc}60`,transition:'height 0.3s ease'}}/>
+                </div>
+                <span style={{fontSize:9,color:isTodayBar?T.acc:T.txM,fontWeight:isTodayBar?700:400}}>{FDAYS[dayIdx]}</span>
+                {b.hours>0&&<span style={{fontSize:8,color:T.txM,fontFamily:T.mono}}>{b.hours.toFixed(0)}h</span>}
+              </div>;
+            })}
+          </div>
+        </Card>
+      </>;
+    })()}
   </div>;
 };
 
@@ -3645,6 +3922,9 @@ export default function App() {
   const [todayPlan,setTodayPlan] = useState([]);
   const [weekPlans,setWeekPlans] = useState({});
   const [defaultLogMealType,setDefaultLogMealType] = useState(null);
+  const [isFasting,setIsFasting] = useState(false);
+  const [fastStartedAt,setFastStartedAt] = useState(null);
+  const [fastingGoal,setFastingGoal] = useState(16);
 
   // ── PWA install prompt ──────────────────────────────────────────
   const [pwaPrompt,setPwaPrompt] = useState(null); // null | 'native' | 'ios'
@@ -3790,6 +4070,12 @@ export default function App() {
           const dowIndex = todayDow === 0 ? 6 : todayDow - 1; // Mon=0..Sun=6
           const abKey = dowIndex % 2 === 0 ? 0 : 1;
           if(plans[abKey]) setTodayPlan(plans[abKey]);
+          // Restore fasting state
+          if(data.is_fasting && data.fast_started_at){
+            setIsFasting(true);
+            setFastStartedAt(data.fast_started_at);
+            setFastingGoal(data.fasting_goal || 16);
+          }
           setPhase("app");
           return;
         }
@@ -3833,6 +4119,9 @@ export default function App() {
       const dowIndex = todayDow === 0 ? 6 : todayDow - 1;
       const abKey = dowIndex % 2 === 0 ? 0 : 1;
       if(plans[abKey]) setTodayPlan(plans[abKey]);
+      if(data.is_fasting && data.fast_started_at){
+        setIsFasting(true); setFastStartedAt(data.fast_started_at); setFastingGoal(data.fasting_goal || 16);
+      }
       setPhase("app");
     } else {
       setPhase("onboarding");
@@ -3845,9 +4134,20 @@ export default function App() {
     setPhase("app");
   };
 
+  const handleStartFast = async (goalHours, startedAt) => {
+    setIsFasting(true); setFastStartedAt(startedAt); setFastingGoal(goalHours);
+    if(user) await startFast(user.id, goalHours, startedAt);
+  };
+
+  const handleEndFast = async (startedAt, endedAt, goalHours, completed) => {
+    setIsFasting(false); setFastStartedAt(null);
+    if(user) await endFast(user.id, startedAt, endedAt, goalHours, completed);
+  };
+
   const handleSignOut = async () => {
     await signOut();
     setUser(null);setProfile(null);setSavedMeals([]);setTodayLog([]);setTodayPlan([]);setWeekPlans({});
+    setIsFasting(false);setFastStartedAt(null);setFastingGoal(16);
     setTab("home");setPhase("auth");
   };
 
@@ -3921,7 +4221,7 @@ export default function App() {
   if(phase==="onboarding") return <Onboarding onComplete={handleComplete}/>;
 
   const screens = {
-    home:<Dashboard setTab={switchTab} onLogCategory={goToLogWithCategory} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal} onUnlogMeal={handleUnlogMeal} todayPlan={todayPlan} weekPlans={weekPlans} userId={user?.id} savedMeals={savedMeals} onHeartMeal={handleHeartToggle}/>,
+    home:<Dashboard setTab={switchTab} onLogCategory={goToLogWithCategory} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal} onUnlogMeal={handleUnlogMeal} todayPlan={todayPlan} weekPlans={weekPlans} userId={user?.id} savedMeals={savedMeals} onHeartMeal={handleHeartToggle} isFasting={isFasting} fastStartedAt={fastStartedAt} fastingGoal={fastingGoal} onStartFast={handleStartFast} onEndFast={handleEndFast}/>,
     plan:<Plan profile={profile} userId={user?.id} isPro={isPro} savedMeals={savedMeals} onHeartMeal={handleHeartToggle} onLogMeal={handleLogMeal} setTab={switchTab} onWeekPlanUpdate={(plans)=>{
       // plans = { 0: dayA[], 1: dayB[] }
       const wasEmpty = Object.keys(weekPlans).length === 0;

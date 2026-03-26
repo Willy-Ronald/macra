@@ -499,3 +499,45 @@ export async function unlockAchievement(userId, key) {
     console.error("[unlockAchievement]", { key, code: error.code, message: error.message });
   }
 }
+
+// ── FASTING LOG ─────────────────────────────────────────────────
+
+export async function startFast(userId, goalHours, startedAt) {
+  if (!supabase) return;
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      is_fasting: true,
+      fast_started_at: startedAt,
+      fasting_goal: goalHours,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", userId);
+  if (error) console.error("[startFast] failed", { code: error.code, message: error.message });
+  return { error };
+}
+
+export async function endFast(userId, startedAt, endedAt, goalHours, completed) {
+  if (!supabase) return;
+  const { error: insertErr } = await supabase
+    .from("fasting_log")
+    .insert({ user_id: userId, started_at: startedAt, ended_at: endedAt, goal_hours: goalHours, completed });
+  if (insertErr) console.error("[endFast] insert failed", { code: insertErr.code, message: insertErr.message });
+  const { error: updateErr } = await supabase
+    .from("profiles")
+    .update({ is_fasting: false, fast_started_at: null, fasting_goal: goalHours, updated_at: new Date().toISOString() })
+    .eq("id", userId);
+  if (updateErr) console.error("[endFast] profile update failed", { code: updateErr.code, message: updateErr.message });
+  return { error: insertErr || updateErr };
+}
+
+export async function getFastingLog(userId) {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("fasting_log")
+    .select("*")
+    .eq("user_id", userId)
+    .order("started_at", { ascending: false });
+  if (error) console.error("[getFastingLog] failed", { code: error.code, message: error.message });
+  return data || [];
+}
