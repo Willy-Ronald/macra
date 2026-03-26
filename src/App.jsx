@@ -2935,6 +2935,28 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade}) => {
   const allPlanItems = planCategories.flatMap(c=>c.items);
   const planCheckedCount = Object.values(planChecked).filter(Boolean).length;
 
+  async function handleSharePlanList() {
+    const lines = ["🛒 Macra Weekly Grocery List\n"];
+    planCategories.forEach(cat => {
+      lines.push(`— ${cat.name} —`);
+      cat.items.forEach(it => {
+        const q = Number.isInteger(it.qty) ? it.qty : Math.round(it.qty*10)/10;
+        lines.push(`• ${it.name} — ${q} ${it.unit}`);
+      });
+      lines.push("");
+    });
+    const text = lines.join("\n").trim();
+    if (navigator.share) {
+      try { await navigator.share({ title: "Macra Grocery List", text }); return; } catch {}
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      alert("Grocery list copied to clipboard!");
+    } catch {
+      alert("Could not share — please copy manually.");
+    }
+  }
+
   const TabBtn = ({k,label,badge}) => (
     <button onClick={()=>setActiveTab(k)} style={{flex:1,padding:"10px 8px",borderRadius:8,border:"none",background:activeTab===k?T.acc:"transparent",color:activeTab===k?T.bg:T.txM,fontSize:13,fontWeight:700,cursor:"pointer",transition:"all 0.2s",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
       {label}
@@ -3008,8 +3030,12 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade}) => {
               </div>
             </div>
           </Card>
-          <Card style={{padding:"8px 14px",marginBottom:16,background:T.accG,border:`1px solid ${T.accM}`}}>
+          <Card style={{padding:"8px 14px",marginBottom:16,background:T.accG,border:`1px solid ${T.accM}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
             <p style={{fontSize:11,color:T.tx2,margin:0}}>✦ Day A × 4 days + Day B × 3 days · quantities combined and deduplicated</p>
+            <button onClick={handleSharePlanList} style={{flexShrink:0,padding:"6px 12px",borderRadius:8,border:`1px solid ${T.acc}`,background:"transparent",color:T.acc,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:T.font,display:"flex",alignItems:"center",gap:5}}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+              Share
+            </button>
           </Card>
           {planCategories.map(cat=>{
             const catDone = cat.items.filter(it=>planChecked[it.id]).length;

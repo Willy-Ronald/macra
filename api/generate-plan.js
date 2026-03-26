@@ -186,7 +186,7 @@ async function callClaude(apiKey, model, userContent, { useCache = true } = {}) 
     },
     body: JSON.stringify({
       model,
-      max_tokens: 3500,  // realistic cap for 8-meal plan; was 8000 (wasteful)
+      max_tokens: 4000,  // increased from 3500 — gives room for complex constraint plans
       system: systemContent,
       messages: [
         { role: "user",      content: userContent },
@@ -381,10 +381,12 @@ export default async function handler(req, res) {
     }
 
     // ── Model selection ─────────────────────────────────────────
+    // NOTE: Haiku tiering temporarily disabled — Haiku does not reliably hit
+    // numerical macro targets (30-50g protein deficits observed in QA).
+    // Force Sonnet for all generations until Haiku accuracy is verified.
     const complexityScore = getComplexityScore(profile);
-    const useHaiku = complexityScore < 4;
-    const model = useHaiku ? MODEL_HAIKU : MODEL_SONNET;
-    console.log(`[model] complexity:${complexityScore} → ${useHaiku ? "Haiku (simple)" : "Sonnet (complex)"}`);
+    const model = MODEL_SONNET;
+    console.log(`[model] complexity:${complexityScore} → Sonnet (forced — Haiku macro accuracy under review)`);
 
     // ── Build dynamic user content (no JSON examples — those live in cached system) ──
     const macros = profile.macros || { target: 2200, proteinG: 180, carbG: 240, fatG: 70 };
@@ -425,29 +427,32 @@ export default async function handler(req, res) {
     const dislikedFoods = profile.dislikedFoods || [];
 
     const DIET_RULES = {
-      "Vegan":        "no meat, fish, dairy, eggs, or animal products",
-      "Vegetarian":   "no meat or fish — dairy and eggs allowed",
-      "Keto":         "total carbs under 30g net for the entire day",
-      "Gluten-Free":  "no wheat, barley, rye, or gluten ingredients",
-      "Dairy-Free":   "no milk, cheese, butter, cream, yogurt, or dairy",
-      "Carnivore":    "only animal proteins and fats — no grains, legumes, vegetables",
-      "Paleo":        "no grains, legumes, dairy, or processed foods",
-      "Halal":        "no pork or alcohol in any ingredient",
-      "Kosher":       "no pork or shellfish; never mix meat and dairy",
-      "High Protein": "min 35g protein per meal, prioritize lean protein",
-      "High Fiber":   "include high-fiber foods every meal (legumes, veg, whole grains)",
+      "Vegan":        "ZERO TOLERANCE — absolutely no meat (chicken, beef, pork, turkey, fish, seafood, shrimp, tuna, salmon), no dairy (milk, cheese, butter, cream, yogurt, whey), no eggs, no honey, no animal products of any kind. Every single ingredient must be plant-based.",
+      "Vegetarian":   "ZERO TOLERANCE — absolutely no meat (chicken, beef, pork, turkey, lamb, bison), no fish, no seafood (shrimp, tuna, salmon, cod, crab). Dairy and eggs are allowed.",
+      "Keto":         "ZERO TOLERANCE — total net carbs must be under 30g for the ENTIRE day. No bread, rice, pasta, potatoes, oats, tortillas, beans, legumes, fruit (except small berries), sugar, or grains of any kind.",
+      "Gluten-Free":  "ZERO TOLERANCE — no wheat, barley, rye, spelt, farro, or anything containing gluten. No regular bread, pasta, flour tortillas, soy sauce (unless certified GF), or beer.",
+      "Dairy-Free":   "ZERO TOLERANCE — absolutely no milk, cheese (cheddar, feta, mozzarella, parmesan, cottage cheese, ricotta), butter, cream, sour cream, yogurt, whey protein, or any dairy derivative.",
+      "Carnivore":    "STRICT — only animal proteins and fats: meat, fish, eggs, butter, lard. Absolutely no grains, legumes, vegetables, fruits, seeds, nuts, or plant foods.",
+      "Paleo":        "STRICT — no grains (rice, oats, bread, pasta), no legumes (beans, lentils, peanuts), no dairy, no refined sugar, no processed foods. Use meat, fish, eggs, vegetables, fruits, nuts, and healthy fats.",
+      "Halal":        "ZERO TOLERANCE — no pork or pork derivatives (bacon, ham, lard, pepperoni), no alcohol in any ingredient (no wine sauces, beer-battered, sake-marinated).",
+      "Kosher":       "STRICT — no pork (bacon, ham, pork chops), no shellfish (shrimp, lobster, crab, oysters, clams). Never mix meat and dairy in the same meal.",
+      "High Protein": "Every meal must have at least 35g protein. Lead with a primary protein source in every meal. Prioritize lean proteins (chicken breast, turkey, egg whites, Greek yogurt, tuna, cottage cheese).",
+      "High Fiber":   "Every meal must include high-fiber foods. Include legumes (beans, lentils, chickpeas), cruciferous vegetables, whole grains, or seeds in every meal.",
     };
 
     const dietConstraintLines = dietList.length > 0
-      ? dietList.filter(d => DIET_RULES[d]).map(d => `  - ${d}: ${DIET_RULES[d]}`).join("\n")
-      : "  - None";
+      ? dietList.filter(d => DIET_RULES[d]).map(d => `✗ ${d}: ${DIET_RULES[d]}`).join("\n")
+      : null;
+
+    console.log(`[dietary] constraints sent: diet=[${dietList.join(",")}] dislikedFoods=[${dislikedFoods.join(",")}]`);
 
     const hardConstraints = [
-      "DIETARY RULES:",
-      dietConstraintLines,
-      dislikedFoods.length    > 0 ? `FOODS NEVER TO USE: ${dislikedFoods.join(", ")}` : "",
-      dislikedCuisines.length > 0 ? `CUISINES TO NEVER USE: ${dislikedCuisines.join(", ")}` : "",
-    ].filter(Boolean).join("\n");
+      dietConstraintLines
+        ? `⚠ DIETARY RESTRICTIONS — NON-NEGOTIABLE. VIOLATION = UNUSABLE PLAN:\n${dietConstraintLines}`
+        : "",
+      dislikedFoods.length    > 0 ? `✗ FOODS NEVER TO USE (user allergy/preference): ${dislikedFoods.join(", ")}` : "",
+      dislikedCuisines.length > 0 ? `✗ CUISINES TO NEVER USE: ${dislikedCuisines.join(", ")}` : "",
+    ].filter(Boolean).join("\n\n");
 
     const weeklyBudget = profile.weeklyBudget ?? null;
     const budgetLine = weeklyBudget
@@ -467,26 +472,37 @@ STRICT: no fish/seafood, no beans/legumes, no leafy greens, no ethnic names, no 
     const complexityLine = complexityLines[pickinessLevel] || complexityLines[3];
 
     // Dynamic content only — static format/rules are in the cached system prompt
-    const buildDynamicContent = (retryPrefix = "") =>
-      `${retryPrefix}Generate an A/B day meal plan. Goal: ${goal}.
-${budgetLine ? `\n${budgetLine}` : ""}
+    const buildDynamicContent = (retryPrefix = "") => {
+      const parts = [];
 
-${complexityLine}
+      if (retryPrefix) parts.push(retryPrefix);
 
-MACROS — hit daily totals within 3%:
-Cal:${macros.target} P:${macros.proteinG}g C:${macros.carbG}g F:${macros.fatG}g
+      parts.push(`Generate an A/B day meal plan. Goal: ${goal}.`);
 
-MACRO DISTRIBUTION: Distribute naturally — breakfast lighter, dinner heavier. The DAILY TOTAL must hit targets, not each individual meal.
-Approximate per meal for ${macros.target} cal/day:
-- Breakfast: ~${Math.round(macros.target*0.20)}-${Math.round(macros.target*0.22)} cal
-- Lunch: ~${Math.round(macros.target*0.26)}-${Math.round(macros.target*0.28)} cal
-- Snack: ~${Math.round(macros.target*0.14)}-${Math.round(macros.target*0.16)} cal
-- Dinner: ~${Math.round(macros.target*0.34)}-${Math.round(macros.target*0.36)} cal
+      // Dietary constraints go FIRST — highest priority
+      if (hardConstraints) {
+        parts.push(hardConstraints);
+      }
 
-${hardConstraints}
+      // Macros — explicit and prominent
+      parts.push(
+        `MACROS — REQUIRED. Hit EVERY daily total within 3% or the plan fails:
+Daily targets: Cal:${macros.target} P:${macros.proteinG}g C:${macros.carbG}g F:${macros.fatG}g
+Protein target of ${macros.proteinG}g is critical — use sufficient protein sources at each meal.
 
-Cuisine per slot:
-${cuisineAssignmentLines}`;
+MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
+- Breakfast: ~${Math.round(macros.target*0.20)}-${Math.round(macros.target*0.22)} cal, ~${Math.round(macros.proteinG*0.20)}-${Math.round(macros.proteinG*0.22)}g protein
+- Lunch:     ~${Math.round(macros.target*0.27)}-${Math.round(macros.target*0.29)} cal, ~${Math.round(macros.proteinG*0.27)}-${Math.round(macros.proteinG*0.29)}g protein
+- Snack:     ~${Math.round(macros.target*0.13)}-${Math.round(macros.target*0.15)} cal, ~${Math.round(macros.proteinG*0.13)}-${Math.round(macros.proteinG*0.15)}g protein
+- Dinner:    ~${Math.round(macros.target*0.34)}-${Math.round(macros.target*0.36)} cal, ~${Math.round(macros.proteinG*0.34)}-${Math.round(macros.proteinG*0.36)}g protein`
+      );
+
+      if (budgetLine) parts.push(budgetLine);
+      parts.push(complexityLine);
+      parts.push(`Cuisine per slot:\n${cuisineAssignmentLines}`);
+
+      return parts.join("\n\n");
+    };
 
     // ── First Claude call ────────────────────────────────────────
     let totalUsage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
@@ -542,23 +558,49 @@ ${cuisineAssignmentLines}`;
     let abPlan = firstPlan;
 
     if (checkA.failed || checkB.failed) {
-      // ── Cheap Haiku portion-only fix instead of full Sonnet regen ──
-      // ~10% of the cost of a full retry.
-      const fix = await adjustPortions(apiKey, firstPlan, macros, checkA, checkB);
-      totalUsage = mergeUsage(totalUsage, (fix?.usage) || {});
+      // ── Full Sonnet retry with explicit correction prefix ──────
+      // Haiku portion-fix removed: Haiku was not reliable enough for macro accuracy.
+      // A second Sonnet call with a correction prefix is more reliable.
+      const missDetails = [];
+      if (checkA.failed) {
+        if (Math.abs(checkA.diffs.calOff) > 5) missDetails.push(`Day A cal: got ${checkA.totals.cal}, need ${macros.target}`);
+        if (Math.abs(checkA.diffs.pOff)   > 5) missDetails.push(`Day A protein: got ${checkA.totals.p}g, need ${macros.proteinG}g`);
+        if (Math.abs(checkA.diffs.cOff)   > 5) missDetails.push(`Day A carbs: got ${checkA.totals.c}g, need ${macros.carbG}g`);
+        if (Math.abs(checkA.diffs.fOff)   > 5) missDetails.push(`Day A fat: got ${checkA.totals.f}g, need ${macros.fatG}g`);
+      }
+      if (checkB.failed) {
+        if (Math.abs(checkB.diffs.calOff) > 5) missDetails.push(`Day B cal: got ${checkB.totals.cal}, need ${macros.target}`);
+        if (Math.abs(checkB.diffs.pOff)   > 5) missDetails.push(`Day B protein: got ${checkB.totals.p}g, need ${macros.proteinG}g`);
+        if (Math.abs(checkB.diffs.cOff)   > 5) missDetails.push(`Day B carbs: got ${checkB.totals.c}g, need ${macros.carbG}g`);
+        if (Math.abs(checkB.diffs.fOff)   > 5) missDetails.push(`Day B fat: got ${checkB.totals.f}g, need ${macros.fatG}g`);
+      }
 
-      if (fix) {
-        const fixA = validateMacros(fix.plan.A, macros, "Day A (fix)");
-        const fixB = validateMacros(fix.plan.B, macros, "Day B (fix)");
-        if (!fixA.failed && !fixB.failed) {
-          console.log("[macro-fix] Portion adjustment PASSED — using corrected plan");
-          abPlan = fix.plan;
+      const retryPrefix =
+        `PREVIOUS ATTEMPT FAILED MACRO TARGETS. Generate a completely new plan that hits the targets.\n` +
+        `Misses: ${missDetails.join("; ")}\n` +
+        `CRITICAL: Protein target of ${macros.proteinG}g per day MUST be met. Use larger protein portions.\n\n`;
+
+      console.log("[macro-fix] Macro validation failed — full Sonnet retry:", missDetails.join(" | "));
+      const retryResult = await callClaude(apiKey, MODEL_SONNET, buildDynamicContent(retryPrefix), { useCache: true });
+      totalUsage = mergeUsage(totalUsage, retryResult.usage || {});
+
+      if (!retryResult.error) {
+        const retryParsed = parsePlan(retryResult.rawText);
+        if (!retryParsed.error && retryParsed.abPlan) {
+          const retryA = validateMacros(retryParsed.abPlan.A, macros, "Day A (retry)");
+          const retryB = validateMacros(retryParsed.abPlan.B, macros, "Day B (retry)");
+          if (!retryA.failed && !retryB.failed) {
+            console.log("[macro-fix] Retry PASSED — using corrected plan");
+            abPlan = retryParsed.abPlan;
+          } else {
+            console.warn("[macro-fix] Retry still off — serving best available plan");
+            abPlan = retryParsed.abPlan; // serve retry plan even if imperfect (better than first fail)
+          }
         } else {
-          console.warn("[macro-fix] Portion adjustment still off — using first attempt");
-          // Keep firstPlan — don't spend another full Sonnet call
+          console.warn("[macro-fix] Retry parse failed:", retryParsed.error, "— serving first attempt");
         }
       } else {
-        console.warn("[macro-fix] Portion adjustment failed — using first attempt");
+        console.warn("[macro-fix] Retry API call failed:", retryResult.error, "— serving first attempt");
       }
     }
 
