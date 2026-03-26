@@ -15,6 +15,7 @@ import {
   startFast, endFast, getFastingLog,
 } from "./lib/supabase";
 import { generateMealPlan } from "./lib/claude";
+import OnboardingTour from "./components/OnboardingTour";
 
 // USDA FoodData Central API key (set VITE_USDA_API_KEY in Vercel env vars)
 const USDA_API_KEY = import.meta.env.VITE_USDA_API_KEY || "DEMO_KEY";
@@ -62,7 +63,7 @@ const CAT_CONFIG = {
   other:    {label:'Other',    icon:'·',     pct:0},
 };
 
-const Card=({children,style:s={},onClick})=><div onClick={onClick} style={{background:T.sf,borderRadius:T.r,border:`1px solid ${T.bd}`,...s}}>{children}</div>;
+const Card=({children,style:s={},onClick,...rest})=><div onClick={onClick} style={{background:T.sf,borderRadius:T.r,border:`1px solid ${T.bd}`,...s}} {...rest}>{children}</div>;
 const Lbl=({children})=><span style={{fontSize:10,fontWeight:600,color:T.txM,letterSpacing:"0.1em",textTransform:"uppercase"}}>{children}</span>;
 
 const Ring=({pct,r,stroke,w,children})=>{
@@ -668,7 +669,7 @@ const WeekStrip = ({viewDate, onSelectDate, onOpenCalendar}) => {
     container.scrollLeft = target;
   }, [viewStr]);
 
-  return <div style={{display:'flex',alignItems:'center',gap:4,margin:'4px 0 8px'}}>
+  return <div data-tour="week-strip" style={{display:'flex',alignItems:'center',gap:4,margin:'4px 0 8px'}}>
     <style>{`.ws-strip::-webkit-scrollbar{display:none}`}</style>
     <div className="ws-strip" ref={containerRef}
       style={{flex:1,display:'flex',overflowX:'auto',scrollbarWidth:'none',msOverflowStyle:'none',gap:0,WebkitOverflowScrolling:'touch'}}>
@@ -1288,7 +1289,7 @@ const FastingDetailView = ({isFasting, fastStartedAt, fastingGoal, onStart, onEn
 };
 
 // ─── DASHBOARD ─────────────────────────────────────────────────
-const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[],weekPlans={},userId,savedMeals=[],onHeartMeal,isFasting=false,fastStartedAt=null,fastingGoal=16,onStartFast,onEndFast}) => {
+const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMeal,todayPlan=[],weekPlans={},userId,savedMeals=[],onHeartMeal,isFasting=false,fastStartedAt=null,fastingGoal=16,onStartFast,onEndFast,onTourComplete}) => {
   const [viewDate,setViewDate]=useState(()=>new Date());
   const [historyLog,setHistoryLog]=useState(null); // null = showing today
   const [loggingId,setLoggingId]=useState(null);
@@ -1423,7 +1424,7 @@ const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMe
     {!isToday&&<p style={{fontSize:11,color:T.acc,fontWeight:600,textAlign:'center',margin:'-12px 0 12px',letterSpacing:'0.07em'}}>VIEWING · {viewingLabel}</p>}
 
     {/* ── Macro ring card ── */}
-    <Card style={{padding:"28px 24px",marginBottom:16}}>
+    <Card style={{padding:"28px 24px",marginBottom:16}} data-tour="macro-ring">
       <div style={{display:"flex",alignItems:"center",gap:28}}>
         <Ring pct={(cal.cur/cal.tgt)*100} r={50} stroke={T.acc} w={5}>
           <span style={{fontSize:30,fontWeight:700,color:T.tx,fontFamily:T.mono,lineHeight:1}}>{remaining}</span>
@@ -1614,6 +1615,11 @@ const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMe
           </button>
         </div>
       </div>
+    )}
+
+    {/* ── First-login onboarding tour ── */}
+    {profile && !profile.onboardingCompleted && onTourComplete && (
+      <OnboardingTour userId={userId} onComplete={onTourComplete} />
     )}
   </div>;
 };
@@ -4239,6 +4245,7 @@ export default function App() {
             trackingMode:data.tracking_mode||'ai_plan', waterGoal:data.water_goal??8,
             customProteinPct:data.custom_protein_pct??null, customCarbsPct:data.custom_carbs_pct??null,
             customFatPct:data.custom_fat_pct??null, customMacroSplit:data.custom_macro_split??false,
+            onboardingCompleted:data.onboarding_completed??false,
           };
           const hasStats = pBase.sex && pBase.age && pBase.weightLbs && pBase.heightFt != null && pBase.activity && pBase.goal;
           // If user has a custom split, load saved macro grams directly; otherwise recalculate
@@ -4297,6 +4304,7 @@ export default function App() {
         trackingMode:data.tracking_mode||'ai_plan', waterGoal:data.water_goal??8,
         customProteinPct:data.custom_protein_pct??null, customCarbsPct:data.custom_carbs_pct??null,
         customFatPct:data.custom_fat_pct??null, customMacroSplit:data.custom_macro_split??false,
+        onboardingCompleted:data.onboarding_completed??false,
       };
       const hasStats = pBase.sex && pBase.age && pBase.weightLbs && pBase.heightFt != null && pBase.activity && pBase.goal;
       const freshMacros = pBase.customMacroSplit
@@ -4339,6 +4347,10 @@ export default function App() {
   const handleEndFast = async (startedAt, endedAt, goalHours, completed) => {
     setIsFasting(false); setFastStartedAt(null);
     if(user) await endFast(user.id, startedAt, endedAt, goalHours, completed);
+  };
+
+  const handleTourComplete = () => {
+    setProfile(p => p ? { ...p, onboardingCompleted: true } : p);
   };
 
   const handleSignOut = async () => {
@@ -4418,7 +4430,7 @@ export default function App() {
   if(phase==="onboarding") return <Onboarding onComplete={handleComplete}/>;
 
   const screens = {
-    home:<Dashboard setTab={switchTab} onLogCategory={goToLogWithCategory} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal} onUnlogMeal={handleUnlogMeal} todayPlan={todayPlan} weekPlans={weekPlans} userId={user?.id} savedMeals={savedMeals} onHeartMeal={handleHeartToggle} isFasting={isFasting} fastStartedAt={fastStartedAt} fastingGoal={fastingGoal} onStartFast={handleStartFast} onEndFast={handleEndFast}/>,
+    home:<Dashboard setTab={switchTab} onLogCategory={goToLogWithCategory} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal} onUnlogMeal={handleUnlogMeal} todayPlan={todayPlan} weekPlans={weekPlans} userId={user?.id} savedMeals={savedMeals} onHeartMeal={handleHeartToggle} isFasting={isFasting} fastStartedAt={fastStartedAt} fastingGoal={fastingGoal} onStartFast={handleStartFast} onEndFast={handleEndFast} onTourComplete={handleTourComplete}/>,
     plan:<Plan profile={profile} userId={user?.id} isPro={isPro} savedMeals={savedMeals} onHeartMeal={handleHeartToggle} onLogMeal={handleLogMeal} setTab={switchTab} onWeekPlanUpdate={(plans)=>{
       // plans = { 0: dayA[], 1: dayB[] }
       const wasEmpty = Object.keys(weekPlans).length === 0;
@@ -4456,7 +4468,7 @@ export default function App() {
     <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:"rgba(9,9,11,0.95)",backdropFilter:"blur(24px)",borderTop:`1px solid ${T.bd}`,display:"flex",justifyContent:"space-around",padding:"6px 0 22px",zIndex:10}}>
       {navTabs.map(t=>{
         const a=tab===t.id;
-        return <button key={t.id} onClick={()=>switchTab(t.id)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"4px 7px",transition:"all 0.2s"}}>
+        return <button key={t.id} data-tour={`nav-${t.id}`} onClick={()=>switchTab(t.id)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"4px 7px",transition:"all 0.2s"}}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?T.acc:"#8E8E93"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             {t.d.split("|").map((p,i)=><path key={i} d={p}/>)}
           </svg>
