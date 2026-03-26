@@ -26,7 +26,7 @@ const T = {
   bg:"#09090B",sf:"#121215",bd:"#1E1E22",acc:"#C8B88A",
   accM:"rgba(200,184,138,0.12)",accG:"rgba(200,184,138,0.06)",
   tx:"#FAFAF9",tx2:"#A1A1AA",txM:"#52525B",
-  pro:"#7C9CF5",carb:"#D4A853",fat:"#C084A6",ok:"#6BCB77",
+  pro:"#C4714A",carb:"#C9A84C",fat:"#7A9E7E",ok:"#6BCB77",
   r:14,font:"'Outfit',sans-serif",mono:"'DM Mono',monospace"
 };
 
@@ -35,14 +35,31 @@ const T = {
 // (toISOString is UTC and can return the wrong day for non-UTC users).
 const localDate = (d = new Date()) => d.toLocaleDateString('en-CA');
 
+// ── Monochrome SVG icon primitives — width/height="1em" inherits parent fontSize ──
+const _I=(c)=><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{c}</svg>;
+const IcoFlame  = _I(<path d="M12 21c-4 0-7-3.1-7-7 0-2.4 1-4.4 2.5-5.8.2 1.2.8 2.1 1.5 2.6C9 8.5 9.5 5.5 12 3c.7 2 1.8 3.5 3 4.5.7-1.3.5-3 .1-4.1 2 1.9 3.9 4.5 3.9 7.1 0 5.1-3 10.5-7 10.5z"/>);
+const IcoMoon   = _I(<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>);
+const IcoTrophy = _I(<><path d="M8 21h8M12 17v4"/><path d="M5 3h14v8a7 7 0 01-14 0V3z"/><path d="M3 7h2M19 7h2M5 7c0 2 1.5 3.5 2 4M19 7c0 2-1.5 3.5-2 4"/></>);
+const IcoStar   = _I(<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>);
+const IcoDrop   = _I(<path d="M12 2C8.5 8.5 5 12.5 5 16a7 7 0 0014 0c0-3.5-3.5-7.5-7-14z"/>);
+const IcoChart  = _I(<><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></>);
+const IcoTarget = _I(<><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>);
+const IcoFork   = _I(<><path d="M9 3v7c0 1.1-.9 2-2 2s-2-.9-2-2V3"/><line x1="7" y1="12" x2="7" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><path d="M13 3v4a2 2 0 004 0V3"/></>);
+const IcoClip   = _I(<><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></>);
+const IcoScale  = _I(<><line x1="12" y1="3" x2="12" y2="20"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="5" y1="9" x2="19" y2="9"/><path d="M6 9l3 6H3l3-6zM18 9l3 6h-6l3-6z"/></>);
+const IcoSun    = _I(<><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></>);
+const IcoBowl   = _I(<><path d="M4.5 11h15c-.5 4-3.8 7-7.5 7s-7-3-7.5-7z"/><line x1="4.5" y1="11" x2="19.5" y2="11"/><path d="M9 11V7M12 11V5M15 11V7"/></>);
+const IcoApple  = _I(<><path d="M12 19c-3.87 0-7-2.7-7-7 0-3.5 2.8-7 7-7s7 3.5 7 7c0 4.3-3.13 7-7 7z"/><line x1="12" y1="5" x2="12" y2="3"/><path d="M12 3c1-1 2.5-1.5 3.5-1"/></>);
+const IcoPlate  = _I(<><circle cx="12" cy="13" r="5"/><line x1="4" y1="5" x2="4" y2="19"/><line x1="2" y1="7" x2="6" y2="7"/><line x1="20" y1="5" x2="20" y2="10"/><path d="M18 5a2 2 0 012 2v3"/><line x1="20" y1="10" x2="20" y2="19"/></>);
+
 const MEAL_CATS = ['breakfast','lunch','snack','dinner'];
 
 const CAT_CONFIG = {
-  breakfast:{label:'Breakfast',icon:'☀️',pct:0.25},
-  lunch:    {label:'Lunch',    icon:'🥗',pct:0.30},
-  snack:    {label:'Snack',    icon:'🍎',pct:0.15},
-  dinner:   {label:'Dinner',   icon:'🍽️',pct:0.30},
-  other:    {label:'Other',    icon:'·', pct:0},
+  breakfast:{label:'Breakfast',icon:IcoSun,  pct:0.25},
+  lunch:    {label:'Lunch',    icon:IcoBowl, pct:0.30},
+  snack:    {label:'Snack',    icon:IcoApple,pct:0.15},
+  dinner:   {label:'Dinner',   icon:IcoPlate,pct:0.30},
+  other:    {label:'Other',    icon:'·',     pct:0},
 };
 
 const Card=({children,style:s={},onClick})=><div onClick={onClick} style={{background:T.sf,borderRadius:T.r,border:`1px solid ${T.bd}`,...s}}>{children}</div>;
@@ -1226,7 +1243,8 @@ const FastingDetailView = ({isFasting, fastStartedAt, fastingGoal, onStart, onEn
       {/* ── Start / End button ── */}
       {!isFasting
         ? <button onClick={handleStart} style={{width:'100%',padding:16,borderRadius:T.r,border:'none',background:T.acc,color:T.bg,fontSize:15,fontWeight:700,cursor:'pointer',fontFamily:T.font,marginBottom:32}}>
-            🌙 Start {goal}h Fast
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{verticalAlign:"middle",marginRight:6}}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            Start {goal}h Fast
           </button>
         : <div style={{marginBottom:32}}>
             {!confirmEnd
@@ -1391,7 +1409,7 @@ const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMe
               <span style={{fontSize:11,fontWeight:600,color:T.acc,whiteSpace:'nowrap'}}>Fasting · {fastHeaderStr}</span>
             </button>
           : <button onClick={()=>setShowFasting(true)} style={{display:'flex',alignItems:'center',gap:5,padding:'6px 12px',borderRadius:20,border:`1px solid ${T.bd}`,background:'transparent',cursor:'pointer',fontFamily:T.font}}>
-              <span style={{fontSize:13}}>🌙</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={T.tx2} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
               <span style={{fontSize:11,fontWeight:500,color:T.tx2}}>Fast</span>
             </button>
         }
@@ -3747,34 +3765,34 @@ const PwaPrompt = ({type, onInstall, onDismiss}) => (
 // ─── STATS TAB ─────────────────────────────────────────────────
 const ACHIEVEMENTS_DEF = [
   // Logging
-  {key:'first_bite',    name:'First Bite',    desc:'Log your first meal',                   icon:'🍽️', cat:'Logging',  total:1,   prog:d=>Math.min(d.totalMeals,1),    chk:d=>d.totalMeals>=1},
-  {key:'consistent',    name:'Consistent',    desc:'3-day logging streak',                  icon:'🔥', cat:'Logging',  total:3,   prog:d=>Math.min(d.bestLogging,3),   chk:d=>d.bestLogging>=3},
-  {key:'week_warrior',  name:'Week Warrior',  desc:'7-day logging streak',                  icon:'💪', cat:'Logging',  total:7,   prog:d=>Math.min(d.bestLogging,7),   chk:d=>d.bestLogging>=7},
-  {key:'month_strong',  name:'Month Strong',  desc:'30-day logging streak',                 icon:'📅', cat:'Logging',  total:30,  prog:d=>Math.min(d.bestLogging,30),  chk:d=>d.bestLogging>=30},
-  {key:'century',       name:'Century',       desc:'Log 100 total meals',                   icon:'💯', cat:'Logging',  total:100, prog:d=>Math.min(d.totalMeals,100),  chk:d=>d.totalMeals>=100},
+  {key:'first_bite',    name:'First Bite',    desc:'Log your first meal',                   icon:IcoFork,   cat:'Logging',  total:1,   prog:d=>Math.min(d.totalMeals,1),    chk:d=>d.totalMeals>=1},
+  {key:'consistent',    name:'Consistent',    desc:'3-day logging streak',                  icon:IcoFlame,  cat:'Logging',  total:3,   prog:d=>Math.min(d.bestLogging,3),   chk:d=>d.bestLogging>=3},
+  {key:'week_warrior',  name:'Week Warrior',  desc:'7-day logging streak',                  icon:IcoFlame,  cat:'Logging',  total:7,   prog:d=>Math.min(d.bestLogging,7),   chk:d=>d.bestLogging>=7},
+  {key:'month_strong',  name:'Month Strong',  desc:'30-day logging streak',                 icon:IcoFlame,  cat:'Logging',  total:30,  prog:d=>Math.min(d.bestLogging,30),  chk:d=>d.bestLogging>=30},
+  {key:'century',       name:'Century',       desc:'Log 100 total meals',                   icon:IcoTrophy, cat:'Logging',  total:100, prog:d=>Math.min(d.totalMeals,100),  chk:d=>d.totalMeals>=100},
   // Macros
-  {key:'on_target',     name:'On Target',     desc:'Hit your calorie goal once',            icon:'🎯', cat:'Macros',   total:1,   prog:d=>Math.min(d.bestMacros,1),    chk:d=>d.bestMacros>=1},
-  {key:'macro_master',  name:'Macro Master',  desc:'Calorie goal 7 days in a row',          icon:'🏆', cat:'Macros',   total:7,   prog:d=>Math.min(d.bestMacros,7),    chk:d=>d.bestMacros>=7},
-  {key:'precision',     name:'Precision',     desc:'All 3 macros within 10% in one day',   icon:'🔬', cat:'Macros',   total:1,   prog:d=>d.hasPrecision?1:0,          chk:d=>d.hasPrecision},
-  {key:'balanced_week', name:'Balanced Week', desc:'All macros within 10% for 7 days',     icon:'⚖️', cat:'Macros',   total:7,   prog:d=>Math.min(d.bestPrecision,7), chk:d=>d.bestPrecision>=7},
+  {key:'on_target',     name:'On Target',     desc:'Hit your calorie goal once',            icon:IcoTarget, cat:'Macros',   total:1,   prog:d=>Math.min(d.bestMacros,1),    chk:d=>d.bestMacros>=1},
+  {key:'macro_master',  name:'Macro Master',  desc:'Calorie goal 7 days in a row',          icon:IcoTrophy, cat:'Macros',   total:7,   prog:d=>Math.min(d.bestMacros,7),    chk:d=>d.bestMacros>=7},
+  {key:'precision',     name:'Precision',     desc:'All 3 macros within 10% in one day',   icon:IcoChart,  cat:'Macros',   total:1,   prog:d=>d.hasPrecision?1:0,          chk:d=>d.hasPrecision},
+  {key:'balanced_week', name:'Balanced Week', desc:'All macros within 10% for 7 days',     icon:IcoScale,  cat:'Macros',   total:7,   prog:d=>Math.min(d.bestPrecision,7), chk:d=>d.bestPrecision>=7},
   // Plan
-  {key:'planner',       name:'Planner',       desc:'Generate your first meal plan',         icon:'📋', cat:'Plan',     total:1,   prog:d=>Math.min(d.lifetimeGens,1),  chk:d=>d.lifetimeGens>=1},
-  {key:'committed',     name:'Committed',     desc:'Follow your plan for 3 days',           icon:'✅', cat:'Plan',     total:3,   prog:d=>Math.min(d.bestPlan,3),      chk:d=>d.bestPlan>=3},
-  {key:'dedicated',     name:'Dedicated',     desc:'Follow your plan for 7 days',           icon:'🎖️', cat:'Plan',     total:7,   prog:d=>Math.min(d.bestPlan,7),      chk:d=>d.bestPlan>=7},
+  {key:'planner',       name:'Planner',       desc:'Generate your first meal plan',         icon:IcoClip,   cat:'Plan',     total:1,   prog:d=>Math.min(d.lifetimeGens,1),  chk:d=>d.lifetimeGens>=1},
+  {key:'committed',     name:'Committed',     desc:'Follow your plan for 3 days',           icon:IcoTrophy, cat:'Plan',     total:3,   prog:d=>Math.min(d.bestPlan,3),      chk:d=>d.bestPlan>=3},
+  {key:'dedicated',     name:'Dedicated',     desc:'Follow your plan for 7 days',           icon:IcoTrophy, cat:'Plan',     total:7,   prog:d=>Math.min(d.bestPlan,7),      chk:d=>d.bestPlan>=7},
   // Health
-  {key:'hydrated',      name:'Hydrated',      desc:'Hit your water goal once',              icon:'💧', cat:'Health',   total:1,   prog:d=>Math.min(d.waterGoalHit,1),  chk:d=>d.waterGoalHit>=1},
-  {key:'water_week',    name:'Water Week',    desc:'Hit water goal 7 days in a row',        icon:'🌊', cat:'Health',   total:7,   prog:d=>Math.min(d.waterStreak,7),   chk:d=>d.waterStreak>=7},
-  {key:'weight_watcher',name:'Weight Watcher',desc:'Log your weight 7 times',               icon:'📊', cat:'Health',   total:7,   prog:d=>Math.min(d.weightEntries,7), chk:d=>d.weightEntries>=7},
-  {key:'transformation',name:'Transformation',desc:'Log weight 30 times',                   icon:'🌟', cat:'Health',   total:30,  prog:d=>Math.min(d.weightEntries,30),chk:d=>d.weightEntries>=30},
+  {key:'hydrated',      name:'Hydrated',      desc:'Hit your water goal once',              icon:IcoDrop,   cat:'Health',   total:1,   prog:d=>Math.min(d.waterGoalHit,1),  chk:d=>d.waterGoalHit>=1},
+  {key:'water_week',    name:'Water Week',    desc:'Hit water goal 7 days in a row',        icon:IcoDrop,   cat:'Health',   total:7,   prog:d=>Math.min(d.waterStreak,7),   chk:d=>d.waterStreak>=7},
+  {key:'weight_watcher',name:'Weight Watcher',desc:'Log your weight 7 times',               icon:IcoChart,  cat:'Health',   total:7,   prog:d=>Math.min(d.weightEntries,7), chk:d=>d.weightEntries>=7},
+  {key:'transformation',name:'Transformation',desc:'Log weight 30 times',                   icon:IcoStar,   cat:'Health',   total:30,  prog:d=>Math.min(d.weightEntries,30),chk:d=>d.weightEntries>=30},
   // Fasting
-  {key:'first_fast',     name:'First Fast',     desc:'Complete your first fast',             icon:'🌙', cat:'Fasting',  total:1,   prog:d=>Math.min(d.totalFasts,1),         chk:d=>d.totalFasts>=1},
-  {key:'half_day',       name:'Half Day',       desc:'Complete a 12-hour fast',              icon:'⏰', cat:'Fasting',  total:1,   prog:d=>d.has12hFast?1:0,                chk:d=>d.has12hFast},
-  {key:'extended_fast',  name:'Extended Fast',  desc:'Complete an 18-hour fast',             icon:'🌟', cat:'Fasting',  total:1,   prog:d=>d.has18hFast?1:0,                chk:d=>d.has18hFast},
-  {key:'fasting_streak', name:'Fasting Streak', desc:'Fast 7 days in a row',                 icon:'⚡', cat:'Fasting',  total:7,   prog:d=>Math.min(d.bestFastingStreak,7),  chk:d=>d.bestFastingStreak>=7},
-  {key:'fasting_master', name:'Fasting Master', desc:'Complete 30 total fasts',              icon:'🏅', cat:'Fasting',  total:30,  prog:d=>Math.min(d.totalFasts,30),        chk:d=>d.totalFasts>=30},
+  {key:'first_fast',     name:'First Fast',     desc:'Complete your first fast',             icon:IcoMoon,   cat:'Fasting',  total:1,   prog:d=>Math.min(d.totalFasts,1),         chk:d=>d.totalFasts>=1},
+  {key:'half_day',       name:'Half Day',       desc:'Complete a 12-hour fast',              icon:IcoMoon,   cat:'Fasting',  total:1,   prog:d=>d.has12hFast?1:0,                chk:d=>d.has12hFast},
+  {key:'extended_fast',  name:'Extended Fast',  desc:'Complete an 18-hour fast',             icon:IcoMoon,   cat:'Fasting',  total:1,   prog:d=>d.has18hFast?1:0,                chk:d=>d.has18hFast},
+  {key:'fasting_streak', name:'Fasting Streak', desc:'Fast 7 days in a row',                 icon:IcoFlame,  cat:'Fasting',  total:7,   prog:d=>Math.min(d.bestFastingStreak,7),  chk:d=>d.bestFastingStreak>=7},
+  {key:'fasting_master', name:'Fasting Master', desc:'Complete 30 total fasts',              icon:IcoMoon,   cat:'Fasting',  total:30,  prog:d=>Math.min(d.totalFasts,30),        chk:d=>d.totalFasts>=30},
   // Milestone
-  {key:'early_adopter', name:'Early Adopter', desc:'One of the first Macra users',          icon:'⭐', cat:'Milestone',total:1,   prog:d=>1,                           chk:d=>true},
-  {key:'pro_member',    name:'Pro Member',    desc:'Upgraded to Macra Pro',                 icon:'👑', cat:'Milestone',total:1,   prog:d=>d.isPro?1:0,                 chk:d=>d.isPro},
+  {key:'early_adopter', name:'Early Adopter', desc:'One of the first Macra users',          icon:IcoStar,   cat:'Milestone',total:1,   prog:d=>1,                           chk:d=>true},
+  {key:'pro_member',    name:'Pro Member',    desc:'Upgraded to Macra Pro',                 icon:IcoStar,   cat:'Milestone',total:1,   prog:d=>d.isPro?1:0,                 chk:d=>d.isPro},
 ];
 
 const StatsTab = ({profile, userId, isPro}) => {
@@ -3957,10 +3975,10 @@ const StatsTab = ({profile, userId, isPro}) => {
     <Lbl>Streaks</Lbl>
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:10,marginBottom:28}}>
       {[
-        {label:'Logging', val:statsData.loggingStreak, best:statsData.bestLogging,  icon:'🔥'},
-        {label:'Macros',  val:statsData.macroStreak,   best:statsData.bestMacros,   icon:'🎯'},
-        ...(profile?.trackingMode!=='manual'?[{label:'Plan', val:statsData.planStreak, best:statsData.bestPlan, icon:'📋'}]:[]),
-        {label:'Fasting', val:statsData.fastingStreak, best:statsData.bestFastingStreak, icon:'🌙'},
+        {label:'Logging', val:statsData.loggingStreak, best:statsData.bestLogging,  icon:IcoFlame},
+        {label:'Macros',  val:statsData.macroStreak,   best:statsData.bestMacros,   icon:IcoTarget},
+        ...(profile?.trackingMode!=='manual'?[{label:'Plan', val:statsData.planStreak, best:statsData.bestPlan, icon:IcoClip}]:[]),
+        {label:'Fasting', val:statsData.fastingStreak, best:statsData.bestFastingStreak, icon:IcoMoon},
       ].map(s=><Card key={s.label} style={{padding:'16px 8px',textAlign:'center',border:s.val>0?`1px solid ${T.acc}40`:`1px solid ${T.bd}`}}>
         <div style={{fontSize:22,marginBottom:6}}>{s.icon}</div>
         <p style={{fontSize:28,fontWeight:700,color:s.val>0?T.acc:T.txM,margin:'0 0 3px',fontFamily:T.mono,lineHeight:1}}>{s.val}</p>
