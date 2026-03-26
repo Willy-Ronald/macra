@@ -10,6 +10,11 @@ const Landing = () => {
   const [activeScreen, setActiveScreen] = useState(0);
   const carouselRef = useRef(null);
   const [isMobile, setIsMobile] = useState(false);
+  // ── Waitlist state ──────────────────────────────────────────
+  const [wlEmail,  setWlEmail]  = useState('');
+  const [wlStatus, setWlStatus] = useState('idle'); // 'idle'|'loading'|'success'|'error'
+  const [wlError,  setWlError]  = useState('');
+  const [wlHoney,  setWlHoney]  = useState(''); // hidden honeypot — bots fill this
   useEffect(() => {
     supabase.auth.getSession().then(({data:{session}}) => {
       if(session) { navigate("/app", {replace:true}); return; }
@@ -176,6 +181,34 @@ const Landing = () => {
       </div>
     </div>,
   ];
+  async function handleWaitlist(e) {
+    e.preventDefault();
+    if (wlHoney) return; // bot submitted the hidden field — discard silently
+    setWlStatus('loading');
+    setWlError('');
+    const clean = wlEmail.toLowerCase().trim();
+    if (!clean || !clean.includes('@') || !clean.includes('.')) {
+      setWlError('Please enter a valid email address.');
+      setWlStatus('error');
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from('waitlist')
+        .insert({ email: clean, referral_source: document.referrer || 'direct' });
+      if (error) {
+        setWlError(error.code === '23505' ? "You're already on the list!" : 'Something went wrong. Please try again.');
+        setWlStatus('error');
+        return;
+      }
+      setWlStatus('success');
+      setWlEmail('');
+    } catch {
+      setWlError('Something went wrong. Please try again.');
+      setWlStatus('error');
+    }
+  }
+
   if(!authChecked) return <div style={{background:"#09090B",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
     <div style={{width:32,height:32,borderRadius:8,background:"linear-gradient(135deg, #C8B88A, #A89560)",display:"flex",alignItems:"center",justifyContent:"center",animation:"pulse 1.5s ease infinite"}}>
       <span style={{fontSize:17,fontWeight:800,color:"#09090B",fontFamily:"'Outfit',sans-serif"}}>M</span>
@@ -235,6 +268,111 @@ const Landing = () => {
           <style>{"@keyframes scrollP{0%,100%{opacity:.3;transform:translateY(0)}50%{opacity:1;transform:translateY(4px)}} @keyframes featIn{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}"}</style>
         </div>
       </section>
+      {/* ── Waitlist / Early Access ─────────────────────────────── */}
+      <section style={{padding:"0 24px 72px",textAlign:"center"}}>
+        <div style={{maxWidth:540,margin:"0 auto"}}>
+          <p style={{fontSize:13,fontWeight:600,color:"#C4714A",letterSpacing:"0.18em",textTransform:"uppercase",margin:"0 0 14px"}}>Limited Early Access</p>
+          <h2 style={{fontSize:"clamp(26px,6vw,38px)",fontWeight:800,letterSpacing:"-0.025em",lineHeight:1.1,margin:"0 0 14px",color:"#FAFAF9"}}>
+            Meal Plans That Actually<br/>Fit Your Life
+          </h2>
+          <p style={{fontSize:"clamp(15px,2.5vw,17px)",color:tx2,lineHeight:1.65,margin:"0 0 28px",maxWidth:460,marginLeft:"auto",marginRight:"auto"}}>
+            Set your macros, budget, and pickiness level. Get two days of meals in one tap — no food waste, no repeats.
+          </p>
+
+          {wlStatus === 'success' ? (
+            <div style={{padding:"24px 28px",background:"rgba(107,203,119,0.08)",border:"1px solid rgba(107,203,119,0.22)",borderRadius:16,marginBottom:16}}>
+              <p style={{fontSize:22,margin:"0 0 6px"}}>🎉</p>
+              <p style={{fontSize:17,fontWeight:700,color:"#FAFAF9",margin:"0 0 6px"}}>You're on the list!</p>
+              <p style={{fontSize:13,color:tx2,margin:0}}>We'll email you when we launch — watch your inbox for lifetime deal access.</p>
+            </div>
+          ) : (
+            <form onSubmit={handleWaitlist} style={{position:"relative"}}>
+              {/* Honeypot — hidden from humans, catches bots */}
+              <input
+                type="text"
+                value={wlHoney}
+                onChange={e => setWlHoney(e.target.value)}
+                tabIndex={-1}
+                aria-hidden="true"
+                style={{position:"absolute",opacity:0,pointerEvents:"none",height:0,width:0,overflow:"hidden"}}
+              />
+              <div style={{display:"flex",gap:8,flexWrap:isMobile?"wrap":"nowrap",justifyContent:"center"}}>
+                <input
+                  type="email"
+                  placeholder="Enter your email"
+                  value={wlEmail}
+                  onChange={e => setWlEmail(e.target.value)}
+                  disabled={wlStatus === 'loading'}
+                  required
+                  style={{
+                    flex:"1 1 220px",
+                    height:50,
+                    padding:"0 18px",
+                    borderRadius:12,
+                    border:"1.5px solid " + (wlStatus==='error' ? "rgba(239,68,68,0.5)" : bd),
+                    background:sf,
+                    color:"#FAFAF9",
+                    fontSize:15,
+                    fontFamily:"'Outfit',sans-serif",
+                    outline:"none",
+                    boxSizing:"border-box",
+                    width: isMobile ? "100%" : undefined,
+                    transition:"border-color 0.2s",
+                  }}
+                  onFocus={e => { e.target.style.borderColor = "#C4714A"; }}
+                  onBlur={e => { e.target.style.borderColor = wlStatus==='error' ? "rgba(239,68,68,0.5)" : bd; }}
+                />
+                <button
+                  type="submit"
+                  disabled={wlStatus === 'loading'}
+                  style={{
+                    height:50,
+                    padding:"0 28px",
+                    borderRadius:12,
+                    border:"none",
+                    background:"#C4714A",
+                    color:"#FAFAF9",
+                    fontSize:15,
+                    fontWeight:700,
+                    cursor: wlStatus==='loading' ? "wait" : "pointer",
+                    fontFamily:"'Outfit',sans-serif",
+                    letterSpacing:"0.01em",
+                    opacity: wlStatus==='loading' ? 0.7 : 1,
+                    transition:"opacity 0.2s, transform 0.1s",
+                    flexShrink:0,
+                    width: isMobile ? "100%" : undefined,
+                    display:"flex",
+                    alignItems:"center",
+                    justifyContent:"center",
+                    gap:8,
+                    boxSizing:"border-box",
+                  }}
+                >
+                  {wlStatus === 'loading' ? (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{animation:"spin 0.8s linear infinite"}}>
+                        <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                      </svg>
+                      Joining…
+                    </>
+                  ) : 'Get Early Access'}
+                </button>
+              </div>
+              {wlStatus === 'error' && (
+                <p style={{fontSize:13,color:"rgba(239,68,68,0.9)",margin:"10px 0 0",fontFamily:"'Outfit',sans-serif"}}>
+                  {wlError}
+                </p>
+              )}
+            </form>
+          )}
+
+          <p style={{fontSize:13,color:txM,margin:"14px 0 0",lineHeight:1.5}}>
+            First 200 members get lifetime access for $99 — then it's gone forever.
+          </p>
+        </div>
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      </section>
+
       <section style={{padding:"40px 24px",textAlign:"center",borderTop:"1px solid "+bd,borderBottom:"1px solid "+bd}}>
         <div style={{display:"flex",justifyContent:"center",gap:isMobile?24:48,flexWrap:"wrap"}}>
           {[{n:"60 sec",l:"From signup to your first meal plan"},{n:"1,000+",l:"Foods & brands in search database"},{n:"$4.99",l:"Per month for all Pro features"}].map((s,i)=>
