@@ -11,6 +11,11 @@
 
 import { createClient } from "@supabase/supabase-js";
 
+// Returns a YYYY-MM-DD string in the user's LOCAL timezone.
+// Use this everywhere instead of new Date().toISOString().split('T')[0]
+// which returns the UTC date and can be wrong for non-UTC users.
+const localDate = (d = new Date()) => d.toLocaleDateString('en-CA');
+
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -170,15 +175,15 @@ export async function logMeal(userId, meal, dateStr = null) {
     protein: meal.p,
     carbs: meal.c,
     fat: meal.f,
+    date: dateStr || localDate(), // always set local date, never rely on DB default
   };
-  if (dateStr) row.date = dateStr;
   const { error } = await supabase.from("meal_log").insert(row);
   return { error };
 }
 
 export async function getTodayLog(userId) {
   if (!supabase) return [];
-  const today = new Date().toISOString().split("T")[0];
+  const today = localDate();
   const { data } = await supabase
     .from("meal_log")
     .select("*")
@@ -397,7 +402,7 @@ export async function deleteWeightEntry(id) {
 
 export async function getTodayWater(userId) {
   if (!supabase) return null;
-  const today = new Date().toISOString().split("T")[0];
+  const today = localDate();
   const { data } = await supabase
     .from("water_log")
     .select("*")
@@ -409,7 +414,7 @@ export async function getTodayWater(userId) {
 
 export async function upsertWaterLog(userId, glasses, goal) {
   if (!supabase) return;
-  const today = new Date().toISOString().split("T")[0];
+  const today = localDate();
   const { error } = await supabase.from("water_log").upsert(
     { user_id: userId, glasses, goal, log_date: today },
     { onConflict: "user_id,log_date" }
@@ -422,7 +427,7 @@ export async function getWaterHistory(userId) {
   if (!supabase) return [];
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-  const startDate = sevenDaysAgo.toISOString().split("T")[0];
+  const startDate = localDate(sevenDaysAgo);
   const { data } = await supabase
     .from("water_log")
     .select("glasses, goal, log_date")

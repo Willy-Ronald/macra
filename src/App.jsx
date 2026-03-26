@@ -30,6 +30,11 @@ const T = {
   r:14,font:"'Outfit',sans-serif",mono:"'DM Mono',monospace"
 };
 
+// Returns YYYY-MM-DD in the user's LOCAL timezone.
+// Always use this instead of new Date().toISOString().split('T')[0]
+// (toISOString is UTC and can return the wrong day for non-UTC users).
+const localDate = (d = new Date()) => d.toLocaleDateString('en-CA');
+
 const MEAL_CATS = ['breakfast','lunch','snack','dinner'];
 
 const CAT_CONFIG = {
@@ -624,8 +629,8 @@ const BackBtn = ({onBack}) => (
 const STRIP_DAY_ABB = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 const WeekStrip = ({viewDate, onSelectDate, onOpenCalendar}) => {
-  const todayStr = new Date().toISOString().split('T')[0];
-  const viewStr  = viewDate.toISOString().split('T')[0];
+  const todayStr = localDate();
+  const viewStr  = localDate(viewDate);
   const containerRef = useRef(null);
   const selectedRef  = useRef(null);
 
@@ -688,8 +693,8 @@ const CAL_MONTH_NAMES = ['January','February','March','April','May','June','July
 const CAL_DAY_ABB = ['Mo','Tu','We','Th','Fr','Sa','Su'];
 
 const CalendarOverlay = ({viewDate, onSelectDate, onClose, userId}) => {
-  const todayStr = new Date().toISOString().split('T')[0];
-  const viewStr  = viewDate.toISOString().split('T')[0];
+  const todayStr = localDate();
+  const viewStr  = localDate(viewDate);
   const curYear  = new Date().getFullYear();
 
   const [calMonth, setCalMonth] = useState(()=>new Date(viewDate.getFullYear(), viewDate.getMonth(), 1));
@@ -1021,9 +1026,9 @@ const WaterSettingsView = ({userId, defaultGoal=8, onBack, onGoalChange}) => {
   const unitLabel = unit==='oz' ? 'oz' : 'glasses';
 
   // 7-day bar chart
-  const today=new Date().toISOString().split('T')[0];
+  const today=localDate();
   const last7=[];
-  for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);last7.push(d.toISOString().split('T')[0]);}
+  for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);last7.push(localDate(d));}
   const histMap=Object.fromEntries(history.map(r=>[r.log_date,r]));
   const barData=last7.map(d=>({date:d,glasses:histMap[d]?.glasses||0,goal:histMap[d]?.goal||goal}));
   const maxBar=Math.max(...barData.map(b=>Math.max(b.glasses,b.goal)),1);
@@ -1292,8 +1297,8 @@ const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMe
   },[isFasting,fastStartedAt]);
   const fastHeaderStr=`${Math.floor(fastElapsedSecs/3600)}h ${Math.floor((fastElapsedSecs%3600)/60)}m`;
 
-  const todayStr = new Date().toISOString().split("T")[0];
-  const viewStr = viewDate.toISOString().split("T")[0];
+  const todayStr = localDate();
+  const viewStr = localDate(viewDate);
   const isToday = viewStr === todayStr;
 
   const displayLog = isToday ? todayLog : (historyLog||[]);
@@ -3625,11 +3630,11 @@ const StatsTab = ({profile, userId, isPro}) => {
 
   const load = async () => {
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = localDate();
     const d90 = new Date(now.getTime() - 90*24*60*60*1000);
     const d30 = new Date(now.getTime() - 30*24*60*60*1000);
-    const start90 = d90.toISOString().split('T')[0];
-    const start30 = d30.toISOString().split('T')[0];
+    const start90 = localDate(d90);
+    const start30 = localDate(d30);
 
     const [logData, summary, waterHist, weightLog, dbAch, genUsage, fastingLog] = await Promise.all([
       getMealLogRange(userId, start90, todayStr),
@@ -3648,7 +3653,7 @@ const StatsTab = ({profile, userId, isPro}) => {
     // Build ordered date array for 90-day window
     const dates = [];
     const d = new Date(d90);
-    while(d <= now){ dates.push(d.toISOString().split('T')[0]); d.setDate(d.getDate()+1); }
+    while(d <= now){ dates.push(localDate(d)); d.setDate(d.getDate()+1); }
 
     const m = profile?.macros || {target:2200,proteinG:180,carbG:240,fatG:70};
 
@@ -3701,7 +3706,7 @@ const StatsTab = ({profile, userId, isPro}) => {
     let waterStreak=0;
     for(let i=0;i<7;i++){
       const d2=new Date(now); d2.setDate(d2.getDate()-i);
-      const ds=d2.toISOString().split('T')[0];
+      const ds=localDate(d2);
       const entry=waterHist.find(w=>w.log_date===ds);
       if(entry&&entry.glasses>=(entry.goal||8)){ waterStreak++; }
       else if(ds===todayStr){ continue; }
@@ -3722,7 +3727,7 @@ const StatsTab = ({profile, userId, isPro}) => {
     const has18hFast = fastDurations.some(h=>h>=18);
     // Fasting streak: consecutive calendar days (by started_at date) with a completed fast
     const fastByDate = {};
-    completedFasts.forEach(f=>{ const dd=f.started_at.split('T')[0]; fastByDate[dd]=true; });
+    completedFasts.forEach(f=>{ const dd=localDate(new Date(f.started_at)); fastByDate[dd]=true; });
     let fastingStreak=0;
     for(let i=dates.length-1;i>=0;i--){
       if(fastByDate[dates[i]]){fastingStreak++;}
@@ -3735,8 +3740,8 @@ const StatsTab = ({profile, userId, isPro}) => {
     const fastBarData=[];
     for(let i=6;i>=0;i--){
       const d2=new Date(now); d2.setDate(d2.getDate()-i);
-      const ds=d2.toISOString().split('T')[0];
-      const dayFasts=completedFasts.filter(f=>f.started_at.split('T')[0]===ds);
+      const ds=localDate(d2);
+      const dayFasts=completedFasts.filter(f=>localDate(new Date(f.started_at))===ds);
       const maxH=dayFasts.length>0?Math.max(...dayFasts.map(f=>f.ended_at?(new Date(f.ended_at)-new Date(f.started_at))/3600000:0)):0;
       fastBarData.push({date:ds,hours:maxH});
     }
@@ -3864,7 +3869,7 @@ const StatsTab = ({profile, userId, isPro}) => {
 
     {/* ── Fasting History ── */}
     {statsData.totalFasts > 0 && (()=>{
-      const todayForChart = new Date().toISOString().split('T')[0];
+      const todayForChart = localDate();
       const FDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
       const maxH = Math.max(...statsData.fastBarData.map(b=>b.hours), 1);
       const BAR_H = 60;
@@ -4033,6 +4038,12 @@ export default function App() {
   // Uses getSession() (reads local storage — no network round-trip, reliable on Safari ITP)
   // instead of getUser() (makes API call that can fail on expired/missing tokens)
   const checkAuth = async () => {
+    // Timezone diagnostics — verify local vs UTC date on app load
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    console.log(`[timezone] detected: ${tz}`);
+    console.log(`[timezone] local today: ${localDate()}`);
+    console.log(`[timezone] UTC today:   ${new Date().toISOString().split('T')[0]}`);
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const u = session?.user ?? null;
