@@ -1482,8 +1482,9 @@ const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMe
       </Card>}
 
       {/* ── Today's / Day's Plan ── */}
-      {profile?.trackingMode!=='manual'&&dayPlanMeals.length>0&&<>
-        <div data-tour="todays-plan" style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"0 0 14px"}}>
+      {profile?.trackingMode!=='manual'&&<div data-tour="todays-plan">
+        {dayPlanMeals.length>0?<>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"0 0 14px"}}>
           <div>
             <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>{isToday?"Today's Plan":"Day's Plan"}</h2>
             <span style={{fontSize:10,color:T.txM,fontWeight:500}}>{planLabel}</span>
@@ -1510,7 +1511,10 @@ const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMe
             <span style={{fontSize:13,fontWeight:600,fontFamily:T.mono,color:isLogging?T.ok:T.acc}}>{isLogging?"✓":"Log →"}</span>
           </Card>;
         })}
-      </>}
+        </>:<Card style={{padding:"16px",textAlign:"center",marginBottom:16}}>
+          <p style={{fontSize:13,color:T.txM,margin:0}}>Generate your AI plan to see today's meals here.</p>
+        </Card>}
+      </div>}
 
       {/* ── Eaten / Meals Logged ── */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"20px 0 12px"}}>
@@ -1948,11 +1952,11 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,o
     </Card>}
 
     {/* Meal cards */}
-    {!loading && meals.map((m,i)=><Card key={i+"-"+sel+"-"+genCount} data-tour={i===0?"save-meal":undefined} onClick={()=>setSelectedMeal(m)} style={{padding:18,marginBottom:8,animation:"fadeUp 0.4s ease both",animationDelay:`${i*0.08}s`,cursor:"pointer"}}>
+    {!loading && meals.map((m,i)=><Card key={i+"-"+sel+"-"+genCount} onClick={()=>setSelectedMeal(m)} style={{padding:18,marginBottom:8,animation:"fadeUp 0.4s ease both",animationDelay:`${i*0.08}s`,cursor:"pointer"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
         <span style={{fontSize:10,fontWeight:600,color:T.acc,letterSpacing:"0.14em"}}>{m.type}</span>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <button onClick={(e)=>{e.stopPropagation();onHeartMeal&&onHeartMeal(m,'ai_plan');}} style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex",alignItems:"center"}}>
+          <button data-tour={i===0?"save-meal":undefined} onClick={(e)=>{e.stopPropagation();onHeartMeal&&onHeartMeal(m,'ai_plan');}} style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex",alignItems:"center"}}>
             <HeartIcon filled={savedMeals.some(s=>s.name===m.name)}/>
           </button>
           <span style={{fontSize:11,color:T.txM}}>{m.time}</span>
@@ -3066,16 +3070,16 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId}) => {
       </Card>}
 
       {/* Summary */}
-      {myItems.length > 0 && <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-        <Lbl>My Items ({myItems.length})</Lbl>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <Lbl>My List{myItems.length>0?` (${myItems.length})`:""}</Lbl>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <button data-tour="share-list" onClick={async()=>{const text=myItems.map(it=>`• ${it.qty} ${it.unit} ${it.name}`).join("\n");try{await navigator.share({title:"My Grocery List",text});}catch{try{await navigator.clipboard.writeText(text);}catch{}}}} style={{background:"none",border:"none",color:T.acc,fontSize:12,cursor:"pointer",fontFamily:T.font,fontWeight:500,display:"flex",alignItems:"center",gap:3,padding:0}}>
+          <button data-tour="share-list" disabled={myItems.length===0} onClick={async()=>{const text=myItems.map(it=>`• ${it.qty} ${it.unit} ${it.name}`).join("\n");try{await navigator.share({title:"My Grocery List",text});}catch{try{await navigator.clipboard.writeText(text);}catch{}}}} style={{background:"none",border:"none",color:T.acc,fontSize:12,cursor:myItems.length===0?"default":"pointer",fontFamily:T.font,fontWeight:500,display:"flex",alignItems:"center",gap:3,padding:0,opacity:myItems.length===0?0.35:1}}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
             Share
           </button>
           {myItems.some(x=>x.checked) && <button onClick={async()=>await persistMyList(myItems.filter(x=>!x.checked))} style={{background:"none",border:"none",color:"rgba(239,68,68,0.7)",fontSize:12,cursor:"pointer",fontFamily:T.font,fontWeight:500}}>Clear checked</button>}
         </div>
-      </div>}
+      </div>
 
       {myItems.map(item=>{
         if(editingId===item.id) return (
