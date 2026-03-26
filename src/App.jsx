@@ -2954,7 +2954,7 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId}) => {
             <h3 style={{fontSize:20,fontWeight:700,color:T.tx,margin:"0 0 8px"}}>Smart Meal Plan List</h3>
             <p style={{fontSize:13,color:T.tx2,margin:"0 0 6px",lineHeight:1.5}}>Auto-generated from your A/B meal plan. Ingredients are multiplied by days used and organized by category.</p>
             <p style={{fontSize:12,color:T.txM,margin:"0 0 20px"}}>Day A × 4 days · Day B × 3 days · All deduplicated</p>
-            <button onClick={()=>setIsPro(true)} style={{padding:"14px 36px",borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font,marginBottom:8}}>
+            <button style={{padding:"14px 36px",borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"default",fontFamily:T.font,marginBottom:8,opacity:0.7}}>
               Upgrade to Macra Pro — $4.99/mo
             </button>
           </Card>
@@ -3006,9 +3006,6 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId}) => {
               })}
             </div>;
           })}
-          <button onClick={()=>setIsPro(false)} style={{width:"100%",padding:10,borderRadius:T.r,border:`1px dashed ${T.bd}`,background:"transparent",color:T.txM,fontSize:11,cursor:"pointer",fontFamily:T.font,marginTop:4}}>
-            ↩ Switch to Free tier (dev toggle)
-          </button>
         </>
       )}
     </>}
@@ -4218,7 +4215,7 @@ export default function App() {
         const {data} = await getProfile(u.id);
         if(data){
           const proFlag = data.is_pro === true;
-          console.log("[checkAuth] profile loaded", { userId: u.id, isPro: proFlag });
+          console.log(`[auth] userId: ${u.id} isPro: ${proFlag}`);
           setIsPro(proFlag);
           const pBase = {
             name:data.name, sex:data.sex, age:data.age,
@@ -4261,6 +4258,7 @@ export default function App() {
           return;
         }
         // User exists but no profile — needs onboarding
+        console.log(`[auth] userId: ${u.id} isPro: false (no profile yet)`);
         setPhase("onboarding");
         return;
       }
@@ -4275,7 +4273,7 @@ export default function App() {
     const {data} = await getProfile(u.id);
     if(data){
       const proFlag = data.is_pro === true;
-      console.log("[handleAuth] profile loaded", { userId: u.id, isPro: proFlag });
+      console.log(`[auth] userId: ${u.id} isPro: ${proFlag}`);
       setIsPro(proFlag);
       const pBase = {
         name:data.name, sex:data.sex, age:data.age,
@@ -4309,6 +4307,7 @@ export default function App() {
       }
       setPhase("app");
     } else {
+      console.log(`[auth] userId: ${u.id} isPro: false (new user — no profile yet)`);
       setPhase("onboarding");
     }
   };

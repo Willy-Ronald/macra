@@ -164,7 +164,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { profile, userId, isPro, excludedCuisines = [] } = req.body;
+    const { profile, userId, excludedCuisines = [] } = req.body;
     if (!profile) {
       return res.status(400).json({ error: "Missing profile data" });
     }
@@ -173,7 +173,6 @@ export default async function handler(req, res) {
       console.error("[rate-limit] Request missing userId — rejecting");
       return res.status(400).json({ error: "userId is required" });
     }
-    console.log(`[rate-limit] Request from userId: ${userId} isPro: ${isPro}`);
 
     const sbUrl = process.env.SUPABASE_URL;
     const sbKey = process.env.SUPABASE_SERVICE_KEY;
@@ -182,6 +181,11 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Server misconfiguration — cannot enforce rate limits" });
     }
     const sb = createClient(sbUrl, sbKey);
+
+    // Verify Pro status server-side — never trust the value sent from the frontend
+    const { data: profileData } = await sb.from("profiles").select("is_pro").eq("id", userId).single();
+    const isPro = profileData?.is_pro === true;
+    console.log(`[rate-limit] Request from userId: ${userId} isPro: ${isPro} (server-verified)`);
 
     // ── Rate limiting ───────────────────────────────────────────
     let lifetimeCount = 0, weeklyCount = 0, dayCount = 0, monthCount = 0;
