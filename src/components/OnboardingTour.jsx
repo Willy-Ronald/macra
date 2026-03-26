@@ -274,7 +274,7 @@ export default function OnboardingTour({ userId, onSwitchTab, onComplete }) {
             position: "fixed",
             left: sl.l, top: sl.t, width: sl.w, height: sl.h,
             borderRadius: SR,
-            boxShadow: `0 0 0 9999px rgba(0,0,0,0.82), inset 0 0 0 2px ${T.acc}`,
+            boxShadow: `0 0 0 9999px rgba(0,0,0,0.40), inset 0 0 0 3px ${T.acc}`,
             transition: "left 0.3s ease, top 0.3s ease, width 0.3s ease, height 0.3s ease",
             pointerEvents: "none",
             zIndex: 10000,
@@ -283,7 +283,7 @@ export default function OnboardingTour({ userId, onSwitchTab, onComplete }) {
       ) : (
         <div
           aria-hidden="true"
-          style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.82)", zIndex:10000, pointerEvents:"none" }}
+          style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.40)", zIndex:10000, pointerEvents:"none" }}
         />
       )}
 

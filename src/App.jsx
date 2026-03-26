@@ -2240,6 +2240,7 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
   const [freqLoaded,setFreqLoaded]=useState(false);
   const [hiddenNames,setHiddenNames]=useState([]); // locally hidden from "Frequently Logged"
   const [mealType,setMealType]=useState(()=>defaultMealType||getDefaultMealType());
+  const [savedRecipeModal,setSavedRecipeModal]=useState(null); // meal object or null
 
   useEffect(()=>{
     if(!userId||freqLoaded) return;
@@ -2526,7 +2527,7 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
         const fk="savedv-"+m.id;
         const isLogged=loggedId===fk;
         return <SwipeableRow key={m.id} onDelete={()=>onDeleteSavedMeal&&onDeleteSavedMeal(m.id)}>
-          <Card style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:0,cursor:"pointer"}} onClick={()=>quickLog({name:m.name,cal:m.totals.cal,p:m.totals.p,c:m.totals.c,f:m.totals.f},fk)}>
+          <Card style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:0,cursor:"pointer"}} onClick={()=>setSavedRecipeModal(m)}>
             <div style={{flex:1}}>
               <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{m.name}</p>
               <div style={{display:"flex",gap:8,marginTop:3}}>
@@ -2534,20 +2535,53 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
                   <span key={x.l} style={{fontSize:10,fontFamily:T.mono,color:x.c}}>{x.v}<span style={{color:T.txM,fontSize:8}}> {x.l}</span></span>
                 )}
               </div>
+              {m.ingredients?.length>0&&<p style={{fontSize:10,color:T.txM,margin:"3px 0 0"}}>Tap to view recipe</p>}
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
               <button onClick={(e)=>{e.stopPropagation();onDeleteSavedMeal&&onDeleteSavedMeal(m.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex",alignItems:"center"}}>
                 <HeartIcon filled size={18}/>
               </button>
-              <div style={{width:28,height:28,borderRadius:"50%",background:isLogged?T.ok:T.accM,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.3s ease"}}>
+              {/* Quick-log button — logs immediately without opening recipe */}
+              <button onClick={(e)=>{e.stopPropagation();quickLog({name:m.name,cal:m.totals.cal,p:m.totals.p,c:m.totals.c,f:m.totals.f},fk);}} style={{width:28,height:28,borderRadius:"50%",background:isLogged?T.ok:T.accM,border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"all 0.3s ease",flexShrink:0}}>
                 {isLogged
                   ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
                   : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>}
-              </div>
+              </button>
             </div>
           </Card>
         </SwipeableRow>;
       })}
+
+      {/* Recipe modal for saved meals */}
+      {savedRecipeModal&&(
+        <div onClick={()=>setSavedRecipeModal(null)} style={{position:"fixed",inset:0,zIndex:11000,display:"flex",alignItems:"flex-end",justifyContent:"center",background:"rgba(0,0,0,0.75)"}}>
+          <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:430,maxHeight:"85vh",overflowY:"auto",background:T.sf,borderRadius:"20px 20px 0 0",border:`1px solid ${T.bd}`,borderBottom:"none",padding:"20px 20px 44px",position:"relative"}}>
+            <div style={{width:36,height:4,borderRadius:2,background:T.bd,margin:"0 auto 18px"}}/>
+            <button onClick={()=>setSavedRecipeModal(null)} style={{position:"absolute",top:20,right:20,background:"none",border:"none",color:T.txM,fontSize:18,cursor:"pointer",padding:4,lineHeight:1}}>✕</button>
+            <h2 style={{fontSize:18,fontWeight:700,color:T.tx,margin:"0 0 10px",letterSpacing:"-0.01em",paddingRight:28}}>{savedRecipeModal.name}</h2>
+            <div style={{display:"flex",gap:12,marginBottom:16}}>
+              {[{v:savedRecipeModal.totals.cal,l:"cal",c:T.acc},{v:savedRecipeModal.totals.p+"g",l:"Protein",c:T.pro},{v:savedRecipeModal.totals.c+"g",l:"Carbs",c:T.carb},{v:savedRecipeModal.totals.f+"g",l:"Fat",c:T.fat}].map(x=>
+                <div key={x.l} style={{flex:1,textAlign:"center",padding:"8px 4px",background:T.accG,borderRadius:10,border:`1px solid ${T.accM}`}}>
+                  <p style={{fontSize:14,fontWeight:700,color:x.c,margin:0,fontFamily:T.mono}}>{x.v}</p>
+                  <p style={{fontSize:9,color:T.txM,margin:0,fontWeight:600}}>{x.l.toUpperCase()}</p>
+                </div>
+              )}
+            </div>
+            {savedRecipeModal.ingredients?.length>0&&<>
+              <p style={{fontSize:11,fontWeight:700,color:T.acc,letterSpacing:"0.1em",textTransform:"uppercase",margin:"0 0 8px"}}>Ingredients</p>
+              {savedRecipeModal.ingredients.map((ing,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:i<savedRecipeModal.ingredients.length-1?`1px solid ${T.bd}`:"none"}}>
+                  <span style={{fontSize:13,color:T.tx}}>{ing.name}</span>
+                  <span style={{fontSize:12,color:T.txM,fontFamily:T.mono}}>{ing.qty} {ing.unit}</span>
+                </div>
+              ))}
+            </>}
+            <button onClick={()=>{quickLog({name:savedRecipeModal.name,cal:savedRecipeModal.totals.cal,p:savedRecipeModal.totals.p,c:savedRecipeModal.totals.c,f:savedRecipeModal.totals.f},"savedv-"+savedRecipeModal.id);setSavedRecipeModal(null);}} style={{width:"100%",padding:"13px",borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font,marginTop:20}}>
+              Log This Meal
+            </button>
+          </div>
+        </div>
+      )}
     </div>;
   }
 
@@ -2832,15 +2866,16 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade}) => {
   // ── My List state (FREE) ──
   const [myItems,setMyItems]=useState([]);
   const [myListLoaded,setMyListLoaded]=useState(false);
-  const [addForm,setAddForm]=useState({name:"",qty:"1",unit:"lbs"});
+  const [addForm,setAddForm]=useState({name:"",qty:"1",unit:"lbs",category:"Other"});
   const [showAdd,setShowAdd]=useState(false);
   const [editingId,setEditingId]=useState(null);
-  const [editForm,setEditForm]=useState({name:"",qty:"",unit:""});
+  const [editForm,setEditForm]=useState({name:"",qty:"",unit:"",category:"Other"});
 
   // ── Plan List state (PRO) ──
   const [planChecked,setPlanChecked]=useState({});
 
   const myListUnits=["lbs","oz","dozen","gallon","liter","box","package","bunch","bag","can","jar","count"];
+  const myListCategories=["Produce","Dairy","Meat & Seafood","Grains & Pantry","Frozen","Beverages","Snacks","Other"];
   const inputStyle={width:"100%",padding:"10px 12px",borderRadius:10,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:14,fontFamily:T.font,fontWeight:500,outline:"none",boxSizing:"border-box"};
 
   // Load custom list from Supabase
@@ -2860,9 +2895,9 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade}) => {
 
   const addMyItem = async () => {
     if(!addForm.name.trim()) return;
-    const newItems = [...myItems, {id:Date.now().toString(),name:addForm.name.trim(),qty:addForm.qty,unit:addForm.unit,checked:false}];
+    const newItems = [...myItems, {id:Date.now().toString(),name:addForm.name.trim(),qty:addForm.qty,unit:addForm.unit,category:addForm.category||"Other",checked:false}];
     await persistMyList(newItems);
-    setAddForm({name:"",qty:"1",unit:"lbs"});
+    setAddForm({name:"",qty:"1",unit:"lbs",category:"Other"});
     setShowAdd(false);
   };
 
@@ -2876,12 +2911,12 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade}) => {
 
   const startEdit = (item) => {
     setEditingId(item.id);
-    setEditForm({name:item.name,qty:item.qty,unit:item.unit});
+    setEditForm({name:item.name,qty:item.qty,unit:item.unit,category:item.category||"Other"});
   };
 
   const saveEdit = async () => {
     if(!editForm.name.trim()) return;
-    await persistMyList(myItems.map(x=>x.id===editingId?{...x,name:editForm.name.trim(),qty:editForm.qty,unit:editForm.unit}:x));
+    await persistMyList(myItems.map(x=>x.id===editingId?{...x,name:editForm.name.trim(),qty:editForm.qty,unit:editForm.unit,category:editForm.category||"Other"}:x));
     setEditingId(null);
   };
 
@@ -3073,7 +3108,7 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade}) => {
           <p style={{fontSize:13,fontWeight:600,color:T.acc,margin:"0 0 12px"}}>New Item</p>
           <Lbl>Item Name</Lbl>
           <input value={addForm.name} onChange={e=>setAddForm(p=>({...p,name:e.target.value}))} placeholder="e.g. Chicken breast" style={{...inputStyle,marginTop:6,marginBottom:12}} onKeyDown={e=>e.key==="Enter"&&addMyItem()}/>
-          <div style={{display:"flex",gap:8,marginBottom:14}}>
+          <div style={{display:"flex",gap:8,marginBottom:10}}>
             <div style={{flex:"0 0 80px"}}>
               <Lbl>Qty</Lbl>
               <input value={addForm.qty} onChange={e=>setAddForm(p=>({...p,qty:e.target.value}))} type="number" style={{...inputStyle,marginTop:6,textAlign:"center"}}/>
@@ -3085,8 +3120,14 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade}) => {
               </select>
             </div>
           </div>
+          <div style={{marginBottom:14}}>
+            <Lbl>Category</Lbl>
+            <select value={addForm.category} onChange={e=>setAddForm(p=>({...p,category:e.target.value}))} style={{...inputStyle,marginTop:6,appearance:"none"}}>
+              {myListCategories.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
           <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>{setShowAdd(false);setAddForm({name:"",qty:"1",unit:"lbs"})}} style={{flex:1,padding:11,borderRadius:10,border:`1px solid ${T.bd}`,background:"transparent",color:T.tx2,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:T.font}}>Cancel</button>
+            <button onClick={()=>{setShowAdd(false);setAddForm({name:"",qty:"1",unit:"lbs",category:"Other"})}} style={{flex:1,padding:11,borderRadius:10,border:`1px solid ${T.bd}`,background:"transparent",color:T.tx2,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:T.font}}>Cancel</button>
             <button onClick={addMyItem} style={{flex:1,padding:11,borderRadius:10,border:"none",background:T.acc,color:T.bg,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:T.font,opacity:addForm.name?1:0.4,pointerEvents:addForm.name?"auto":"none"}}>Add</button>
           </div>
         </Card>
@@ -3111,16 +3152,26 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade}) => {
         </div>
       </div>
 
-      {myItems.map(item=>{
+      {/* Items grouped by category */}
+      {myListCategories.filter(cat=>myItems.some(x=>(x.category||"Other")===cat)).map(cat=>(
+        <div key={cat} style={{marginBottom:16}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+            <span style={{fontSize:11,fontWeight:600,color:T.acc,letterSpacing:"0.1em",textTransform:"uppercase"}}>{cat}</span>
+            <span style={{fontSize:11,color:T.txM,fontFamily:T.mono}}>{myItems.filter(x=>(x.category||"Other")===cat&&x.checked).length}/{myItems.filter(x=>(x.category||"Other")===cat).length}</span>
+          </div>
+          {myItems.filter(x=>(x.category||"Other")===cat).map(item=>{
         if(editingId===item.id) return (
           <Card key={item.id} style={{padding:"14px",marginBottom:6,border:`1px solid ${T.acc}40`}}>
-            <div style={{display:"flex",gap:8,marginBottom:10}}>
+            <div style={{display:"flex",gap:8,marginBottom:8}}>
               <input value={editForm.name} onChange={e=>setEditForm(p=>({...p,name:e.target.value}))} style={{...inputStyle,flex:2}} onKeyDown={e=>e.key==="Enter"&&saveEdit()}/>
               <input value={editForm.qty} onChange={e=>setEditForm(p=>({...p,qty:e.target.value}))} type="number" style={{...inputStyle,flex:"0 0 60px",textAlign:"center"}}/>
               <select value={editForm.unit} onChange={e=>setEditForm(p=>({...p,unit:e.target.value}))} style={{...inputStyle,flex:"0 0 80px",appearance:"none"}}>
                 {myListUnits.map(u=><option key={u} value={u}>{u}</option>)}
               </select>
             </div>
+            <select value={editForm.category} onChange={e=>setEditForm(p=>({...p,category:e.target.value}))} style={{...inputStyle,marginBottom:8,appearance:"none"}}>
+              {myListCategories.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setEditingId(null)} style={{flex:1,padding:9,borderRadius:8,border:`1px solid ${T.bd}`,background:"transparent",color:T.tx2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:T.font}}>Cancel</button>
               <button onClick={saveEdit} style={{flex:1,padding:9,borderRadius:8,border:"none",background:T.acc,color:T.bg,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:T.font}}>Save</button>
@@ -3133,6 +3184,8 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade}) => {
           onDelete={()=>deleteMyItem(item.id)}
         />;
       })}
+        </div>
+      ))}
     </>}
   </div>;
 };
@@ -4208,40 +4261,47 @@ export default function App() {
   const pwaTimerRef = useRef(null);          // 30-second delay timer
   const pwaTypeRef = useRef(null);           // 'native' | 'ios', set when ready
 
-  // Set up PWA listeners once the user reaches the app phase
+  // Set up PWA listeners once the user reaches the app phase.
+  // Timers are guarded by onboardingCompleted so the prompt never interrupts the tutorial.
   useEffect(() => {
     if(phase !== "app") return;
 
-    // Already running as installed PWA — never show
     const isStandalone = window.matchMedia("(display-mode: standalone)").matches || !!window.navigator.standalone;
     if(isStandalone) return;
-
-    // User dismissed previously — never show again
     if(localStorage.getItem("pwa-dismissed")) return;
 
+    const onboardingDone = profile?.onboardingCompleted ?? false;
     const ua = navigator.userAgent;
     const isIos = /iphone|ipad|ipod/i.test(ua);
     const isSafari = /safari/i.test(ua) && !/chrome|crios|fxios|edgios/i.test(ua);
 
     if(isIos && isSafari){
-      // iOS Safari has no beforeinstallprompt — show manual instructions
       pwaTypeRef.current = "ios";
-      pwaTimerRef.current = setTimeout(() => setPwaPrompt("ios"), 30000);
+      // Only start 30s timer after tutorial is complete
+      if(onboardingDone){
+        pwaTimerRef.current = setTimeout(() => setPwaPrompt("ios"), 30000);
+      }
       return () => clearTimeout(pwaTimerRef.current);
     }
 
-    // Chrome / Android / Edge — wait for beforeinstallprompt
+    // If onboarding just completed and we already have the deferred event, show after 2s
+    if(onboardingDone && deferredInstallEvent.current && !pwaTimerRef.current){
+      pwaTimerRef.current = setTimeout(() => setPwaPrompt("native"), 2000);
+    }
+
+    // Chrome / Android / Edge — capture event; start timer only after tutorial
     const handleBip = (e) => {
       e.preventDefault();
       deferredInstallEvent.current = e;
       pwaTypeRef.current = "native";
-      if(!pwaTimerRef.current){
+      if(onboardingDone && !pwaTimerRef.current){
         pwaTimerRef.current = setTimeout(() => setPwaPrompt("native"), 30000);
       }
     };
 
     const handleInstalled = () => {
       clearTimeout(pwaTimerRef.current);
+      pwaTimerRef.current = null;
       deferredInstallEvent.current = null;
       setPwaPrompt(null);
     };
@@ -4250,13 +4310,16 @@ export default function App() {
     window.addEventListener("appinstalled", handleInstalled);
     return () => {
       clearTimeout(pwaTimerRef.current);
+      pwaTimerRef.current = null;
       window.removeEventListener("beforeinstallprompt", handleBip);
       window.removeEventListener("appinstalled", handleInstalled);
     };
-  }, [phase]);
+  }, [phase, profile?.onboardingCompleted]);
 
-  // Called when first plan is generated — shows prompt immediately (skips 30s timer)
+  // Called when first plan is generated — shows prompt immediately (skips 30s timer).
+  // Guard: never fires during tutorial to avoid interrupting the onboarding flow.
   const triggerPwaEarly = () => {
+    if(!profile?.onboardingCompleted) return;
     if(localStorage.getItem("pwa-dismissed")) return;
     if(pwaPrompt) return; // already visible
     const type = pwaTypeRef.current;

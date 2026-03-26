@@ -37,7 +37,11 @@ export const supabase = supabaseUrl && supabaseKey
 
 export async function signUp(email, password) {
   if (!supabase) return { error: "Supabase not configured" };
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: "https://macra.dev" },
+  });
   return { data, error };
 }
 
