@@ -92,10 +92,10 @@ const AuthScreen = ({onAuth}) => {
   return <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:T.bg,fontFamily:T.font,display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 20px"}}>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
     <div style={{textAlign:"center",marginBottom:40}}>
-      <div style={{width:64,height:64,borderRadius:16,background:`linear-gradient(135deg, ${T.acc}, #A89560)`,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:16,boxShadow:`0 8px 32px rgba(200,184,138,0.2)`}}>
-        <span style={{fontSize:28,fontWeight:800,color:T.bg,fontFamily:T.font}}>M</span>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:14}}>
+        <img src="/logo.svg" alt="Macra" style={{width:36,height:36}}/>
+        <span style={{fontSize:30,fontWeight:600,color:T.acc,fontFamily:"'Cormorant Garamond',serif",letterSpacing:"0.08em",lineHeight:1}}>Macra</span>
       </div>
-      <h1 style={{fontSize:32,fontWeight:800,color:T.tx,margin:"0 0 6px",letterSpacing:"-0.03em"}}>Macra</h1>
       <p style={{fontSize:14,color:T.tx2,margin:0}}>{mode==="login"?"Welcome back.":"Create your account."}</p>
     </div>
 
@@ -194,21 +194,16 @@ const Splash = ({onFinish}) => {
   }}>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
     {/* Logo mark */}
-    <div style={{
-      width:80,height:80,borderRadius:20,
-      background:`linear-gradient(135deg, ${T.acc}, #A89560)`,
-      display:"flex",alignItems:"center",justifyContent:"center",
-      marginBottom:24,
-      boxShadow:`0 8px 32px rgba(200,184,138,0.2)`,
+    <img src="/logo.svg" alt="Macra" style={{
+      width:88,height:88,
+      marginBottom:20,
       opacity:phase>=0?1:0,transform:phase>=0?"scale(1)":"scale(0.8)",
       transition:"all 0.6s cubic-bezier(0.22, 1, 0.36, 1)"
-    }}>
-      <span style={{fontSize:36,fontWeight:800,color:T.bg,fontFamily:T.font,letterSpacing:"-0.04em"}}>M</span>
-    </div>
+    }}/>
     {/* Wordmark */}
     <h1 style={{
-      fontSize:38,fontWeight:800,color:T.tx,margin:"0 0 8px",
-      letterSpacing:"-0.03em",fontFamily:T.font,
+      fontSize:42,fontWeight:600,color:T.acc,margin:"0 0 8px",
+      letterSpacing:"0.08em",fontFamily:"'Cormorant Garamond',serif",
       opacity:phase>=0?1:0,transform:phase>=0?"translateY(0)":"translateY(12px)",
       transition:"all 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.15s"
     }}>Macra</h1>

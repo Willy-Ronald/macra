@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- Dark circle background with gold border -->
+  <circle cx="100" cy="100" r="98" fill="#0A0A0A" stroke="#C8B88A" stroke-width="2"/>
+  <!-- M letterform: geometric, medium weight, clean joints -->
+  <path d="M55,136 L55,70 L100,112 L145,70 L145,136"
+    fill="none" stroke="#C8B88A" stroke-width="11"
+    stroke-linecap="butt" stroke-linejoin="miter"/>
+  <!-- Left flared terminal -->
+  <line x1="46.5" y1="136" x2="63.5" y2="136" stroke="#C8B88A" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- Right flared terminal -->
+  <line x1="136.5" y1="136" x2="153.5" y2="136" stroke="#C8B88A" stroke-width="3.5" stroke-linecap="round"/>
+</svg>
