@@ -147,7 +147,8 @@ RULES:
 - "name" = dish name only, never include the cuisine label in the name
 - Share base ingredients across A and B where practical to keep shopping simple
 - Never repeat the exact same meal as previous generations
-- instructions: exactly 5 steps per meal, each under 12 words, starting with an action verb
+- instructions: exactly 5 steps per meal, each under 20 words, starting with an action verb
+- instructions must include: specific heat level AND temperature in °F (e.g. "medium-high heat (375°F)"), pan/pot size (e.g. "large 12-inch skillet"), exact cook time in minutes, and a visual doneness cue (e.g. "until golden brown", "until internal temp reaches 165°F"). No vague steps like "cook until done".
 - equipment: comma-separated string, max 3 items
 - desc: max 8 words
 - Return ONLY raw JSON starting with { and ending with } — no markdown, no explanation

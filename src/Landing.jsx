@@ -187,8 +187,13 @@ const Landing = () => {
     setWlStatus('loading');
     setWlError('');
     const clean = wlEmail.toLowerCase().trim();
-    if (!clean || !clean.includes('@') || !clean.includes('.')) {
-      setWlError('Please enter a valid email address.');
+    if (!clean) {
+      setWlError('Please enter your email address.');
+      setWlStatus('error');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(clean)) {
+      setWlError('Please enter a valid email address (e.g. you@example.com).');
       setWlStatus('error');
       return;
     }

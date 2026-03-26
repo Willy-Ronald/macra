@@ -70,6 +70,13 @@ export default function PricingModal({ onClose }) {
     return () => clearTimeout(t);
   }, []);
 
+  // Global ESC listener (the outer div may not have focus, so we use window)
+  useEffect(() => {
+    const handler = (e) => { if (e.key === "Escape") handleClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   function handleClose() {
     setVisible(false);
     setTimeout(onClose, 260);
@@ -135,9 +142,9 @@ export default function PricingModal({ onClose }) {
         </p>
 
         {/* Plan cards */}
+        <div style={{display:"flex",flexDirection:"column",gap:20,paddingTop:8}}>
         {PLANS.map(plan => (
           <div key={plan.id} style={{
-            marginBottom: 10,
             border: `1.5px solid ${plan.highlight ? T.acc : T.bd}`,
             borderRadius: T.r,
             padding: "16px 18px",
@@ -187,6 +194,7 @@ export default function PricingModal({ onClose }) {
             </button>
           </div>
         ))}
+        </div>
 
         {/* Feature list */}
         <div style={{

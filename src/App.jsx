@@ -594,12 +594,15 @@ const SwipeableRow = ({onDelete, children, style:outerStyle={}}) => {
   const [dragging, setDragging] = useState(false);
   const startX = useRef(null);
   const startY = useRef(null);
+  const startOffset = useRef(0);
   const isHoriz = useRef(false);
+  const containerRef = useRef(null);
   const REVEAL = 80;
 
   const onTS = (e) => {
     startX.current = e.touches[0].clientX;
     startY.current = e.touches[0].clientY;
+    startOffset.current = offset; // capture current offset so right-swipe can cancel
     isHoriz.current = false;
     setDragging(true);
   };
@@ -611,7 +614,8 @@ const SwipeableRow = ({onDelete, children, style:outerStyle={}}) => {
       if (Math.abs(dx) > 5 || Math.abs(dy) > 5) isHoriz.current = Math.abs(dx) > Math.abs(dy);
       return;
     }
-    if (dx < 0) setOffset(Math.max(dx, -REVEAL));
+    // Both directions: left reveals delete, right cancels reveal
+    setOffset(Math.max(-REVEAL, Math.min(0, startOffset.current + dx)));
   };
   const onTE = () => {
     setDragging(false);
@@ -619,8 +623,20 @@ const SwipeableRow = ({onDelete, children, style:outerStyle={}}) => {
     setOffset(prev => prev < -(REVEAL / 2) ? -REVEAL : 0);
   };
 
+  // Tap anywhere outside this row to collapse the delete button
+  useEffect(() => {
+    if (offset >= 0) return;
+    const handler = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setOffset(0);
+      }
+    };
+    const t = setTimeout(() => document.addEventListener('touchstart', handler, { passive: true }), 150);
+    return () => { clearTimeout(t); document.removeEventListener('touchstart', handler); };
+  }, [offset]);
+
   return (
-    <div style={{position:"relative", overflow:"hidden", borderRadius:T.r, marginBottom:6, ...outerStyle}}>
+    <div ref={containerRef} style={{position:"relative", overflow:"hidden", borderRadius:T.r, marginBottom:6, ...outerStyle}}>
       {/* Delete button revealed on swipe */}
       <div style={{position:"absolute", top:0, right:0, bottom:0, width:REVEAL, background:"#EF4444", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer"}}
         onClick={() => { onDelete(); setOffset(0); }}>
@@ -1500,7 +1516,7 @@ const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMe
         </Card>}
         {unloggedPlan.map((pm,i)=>{
           const isLogging=loggingId===pm.name;
-          return <Card key={"plan-"+i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,border:`1px dashed ${T.bd}`,background:"transparent",cursor:"pointer"}} onClick={()=>{setPendingMealType(getDefaultMealType());setPendingPlanMeal({name:pm.name,cal:pm.cal,p:pm.p||0,c:pm.c||0,f:pm.f||0});}}>
+          return <Card key={"plan-"+i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:10,border:`1px dashed ${T.bd}`,background:"transparent",cursor:"pointer"}} onClick={()=>{setPendingMealType(getDefaultMealType());setPendingPlanMeal({name:pm.name,cal:pm.cal,p:pm.p||0,c:pm.c||0,f:pm.f||0});}}>
             <div style={{display:"flex",alignItems:"center",gap:12}}>
               <div style={{width:7,height:7,borderRadius:"50%",background:T.txM}}/>
               <div>
@@ -1521,7 +1537,7 @@ const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMe
       </div>}
 
       {/* ── Eaten / Meals Logged ── */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"20px 0 12px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"28px 0 14px"}}>
         <h2 style={{fontSize:15,fontWeight:600,color:T.tx,margin:0}}>{isToday?"Eaten Today":"Meals Logged"}</h2>
         <span style={{fontSize:12,color:T.txM,fontFamily:T.mono}}>{displayLog.length} meal{displayLog.length!==1?"s":""}</span>
       </div>
@@ -1545,7 +1561,7 @@ const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMe
           return <div key={cat} style={{
             background:T.sf,borderRadius:T.r,
             border:hasItems?`1px solid ${T.bd}`:`1px dashed ${T.bd}`,
-            marginBottom:12,overflow:'hidden'
+            marginBottom:16,overflow:'hidden'
           }}>
             {/* Category header */}
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 16px'}}>
@@ -3485,13 +3501,31 @@ const ProfileScreen = ({profile, userId, userEmail, isPro, onProfileUpdate, onSi
       {label:'Fat',     pct:draftFatPct, setPct:v=>{setDraftFatPct(v);setDraftIsCustom(true);}, g:fatG,  c:T.fat},
     ];
 
+    // Adjust one macro and proportionally redistribute the remaining % to the other two
+    const handlePctInput = (changedIdx, rawVal) => {
+      const v = Math.max(10, Math.min(65, parseInt(rawVal) || 10));
+      const all = [draftProPct, draftCarbPct, draftFatPct];
+      const otherIdxs = [0,1,2].filter(i => i !== changedIdx);
+      const othersTotal = otherIdxs.reduce((s, i) => s + all[i], 0);
+      all[changedIdx] = v;
+      if (othersTotal > 0) {
+        const [ia, ib] = otherIdxs;
+        all[ia] = Math.max(10, Math.round(all[ia] / othersTotal * (100 - v)));
+        all[ib] = Math.max(10, 100 - v - all[ia]);
+      }
+      setDraftProPct(all[0]); setDraftCarbPct(all[1]); setDraftFatPct(all[2]);
+      setDraftIsCustom(true);
+    };
+
     return <div style={{padding:"0 20px 40px"}}>
       <style>{`
-        input[type=range]{-webkit-appearance:none;appearance:none;width:100%;background:transparent;cursor:pointer;margin:0}
+        input[type=range]{-webkit-appearance:none;appearance:none;width:100%;background:transparent;cursor:pointer;margin:0;user-select:none;-webkit-user-select:none;touch-action:pan-y}
         input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:${T.bd}}
-        input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;margin-top:-7px}
+        input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;margin-top:-9px}
         input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:${T.bd}}
-        input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;border:none}
+        input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;border:none}
+        .macro-pct-input{width:52px;background:transparent;border:none;border-bottom:1.5px solid;text-align:right;font-size:18px;font-weight:700;font-family:${T.mono};outline:none;padding:0;-moz-appearance:textfield}
+        .macro-pct-input::-webkit-inner-spin-button,.macro-pct-input::-webkit-outer-spin-button{-webkit-appearance:none}
       `}</style>
       <BackBtn onBack={()=>setView(null)}/>
       <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 4px",letterSpacing:"-0.02em"}}>Macro Split</h1>
@@ -3499,13 +3533,17 @@ const ProfileScreen = ({profile, userId, userEmail, isPro, onProfileUpdate, onSi
       <p style={{fontSize:11,color:T.txM,margin:"0 0 24px"}}>Calories stay fixed — adjust how they are distributed between macros</p>
 
       {/* Sliders */}
-      <Card style={{padding:'16px 20px',marginBottom:16,overflow:'hidden'}}>
+      <Card style={{padding:'16px 20px',marginBottom:16,overflow:'hidden',userSelect:'none',WebkitUserSelect:'none'}}>
         {sliders.map((s,i)=>(
-          <div key={s.label} style={{marginBottom:i<sliders.length-1?20:0}}>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+          <div key={s.label} style={{marginBottom:i<sliders.length-1?24:0}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
               <span style={{fontSize:13,fontWeight:600,color:T.tx}}>{s.label}</span>
-              <div style={{display:'flex',alignItems:'baseline',gap:8}}>
-                <span style={{fontSize:18,fontWeight:700,color:s.c,fontFamily:T.mono,minWidth:42,textAlign:'right'}}>{s.pct}%</span>
+              <div style={{display:'flex',alignItems:'baseline',gap:6}}>
+                {/* Editable % input — tap to type a value, others adjust proportionally */}
+                <input type="number" className="macro-pct-input" min={10} max={65} value={s.pct}
+                  style={{color:s.c,borderBottomColor:s.c}}
+                  onChange={e=>handlePctInput(i, e.target.value)}/>
+                <span style={{fontSize:14,fontWeight:700,color:s.c,fontFamily:T.mono}}>%</span>
                 <span style={{fontSize:12,color:T.txM,fontFamily:T.mono,minWidth:40}}>{s.g}g</span>
               </div>
             </div>
