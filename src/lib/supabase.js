@@ -83,6 +83,10 @@ export async function saveProfile(userId, profile) {
     pickiness_level: profile.pickinessLevel ?? 3,
     tracking_mode: profile.trackingMode || 'ai_plan',
     water_goal: profile.waterGoal ?? 8,
+    custom_protein_pct: profile.customProteinPct ?? null,
+    custom_carbs_pct:   profile.customCarbsPct ?? null,
+    custom_fat_pct:     profile.customFatPct ?? null,
+    custom_macro_split: profile.customMacroSplit ?? false,
     updated_at: new Date().toISOString(),
   });
   return { error };

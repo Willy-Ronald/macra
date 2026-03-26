@@ -3092,9 +3092,9 @@ const CUISINE_LIST = [
 ];
 const DIET_OPTIONS = ["None","Vegan","Vegetarian","Keto","Carnivore","Gluten-Free","Dairy-Free","Halal","Kosher","Paleo","High Protein","High Fiber"];
 
-const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
+const ProfileScreen = ({profile, userId, isPro, onProfileUpdate, onSignOut}) => {
   const m = profile?.macros;
-  // view: null | "diet" | "foods" | "cuisines" | "name" | "sex" | "age" | "weight" | "height" | "activity" | "goal"
+  // view: null | "diet" | "foods" | "cuisines" | "name" | "sex" | "age" | "weight" | "height" | "activity" | "goal" | "macrosplit"
   const [view, setView] = useState(null);
   const [savedToast, setSavedToast] = useState(false);
   // Drafts for preference sub-views
@@ -3114,6 +3114,11 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
   const [draftBudget, setDraftBudget] = useState("");
   const [draftPickiness, setDraftPickiness] = useState(3);
   const [draftTracking, setDraftTracking] = useState('ai_plan');
+  // Drafts for macro split editor
+  const [draftProPct, setDraftProPct] = useState(37);
+  const [draftCarbPct, setDraftCarbPct] = useState(32);
+  const [draftFatPct, setDraftFatPct] = useState(31);
+  const [draftIsCustom, setDraftIsCustom] = useState(false);
 
   const showSaved = () => { setSavedToast(true); setTimeout(()=>setSavedToast(false),2000); };
 
@@ -3145,6 +3150,22 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
     }
     if(v==="pickiness") setDraftPickiness(profile?.pickinessLevel ?? 3);
     if(v==="tracking") setDraftTracking(profile?.trackingMode||'ai_plan');
+    if(v==="macrosplit") {
+      if(profile?.customMacroSplit && profile?.customProteinPct != null) {
+        setDraftProPct(profile.customProteinPct);
+        setDraftCarbPct(profile.customCarbsPct);
+        setDraftFatPct(profile.customFatPct);
+        setDraftIsCustom(true);
+      } else if(m) {
+        const rec = calcMacros(profile);
+        const recPro = Math.round((rec.proteinG * 4 / rec.target) * 100);
+        const recFat = Math.round((rec.fatG * 9 / rec.target) * 100);
+        setDraftProPct(recPro); setDraftCarbPct(100 - recPro - recFat); setDraftFatPct(recFat);
+        setDraftIsCustom(false);
+      } else {
+        setDraftProPct(37); setDraftCarbPct(32); setDraftFatPct(31); setDraftIsCustom(false);
+      }
+    }
     setView(v);
   };
 
@@ -3171,6 +3192,16 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
     (profile?.heightFt != null) ? `${profile.heightFt}'${profile.heightIn??0}"` : null,
     actLabel[profile?.activity] || null,
   ].filter(Boolean).join(" · ") || "Tap to update";
+
+  // Current macro split percentages (from saved custom or derived from current macros)
+  const splitPct = (() => {
+    if(!m) return {pro:37, carb:32, fat:31};
+    if(profile?.customMacroSplit && profile?.customProteinPct != null)
+      return {pro:profile.customProteinPct, carb:profile.customCarbsPct, fat:profile.customFatPct};
+    const pro = Math.round((m.proteinG * 4 / m.target) * 100);
+    const fat = Math.round((m.fatG * 9 / m.target) * 100);
+    return {pro, carb: 100 - pro - fat, fat};
+  })();
 
   const Chevron = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="1.5" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>;
   const SaveBtn = ({onClick,label="Save"}) => <button onClick={onClick} style={{width:"100%",padding:14,borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font,marginTop:24}}>{label}</button>;
@@ -3256,6 +3287,125 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
       </div>
       <p style={{fontSize:11,color:T.txM,textAlign:"center",margin:"0 0 4px"}}>{draftCuisines.length===0?"All cuisines enabled":`${draftCuisines.length} cuisine${draftCuisines.length!==1?"s":""} excluded`}</p>
       <SaveBtn onClick={()=>saveField({dislikedCuisines:draftCuisines})}/>
+    </div>;
+  }
+
+  // ── Macro Split sub-view ──
+  if(view==="macrosplit") {
+    // Lock screen for free users
+    if(!isPro) return <div style={{padding:"0 20px 24px"}}>
+      <BackBtn onBack={()=>setView(null)}/>
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center',paddingTop:40,gap:16}}>
+        <div style={{fontSize:48}}>🔒</div>
+        <h2 style={{fontSize:20,fontWeight:700,color:T.tx,margin:0,letterSpacing:'-0.02em'}}>Custom Macro Split</h2>
+        <p style={{fontSize:14,color:T.tx2,margin:0,lineHeight:1.6,maxWidth:280}}>Upgrade to Pro to customize your protein, carbs, and fat targets.</p>
+        <button onClick={()=>setView(null)} style={{marginTop:8,padding:'14px 32px',borderRadius:T.r,border:'none',background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:T.font}}>
+          Upgrade to Pro
+        </button>
+      </div>
+    </div>;
+
+    const cals = m?.target || 2000;
+    const total = draftProPct + draftCarbPct + draftFatPct;
+    const valid = total === 100;
+    const proG  = Math.round((cals * draftProPct  / 100) / 4);
+    const carbG = Math.round((cals * draftCarbPct / 100) / 4);
+    const fatG  = Math.round((cals * draftFatPct  / 100) / 9);
+
+    // Recommended percentages derived from calcMacros()
+    const rec = m ? calcMacros(profile) : null;
+    const recPro = rec ? Math.round((rec.proteinG * 4 / rec.target) * 100) : 37;
+    const recFat = rec ? Math.round((rec.fatG * 9 / rec.target) * 100) : 31;
+    const recCarb = 100 - recPro - recFat;
+
+    const applyPreset = (pro, carb, fat, isCustom) => {
+      setDraftProPct(pro); setDraftCarbPct(carb); setDraftFatPct(fat); setDraftIsCustom(isCustom);
+    };
+
+    const handleSaveSplit = async () => {
+      let updates;
+      if(!draftIsCustom) {
+        const recalced = calcMacros(profile);
+        updates = {
+          macros: {...m, proteinG:recalced.proteinG, carbG:recalced.carbG, fatG:recalced.fatG},
+          customProteinPct:null, customCarbsPct:null, customFatPct:null, customMacroSplit:false,
+        };
+      } else {
+        updates = {
+          macros: {...m, proteinG:proG, carbG, fatG},
+          customProteinPct:draftProPct, customCarbsPct:draftCarbPct, customFatPct:draftFatPct, customMacroSplit:true,
+        };
+      }
+      await saveField(updates);
+    };
+
+    const PRESETS = [
+      {label:'Recommended', pro:recPro, carb:recCarb, fat:recFat, custom:false},
+      {label:'High Protein', pro:45, carb:30, fat:25, custom:true},
+      {label:'Balanced',     pro:33, carb:34, fat:33, custom:true},
+    ];
+
+    const sliders = [
+      {label:'Protein', pct:draftProPct, setPct:v=>{setDraftProPct(v);setDraftIsCustom(true);}, g:proG,  c:T.pro},
+      {label:'Carbs',   pct:draftCarbPct,setPct:v=>{setDraftCarbPct(v);setDraftIsCustom(true);},g:carbG, c:T.carb},
+      {label:'Fat',     pct:draftFatPct, setPct:v=>{setDraftFatPct(v);setDraftIsCustom(true);}, g:fatG,  c:T.fat},
+    ];
+
+    return <div style={{padding:"0 20px 40px"}}>
+      <style>{`
+        input[type=range]{-webkit-appearance:none;appearance:none;width:100%;background:transparent;cursor:pointer;margin:0}
+        input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:${T.bd}}
+        input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;margin-top:-7px}
+        input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:${T.bd}}
+        input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;border:none}
+      `}</style>
+      <BackBtn onBack={()=>setView(null)}/>
+      <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 4px",letterSpacing:"-0.02em"}}>Macro Split</h1>
+      <p style={{fontSize:13,color:T.tx2,margin:"0 0 4px"}}>Based on <span style={{color:T.acc,fontWeight:600,fontFamily:T.mono}}>{cals.toLocaleString()} cal</span> daily target</p>
+      <p style={{fontSize:11,color:T.txM,margin:"0 0 24px"}}>Calories stay fixed — adjust how they are distributed between macros</p>
+
+      {/* Sliders */}
+      <Card style={{padding:'16px 20px',marginBottom:16,overflow:'hidden'}}>
+        {sliders.map((s,i)=>(
+          <div key={s.label} style={{marginBottom:i<sliders.length-1?20:0}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+              <span style={{fontSize:13,fontWeight:600,color:T.tx}}>{s.label}</span>
+              <div style={{display:'flex',alignItems:'baseline',gap:8}}>
+                <span style={{fontSize:18,fontWeight:700,color:s.c,fontFamily:T.mono,minWidth:42,textAlign:'right'}}>{s.pct}%</span>
+                <span style={{fontSize:12,color:T.txM,fontFamily:T.mono,minWidth:40}}>{s.g}g</span>
+              </div>
+            </div>
+            <input type="range" min={10} max={65} value={s.pct}
+              onChange={e=>s.setPct(Number(e.target.value))}
+              style={{'--thumb-color':s.c}}/>
+            <style>{`input[type=range]::-webkit-slider-thumb{background:${s.c}} input[type=range]::-moz-range-thumb{background:${s.c}}`}</style>
+          </div>
+        ))}
+      </Card>
+
+      {/* Total indicator */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginBottom:16,padding:'10px',borderRadius:T.r,background:valid?'rgba(107,203,119,0.08)':'rgba(239,68,68,0.08)',border:`1px solid ${valid?'rgba(107,203,119,0.3)':'rgba(239,68,68,0.3)'}`}}>
+        <span style={{fontSize:14,fontWeight:600,color:valid?T.ok:'#EF4444',fontFamily:T.mono}}>Total: {total}%</span>
+        {valid && <span style={{fontSize:14,color:T.ok}}>✓</span>}
+        {!valid && <span style={{fontSize:11,color:'#EF4444'}}>{total < 100 ? `(${100-total}% remaining)` : `(${total-100}% over)`}</span>}
+      </div>
+
+      {/* Preset buttons */}
+      <div style={{display:'flex',gap:8,marginBottom:20}}>
+        {PRESETS.map(p=>{
+          const isActive = draftProPct===p.pro && draftCarbPct===p.carb && draftFatPct===p.fat;
+          return <button key={p.label} onClick={()=>applyPreset(p.pro,p.carb,p.fat,p.custom)}
+            style={{flex:1,padding:'9px 4px',borderRadius:T.r,border:`1px solid ${isActive?T.acc:T.bd}`,background:isActive?T.accM:'transparent',color:isActive?T.acc:T.tx2,fontSize:11,fontWeight:isActive?700:500,cursor:'pointer',fontFamily:T.font}}>
+            {p.label}
+          </button>;
+        })}
+      </div>
+
+      {/* Save */}
+      <button onClick={handleSaveSplit} disabled={!valid}
+        style={{width:'100%',padding:14,borderRadius:T.r,border:'none',background:valid?T.acc:T.bd,color:valid?T.bg:T.txM,fontSize:14,fontWeight:700,cursor:valid?'pointer':'default',fontFamily:T.font,transition:'all 0.2s'}}>
+        Save
+      </button>
     </div>;
   }
 
@@ -3482,6 +3632,21 @@ const ProfileScreen = ({profile, userId, onProfileUpdate, onSignOut}) => {
         <p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{profile?.trackingMode==='manual'?"Manual Track Mode":"AI Plan Mode"}</p>
       </div>
       <Chevron/>
+    </Card>
+    <Card onClick={()=>enterView("macrosplit")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,cursor:"pointer"}}>
+      <div>
+        <div style={{display:'flex',alignItems:'center',gap:6}}>
+          <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>Macro Split</p>
+          {!isPro&&<span style={{fontSize:9,fontWeight:600,color:T.acc,border:`1px solid ${T.acc}40`,borderRadius:8,padding:"2px 7px",letterSpacing:"0.05em"}}>PRO</span>}
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:6,marginTop:2}}>
+          <p style={{fontSize:11,color:T.txM,margin:0}}>Protein {splitPct.pro}% · Carbs {splitPct.carb}% · Fat {splitPct.fat}%</p>
+          <span style={{fontSize:9,fontWeight:600,color:profile?.customMacroSplit?T.acc:T.txM,border:`1px solid ${profile?.customMacroSplit?T.acc+'40':T.bd}`,borderRadius:8,padding:"1px 6px"}}>
+            {profile?.customMacroSplit?'Custom':'Recommended'}
+          </span>
+        </div>
+      </div>
+      {isPro ? <Chevron/> : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>}
     </Card>
     <div style={{marginBottom:20}}/>
 
@@ -4062,11 +4227,16 @@ export default function App() {
             dislikedFoods:data.disliked_foods||[], dislikedCuisines:data.disliked_cuisines||[],
             weeklyBudget:data.weekly_budget??null, pickinessLevel:data.pickiness_level??3,
             trackingMode:data.tracking_mode||'ai_plan', waterGoal:data.water_goal??8,
+            customProteinPct:data.custom_protein_pct??null, customCarbsPct:data.custom_carbs_pct??null,
+            customFatPct:data.custom_fat_pct??null, customMacroSplit:data.custom_macro_split??false,
           };
           const hasStats = pBase.sex && pBase.age && pBase.weightLbs && pBase.heightFt != null && pBase.activity && pBase.goal;
-          const freshMacros = hasStats ? calcMacros(pBase) : {target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat};
+          // If user has a custom split, load saved macro grams directly; otherwise recalculate
+          const freshMacros = pBase.customMacroSplit
+            ? {target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat}
+            : hasStats ? calcMacros(pBase) : {target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat};
           const p = {...pBase, macros: freshMacros};
-          if(hasStats) saveProfile(u.id, p).catch(e=>console.error("[checkAuth] macro resave failed:",e));
+          if(hasStats && !pBase.customMacroSplit) saveProfile(u.id, p).catch(e=>console.error("[checkAuth] macro resave failed:",e));
           setProfile(p);
           // Load saved meals
           const meals = await getSavedMeals(u.id);
@@ -4114,11 +4284,15 @@ export default function App() {
         dislikedFoods:data.disliked_foods||[], dislikedCuisines:data.disliked_cuisines||[],
         weeklyBudget:data.weekly_budget??null, pickinessLevel:data.pickiness_level??3,
         trackingMode:data.tracking_mode||'ai_plan', waterGoal:data.water_goal??8,
+        customProteinPct:data.custom_protein_pct??null, customCarbsPct:data.custom_carbs_pct??null,
+        customFatPct:data.custom_fat_pct??null, customMacroSplit:data.custom_macro_split??false,
       };
       const hasStats = pBase.sex && pBase.age && pBase.weightLbs && pBase.heightFt != null && pBase.activity && pBase.goal;
-      const freshMacros = hasStats ? calcMacros(pBase) : {target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat};
+      const freshMacros = pBase.customMacroSplit
+        ? {target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat}
+        : hasStats ? calcMacros(pBase) : {target:data.target_calories,proteinG:data.target_protein,carbG:data.target_carbs,fatG:data.target_fat};
       const p = {...pBase, macros: freshMacros};
-      if(hasStats) saveProfile(u.id, p).catch(e=>console.error("[handleAuth] macro resave failed:",e));
+      if(hasStats && !pBase.customMacroSplit) saveProfile(u.id, p).catch(e=>console.error("[handleAuth] macro resave failed:",e));
       setProfile(p);
       const meals = await getSavedMeals(u.id);
       setSavedMeals(meals.map(m=>({id:m.id,name:m.name,source:m.source||'custom',ingredients:m.ingredients||[],totals:{cal:m.total_calories,p:m.total_protein,c:m.total_carbs,f:m.total_fat}})));
@@ -4247,7 +4421,7 @@ export default function App() {
     log:<LogMeal savedMeals={savedMeals} onSaveMeal={handleSaveMeal} todayLog={todayLog} onLogMeal={handleLogMeal} userId={user?.id} onDeleteSavedMeal={handleDeleteSavedMeal} defaultMealType={defaultLogMealType}/>,
     stats:<StatsTab profile={profile} userId={user?.id} isPro={isPro}/>,
     grocery:<Grocery isPro={isPro} setIsPro={handleSetIsPro} weekPlans={weekPlans} userId={user?.id}/>,
-    profile:<ProfileScreen profile={profile} userId={user?.id} onProfileUpdate={p=>setProfile(p)} onSignOut={handleSignOut}/>
+    profile:<ProfileScreen profile={profile} userId={user?.id} isPro={isPro} onProfileUpdate={p=>setProfile(p)} onSignOut={handleSignOut}/>
   };
 
   return <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:T.bg,fontFamily:T.font,position:"relative"}}>
