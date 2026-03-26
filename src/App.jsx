@@ -16,6 +16,7 @@ import {
 } from "./lib/supabase";
 import { generateMealPlan } from "./lib/claude";
 import OnboardingTour from "./components/OnboardingTour";
+import PricingModal from "./components/PricingModal";
 
 // USDA FoodData Central API key (set VITE_USDA_API_KEY in Vercel env vars)
 const USDA_API_KEY = import.meta.env.VITE_USDA_API_KEY || "DEMO_KEY";
@@ -1742,7 +1743,7 @@ const RecipeDetail = ({meal, savedMeals=[], onHeartMeal, onLogMeal, onBack}) => 
   </div>;
 };
 
-const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,onLogMeal,setTab}) => {
+const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,onLogMeal,setTab,onUpgrade}) => {
   const [sel,setSel]=useState("A");
   const [loading,setLoading]=useState(false);
   const [loadMsg,setLoadMsg]=useState("");
@@ -1996,8 +1997,8 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,o
         </div>
         <p style={{fontSize:13,color:T.tx2,margin:"0 0 14px",lineHeight:1.5}}>{genError}</p>
         {!isPro ? (
-          <button style={{padding:"12px 28px",borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font}}>
-            Upgrade to Pro — $4.99/mo
+          <button onClick={onUpgrade} style={{padding:"12px 28px",borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font}}>
+            Upgrade to Pro
           </button>
         ) : (
           <p style={{fontSize:12,color:T.txM,margin:0}}>
@@ -2822,7 +2823,7 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
 };
 
 // ─── GROCERY ───────────────────────────────────────────────────
-const Grocery = ({isPro,setIsPro,weekPlans={},userId}) => {
+const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade}) => {
   const [activeTab,setActiveTab]=useState("mylist"); // "planlist" | "mylist"
 
   // ── My List state (FREE) ──
@@ -2974,8 +2975,8 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId}) => {
             <h3 style={{fontSize:20,fontWeight:700,color:T.tx,margin:"0 0 8px"}}>Smart Meal Plan List</h3>
             <p style={{fontSize:13,color:T.tx2,margin:"0 0 6px",lineHeight:1.5}}>Auto-generated from your A/B meal plan. Ingredients are multiplied by days used and organized by category.</p>
             <p style={{fontSize:12,color:T.txM,margin:"0 0 20px"}}>Day A × 4 days · Day B × 3 days · All deduplicated</p>
-            <button style={{padding:"14px 36px",borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"default",fontFamily:T.font,marginBottom:8,opacity:0.7}}>
-              Upgrade to Macra Pro — $4.99/mo
+            <button onClick={onUpgrade} style={{padding:"14px 36px",borderRadius:T.r,border:"none",background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:T.font,marginBottom:8}}>
+              Upgrade to Macra Pro
             </button>
           </Card>
           <div style={{opacity:0.18,filter:"blur(4px)",pointerEvents:"none"}}>
@@ -3115,7 +3116,7 @@ const CUISINE_LIST = [
 ];
 const DIET_OPTIONS = ["None","Vegan","Vegetarian","Keto","Carnivore","Gluten-Free","Dairy-Free","Halal","Kosher","Paleo","High Protein","High Fiber"];
 
-const ProfileScreen = ({profile, userId, isPro, onProfileUpdate, onSignOut}) => {
+const ProfileScreen = ({profile, userId, isPro, onProfileUpdate, onSignOut, onUpgrade}) => {
   const m = profile?.macros;
   // view: null | "diet" | "foods" | "cuisines" | "name" | "sex" | "age" | "weight" | "height" | "activity" | "goal" | "macrosplit"
   const [view, setView] = useState(null);
@@ -3322,7 +3323,7 @@ const ProfileScreen = ({profile, userId, isPro, onProfileUpdate, onSignOut}) => 
         <div style={{fontSize:48}}>🔒</div>
         <h2 style={{fontSize:20,fontWeight:700,color:T.tx,margin:0,letterSpacing:'-0.02em'}}>Custom Macro Split</h2>
         <p style={{fontSize:14,color:T.tx2,margin:0,lineHeight:1.6,maxWidth:280}}>Upgrade to Pro to customize your protein, carbs, and fat targets.</p>
-        <button onClick={()=>setView(null)} style={{marginTop:8,padding:'14px 32px',borderRadius:T.r,border:'none',background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:T.font}}>
+        <button onClick={onUpgrade} style={{marginTop:8,padding:'14px 32px',borderRadius:T.r,border:'none',background:T.acc,color:T.bg,fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:T.font}}>
           Upgrade to Pro
         </button>
       </div>
@@ -3619,7 +3620,7 @@ const ProfileScreen = ({profile, userId, isPro, onProfileUpdate, onSignOut}) => 
       <div style={{flex:1}}>
         <h2 style={{fontSize:18,fontWeight:600,color:T.tx,margin:"0 0 2px"}}>{profile?.name||"User"}</h2>
         <span style={{fontSize:12,color:T.txM}}>Macra Free</span>
-        <span style={{fontSize:12,color:T.acc,marginLeft:8,fontWeight:500,cursor:"pointer"}}>Go Pro →</span>
+        <span onClick={onUpgrade} style={{fontSize:12,color:T.acc,marginLeft:8,fontWeight:500,cursor:"pointer"}}>Go Pro →</span>
       </div>
     </Card>
 
@@ -4122,6 +4123,9 @@ export default function App() {
   const [fastStartedAt,setFastStartedAt] = useState(null);
   const [fastingGoal,setFastingGoal] = useState(16);
 
+  // ── Pricing modal ───────────────────────────────────────────────
+  const [showPricingModal, setShowPricingModal] = useState(false);
+
   // ── PWA install prompt ──────────────────────────────────────────
   const [pwaPrompt,setPwaPrompt] = useState(null); // null | 'native' | 'ios'
   const deferredInstallEvent = useRef(null); // stores the beforeinstallprompt event
@@ -4441,7 +4445,7 @@ export default function App() {
 
   const screens = {
     home:<Dashboard setTab={switchTab} onLogCategory={goToLogWithCategory} profile={profile} todayLog={todayLog} onLogMeal={handleLogMeal} onUnlogMeal={handleUnlogMeal} todayPlan={todayPlan} weekPlans={weekPlans} userId={user?.id} savedMeals={savedMeals} onHeartMeal={handleHeartToggle} isFasting={isFasting} fastStartedAt={fastStartedAt} fastingGoal={fastingGoal} onStartFast={handleStartFast} onEndFast={handleEndFast}/>,
-    plan:<Plan profile={profile} userId={user?.id} isPro={isPro} savedMeals={savedMeals} onHeartMeal={handleHeartToggle} onLogMeal={handleLogMeal} setTab={switchTab} onWeekPlanUpdate={(plans)=>{
+    plan:<Plan profile={profile} userId={user?.id} isPro={isPro} savedMeals={savedMeals} onHeartMeal={handleHeartToggle} onLogMeal={handleLogMeal} setTab={switchTab} onUpgrade={()=>setShowPricingModal(true)} onWeekPlanUpdate={(plans)=>{
       // plans = { 0: dayA[], 1: dayB[] }
       const wasEmpty = Object.keys(weekPlans).length === 0;
       setWeekPlans(plans);
@@ -4454,8 +4458,8 @@ export default function App() {
     }}/>,
     log:<LogMeal savedMeals={savedMeals} onSaveMeal={handleSaveMeal} todayLog={todayLog} onLogMeal={handleLogMeal} userId={user?.id} onDeleteSavedMeal={handleDeleteSavedMeal} defaultMealType={defaultLogMealType}/>,
     stats:<StatsTab profile={profile} userId={user?.id} isPro={isPro}/>,
-    grocery:<Grocery isPro={isPro} setIsPro={handleSetIsPro} weekPlans={weekPlans} userId={user?.id}/>,
-    profile:<ProfileScreen profile={profile} userId={user?.id} isPro={isPro} onProfileUpdate={p=>setProfile(p)} onSignOut={handleSignOut}/>
+    grocery:<Grocery isPro={isPro} setIsPro={handleSetIsPro} weekPlans={weekPlans} userId={user?.id} onUpgrade={()=>setShowPricingModal(true)}/>,
+    profile:<ProfileScreen profile={profile} userId={user?.id} isPro={isPro} onProfileUpdate={p=>setProfile(p)} onSignOut={handleSignOut} onUpgrade={()=>setShowPricingModal(true)}/>
   };
 
   return <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:T.bg,fontFamily:T.font,position:"relative"}}>
@@ -4474,6 +4478,9 @@ export default function App() {
     </button>}
 
     {pwaPrompt && <PwaPrompt type={pwaPrompt} onInstall={handleInstallClick} onDismiss={dismissPwa}/>}
+
+    {/* ── Pricing modal ── */}
+    {showPricingModal && <PricingModal onClose={() => setShowPricingModal(false)}/>}
 
     {/* ── First-login onboarding tour — rendered at App level so tab navigation works ── */}
     {profile && !profile.onboardingCompleted && user && (
