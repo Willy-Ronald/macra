@@ -68,7 +68,8 @@ function getComplexityScore(profile) {
   const pickiness = profile.pickinessLevel ?? 3;
   if (pickiness <= 2 || pickiness >= 5)                 score += 1;
   const budget = profile.weeklyBudget ?? 75;
-  if (budget < 50 || budget > 150)                      score += 1;
+  if (budget < 60)                                      score += 3; // strict budget needs Sonnet to follow ingredient rules
+  else if (budget < 90 || budget > 150)                 score += 1;
   if ((profile.goal || "").includes("bulk"))            score += 1;
   return score;
 }
@@ -461,9 +462,45 @@ export default async function handler(req, res) {
     ].filter(Boolean).join("\n\n");
 
     const weeklyBudget = profile.weeklyBudget ?? null;
-    const budgetLine = weeklyBudget
-      ? `BUDGET: ~$${weeklyBudget}/week total for both days. Use affordable proteins (eggs, canned fish, chicken thighs, ground turkey, legumes). Avoid specialty/exotic ingredients.`
-      : "";
+
+    // Build tiered budget instruction based on how tight the budget is
+    let budgetLine = "";
+    if (weeklyBudget) {
+      if (weeklyBudget < 60) {
+        budgetLine = `🚨 STRICT BUDGET — $${weeklyBudget}/WEEK 🚨
+This is a hard constraint. The combined grocery list for BOTH days MUST cost under $${weeklyBudget} for the full week (4 Day A + 3 Day B servings).
+
+REQUIRED cheap proteins (use these, no exceptions):
+  ✓ Eggs ($0.36 ea)  ✓ Chicken thighs ($3.99/lb)  ✓ Ground turkey ($4.49/lb)
+  ✓ Canned beans ($1.29/can)  ✓ Canned tuna ($1.49/can)  ✓ Tofu ($2.99/block)
+
+REQUIRED cheap carbs: white/brown rice, pasta, potatoes, oats, bread.
+
+REQUIRED vegetables: frozen or canned preferred; onions, carrots, cabbage okay fresh.
+
+ABSOLUTELY FORBIDDEN at this budget:
+  ✗ Chicken breast (use thighs)  ✗ Ground beef (use turkey)
+  ✗ Salmon / steak / shrimp / any expensive seafood
+  ✗ Fresh berries  ✗ Avocado  ✗ Specialty cheeses  ✗ Organic items
+
+If macro targets cannot be hit with these ingredients, get as close as possible — budget is the top priority.`;
+      } else if (weeklyBudget < 90) {
+        budgetLine = `MODERATE BUDGET — $${weeklyBudget}/week.
+Total grocery cost for the week (4A + 3B) should stay at or under $${weeklyBudget}.
+
+PREFERRED proteins: chicken breast, ground turkey, eggs, ground beef, canned beans.
+OCCASIONAL (max 1 meal/week): salmon or pork chops.
+AVOID: steak, shrimp, lamb, any cut over $8/lb.
+
+PRODUCE: mix fresh and frozen; seasonal fruit (apple, banana, orange).
+Limit avocado to 1 meal max. Prefer frozen berries over fresh.
+
+CARBS: rice, pasta, potatoes as primary starches.`;
+      } else {
+        budgetLine = `BUDGET — $${weeklyBudget}/week. Total grocery cost for the week should stay near $${weeklyBudget}.
+All proteins allowed. Vary protein sources. Fresh produce encouraged. Still avoid unnecessary waste — don't use exotic specialty items that spike cost without nutrition benefit.`;
+      }
+    }
 
     const pickinessLevel = profile.pickinessLevel ?? 3;
     const complexityLines = {
@@ -483,9 +520,12 @@ STRICT: no fish/seafood, no beans/legumes, no leafy greens, no ethnic names, no 
 
       if (retryPrefix) parts.push(retryPrefix);
 
+      // Budget goes FIRST — highest priority so Claude never forgets it
+      if (budgetLine) parts.push(budgetLine);
+
       parts.push(`Generate an A/B day meal plan. Goal: ${goal}.`);
 
-      // Dietary constraints go FIRST — highest priority
+      // Dietary constraints — second highest priority
       if (hardConstraints) {
         parts.push(hardConstraints);
       }
@@ -503,7 +543,6 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
 - Dinner:    ~${Math.round(macros.target*0.34)}-${Math.round(macros.target*0.36)} cal, ~${Math.round(macros.proteinG*0.34)}-${Math.round(macros.proteinG*0.36)}g protein`
       );
 
-      if (budgetLine) parts.push(budgetLine);
       parts.push(complexityLine);
       parts.push(`Cuisine per slot:\n${cuisineAssignmentLines}`);
 

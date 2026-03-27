@@ -3203,8 +3203,9 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade,profile}) => {
               </div>
             </div>
           </Card>
-          <Card style={{padding:"8px 14px",marginBottom:16,background:T.accG,border:`1px solid ${T.accM}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-            <p style={{fontSize:11,color:T.tx2,margin:0}}>✦ Day A × 4 days + Day B × 3 days · quantities combined and deduplicated</p>
+          <Card style={{padding:"12px 16px",marginBottom:16,background:T.accG,border:`1px solid ${T.accM}`,textAlign:"center"}}>
+            <p style={{fontSize:12,fontWeight:700,color:T.acc,letterSpacing:"0.08em",textTransform:"uppercase",margin:"0 0 2px"}}>Total Needed for Week</p>
+            <p style={{fontSize:11,color:T.tx2,margin:0}}>4 Day A meals + 3 Day B meals · amounts combined</p>
             <button onClick={handleSharePlanList} style={{flexShrink:0,padding:"6px 12px",borderRadius:8,border:`1px solid ${T.acc}`,background:"transparent",color:T.acc,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:T.font,display:"flex",alignItems:"center",gap:5}}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
               Share
@@ -3220,15 +3221,7 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade,profile}) => {
               {cat.items.map(it=>{
                 const done=!!planChecked[it.id];
                 const dispQty = Number.isInteger(it.qty) ? it.qty : Math.round(it.qty*10)/10;
-                const pkg = costEstimate?.itemMap?.get(it.id);
-                // Only show secondary "· qty unit" when the recipe uses a cooking unit
-                // (tbsp/tsp/cup). For meats/produce measured in oz/lb/pieces the
-                // package label already conveys the quantity — showing both is redundant.
-                const COOKING_UNITS = new Set(["tbsp","tablespoon","tablespoons","tsp","teaspoon","teaspoons","cup","cups","ml","milliliter","milliliters","l","liter","liters"]);
-                const showSecondary = COOKING_UNITS.has((it.unit||"").toLowerCase().trim());
-                const fmtQtyStr = pkg?.pkgLabel
-                  ? (showSecondary ? `${pkg.pkgLabel} · ${dispQty} ${it.unit}` : pkg.pkgLabel)
-                  : `${dispQty} ${it.unit}`;
+                const fmtQtyStr = `${dispQty} ${it.unit}`;
                 return <CheckRow key={it.id} id={it.id} name={it.name} fmtQty={fmtQtyStr} done={done}
                   onToggle={()=>setPlanChecked(p=>({...p,[it.id]:!p[it.id]}))}
                 />;
