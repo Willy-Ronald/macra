@@ -2530,14 +2530,23 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
   const handleSearchInput = (val) => {
     setSearchQuery(val);
     setSelectedFood(null);setSelectedPortion(null);setSearchLogSuccess(false);
+    // Clear stale results when the user edits the query
+    if(savedResults.length>0||usdaResults.length>0){
+      setSavedResults([]);setUsdaResults([]);
+    }
     if(!val||val.length<2){
       if(abortRef.current) abortRef.current.abort();
-      setSavedResults([]);setUsdaResults([]);setSearchError("");setSearchLoading(false);
-      if(debounceRef.current) clearTimeout(debounceRef.current);
-      return;
+      setSearchError("");setSearchLoading(false);
     }
-    if(debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(()=>searchFoods(val),500);
+  };
+
+  // Explicit search trigger — called by Enter key or Search button only.
+  // No automatic search-as-you-type to preserve API quota.
+  const handleSearch = () => {
+    const q = searchQuery.trim();
+    if(!q||q.length<2){ setSearchError("Enter at least 2 characters to search."); return; }
+    setSearchError("");
+    searchFoods(q);
   };
 
   const selectFood = (food) => {
@@ -2730,10 +2739,13 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
             ? <><div style={{width:17,height:17,borderRadius:"50%",border:`2px solid ${T.bd}`,borderTopColor:T.acc,animation:"spin 1s linear infinite"}}/><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style></>
             : <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="1.5" strokeLinecap="round"><circle cx="11" cy="11" r="7.5"/><path d="M21 21l-4.35-4.35"/></svg>}
         </div>
-        <input value={searchQuery} onChange={e=>handleSearchInput(e.target.value)} placeholder="Search foods... e.g. chicken breast, Chobani" style={{flex:1,padding:"13px 10px",border:"none",background:"transparent",color:T.tx,fontSize:14,fontFamily:T.font,fontWeight:500,outline:"none"}}/>
-        {searchQuery && <div onClick={clearSearch} style={{padding:"13px 16px 13px 0",cursor:"pointer"}}>
+        <input value={searchQuery} onChange={e=>handleSearchInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();handleSearch();}}} placeholder="Search foods… press Enter or tap Search" style={{flex:1,padding:"13px 10px",border:"none",background:"transparent",color:T.tx,fontSize:14,fontFamily:T.font,fontWeight:500,outline:"none"}}/>
+        {searchQuery && <div onClick={clearSearch} style={{padding:"13px 8px 13px 0",cursor:"pointer"}}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.txM} strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </div>}
+        <button onClick={handleSearch} disabled={searchLoading} style={{padding:"0 14px",alignSelf:"stretch",border:"none",borderLeft:`1px solid ${T.bd}`,background:"transparent",color:searchLoading?T.txM:T.acc,fontSize:13,fontWeight:700,cursor:searchLoading?"not-allowed":"pointer",fontFamily:T.font,letterSpacing:"0.02em",flexShrink:0}}>
+          {searchLoading?"…":"Search"}
+        </button>
       </Card>
 
       {/* Expanding soon note */}
