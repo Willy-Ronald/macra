@@ -3217,9 +3217,13 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade,profile}) => {
                 const done=!!planChecked[it.id];
                 const dispQty = Number.isInteger(it.qty) ? it.qty : Math.round(it.qty*10)/10;
                 const pkg = costEstimate?.itemMap?.get(it.id);
-                // Show "1 lb · 16 oz" when package info is available, else plain qty
+                // Only show secondary "· qty unit" when the recipe uses a cooking unit
+                // (tbsp/tsp/cup). For meats/produce measured in oz/lb/pieces the
+                // package label already conveys the quantity — showing both is redundant.
+                const COOKING_UNITS = new Set(["tbsp","tablespoon","tablespoons","tsp","teaspoon","teaspoons","cup","cups","ml","milliliter","milliliters","l","liter","liters"]);
+                const showSecondary = COOKING_UNITS.has((it.unit||"").toLowerCase().trim());
                 const fmtQtyStr = pkg?.pkgLabel
-                  ? `${pkg.pkgLabel} · ${dispQty} ${it.unit}`
+                  ? (showSecondary ? `${pkg.pkgLabel} · ${dispQty} ${it.unit}` : pkg.pkgLabel)
                   : `${dispQty} ${it.unit}`;
                 return <CheckRow key={it.id} id={it.id} name={it.name} fmtQty={fmtQtyStr} done={done}
                   onToggle={()=>setPlanChecked(p=>({...p,[it.id]:!p[it.id]}))}
@@ -4024,16 +4028,32 @@ const ProfileScreen = ({profile, userId, userEmail, isPro, onProfileUpdate, onSi
       </div>
       <Chevron/>
     </Card>
-    {/* Admin panel — only visible to admin email */}
-    {isAdmin&&<div style={{marginTop:28,padding:"16px 18px",border:"1.5px solid #C4714A",borderRadius:T.r,background:"rgba(196,113,74,0.08)"}}>
-      <p style={{fontSize:10,fontWeight:700,color:"#C4714A",letterSpacing:"0.12em",textTransform:"uppercase",margin:"0 0 4px"}}>🔧 Dev Admin Panel</p>
-      <p style={{fontSize:12,color:T.tx2,margin:"0 0 14px"}}>Current tier: <strong style={{color:T.tx}}>{isPro?"Pro":"Free"}</strong></p>
-      <button onClick={handleToggleProMode} style={{width:"100%",padding:"11px",borderRadius:T.r,border:"none",background:isPro?"#5A8A5E":"#C4714A",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:T.font,marginBottom:8}}>
-        {isPro?"Switch to Free Tier":"Switch to Pro Tier"}
+    {/* Dev panel — only visible to dev accounts (is_dev_account = true in DB) */}
+    {profile?.isDevAccount&&<div style={{marginTop:28,padding:"16px 18px",border:"1.5px solid rgba(200,184,138,0.5)",borderRadius:T.r,background:"rgba(200,184,138,0.06)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+        <p style={{fontSize:10,fontWeight:700,color:T.acc,letterSpacing:"0.12em",textTransform:"uppercase",margin:0}}>🔧 Dev Controls</p>
+        <span style={{fontSize:10,fontWeight:700,background:"#7A9E7E",color:"#000",padding:"2px 7px",borderRadius:4,letterSpacing:"0.05em"}}>∞ UNLIMITED</span>
+      </div>
+      <div style={{display:"flex",gap:8,marginBottom:12}}>
+        <button onClick={async()=>{
+          const {error}=await supabase.from("profiles").update({is_pro:true}).eq("id",userId);
+          if(!error){await onSetIsPro(true);showAdminToast("Switched to PRO — reloading…");setTimeout(()=>window.location.reload(),800);}
+          else showAdminToast("Toggle failed — check console");
+        }} style={{flex:1,padding:"10px 0",borderRadius:T.r,border:isPro?"2px solid #7A9E7E":"1px solid #555",background:isPro?"rgba(122,158,126,0.15)":"transparent",color:isPro?"#7A9E7E":T.tx2,fontSize:12,fontWeight:isPro?700:500,cursor:"pointer",fontFamily:T.font}}>
+          {isPro?"✓ Pro Mode":"Switch to Pro"}
+        </button>
+        <button onClick={async()=>{
+          const {error}=await supabase.from("profiles").update({is_pro:false}).eq("id",userId);
+          if(!error){await onSetIsPro(false);showAdminToast("Switched to FREE — reloading…");setTimeout(()=>window.location.reload(),800);}
+          else showAdminToast("Toggle failed — check console");
+        }} style={{flex:1,padding:"10px 0",borderRadius:T.r,border:!isPro?"2px solid #C9A84C":"1px solid #555",background:!isPro?"rgba(201,168,76,0.1)":"transparent",color:!isPro?"#C9A84C":T.tx2,fontSize:12,fontWeight:!isPro?700:500,cursor:"pointer",fontFamily:T.font}}>
+          {!isPro?"✓ Free Mode":"Switch to Free"}
+        </button>
+      </div>
+      <button onClick={handleResetGenerations} style={{width:"100%",padding:"9px",borderRadius:T.r,border:`1px solid ${T.bd}`,background:"transparent",color:T.tx2,fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:T.font}}>
+        Clear Generation Log
       </button>
-      <button onClick={handleResetGenerations} style={{width:"100%",padding:"10px",borderRadius:T.r,border:`1px solid #C9A84C`,background:"transparent",color:"#C9A84C",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:T.font}}>
-        Reset Generation Limits
-      </button>
+      <p style={{fontSize:11,color:T.txM,margin:"10px 0 0",textAlign:"center"}}>∞ unlimited generations · current: <strong style={{color:T.tx}}>{isPro?"PRO":"FREE"}</strong></p>
     </div>}
 
     {adminToast&&<div style={{position:"fixed",bottom:100,left:"50%",transform:"translateX(-50%)",background:"#C4714A",color:"#fff",padding:"10px 20px",borderRadius:12,fontSize:12,fontWeight:700,zIndex:200,whiteSpace:"nowrap",boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>{adminToast}</div>}
@@ -4592,6 +4612,7 @@ export default function App() {
             customProteinPct:data.custom_protein_pct??null, customCarbsPct:data.custom_carbs_pct??null,
             customFatPct:data.custom_fat_pct??null, customMacroSplit:data.custom_macro_split??false,
             onboardingCompleted:data.onboarding_completed??false,
+            isDevAccount:data.is_dev_account===true,
           };
           const hasStats = pBase.sex && pBase.age && pBase.weightLbs && pBase.heightFt != null && pBase.activity && pBase.goal;
           // If user has a custom split, load saved macro grams directly; otherwise recalculate

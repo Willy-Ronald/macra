@@ -316,15 +316,20 @@ export default async function handler(req, res) {
     const sb = createClient(sbUrl, sbKey);
 
     // Verify Pro status server-side — never trust the value sent from the frontend
-    const { data: profileData } = await sb.from("profiles").select("is_pro").eq("id", userId).single();
+    const { data: profileData } = await sb.from("profiles").select("is_pro, is_dev_account").eq("id", userId).single();
     const isPro = profileData?.is_pro === true;
-    console.log(`[rate-limit] Request from userId: ${userId} isPro: ${isPro} (server-verified)`);
+    const isDevAccount = profileData?.is_dev_account === true;
+    console.log(`[rate-limit] Request from userId: ${userId} isPro: ${isPro} isDevAccount: ${isDevAccount} (server-verified)`);
 
     // ── Rate limiting ───────────────────────────────────────────
     let lifetimeCount = 0, weeklyCount = 0, dayCount = 0, monthCount = 0;
     let remaining = null;
 
-    if (!isPro) {
+    if (isDevAccount) {
+      // Dev accounts bypass all rate limits entirely
+      console.log(`[rate-limit] DEV ACCOUNT — bypassing all limits for ${userId}`);
+      remaining = { phase: "dev", daily: 999, monthly: 999 };
+    } else if (!isPro) {
       // Phase 1 — Intro: first FREE_INTRO_LIMIT lifetime gens, no time restriction
       lifetimeCount = await countLogs(sb, userId, "1970-01-01T00:00:00Z", "lifetime");
       console.log(`[rate-limit] FREE lifetime: ${lifetimeCount}`);
