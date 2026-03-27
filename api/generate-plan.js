@@ -142,6 +142,8 @@ function validateMacros(day, targets, label) {
 // NEVER include user-specific data here — only format + rules.
 const STATIC_SYSTEM = `You are a precise meal planning AI. Generate A/B day meal plans in exact JSON format.
 
+Generate realistic portion sizes that fit within the user's weekly budget. The estimated grocery cost should not exceed 130% of the stated budget.
+
 RULES:
 - Day A and B must be completely different meals — no repeated dishes across days
 - Each day: exactly 4 meals in order: BREAKFAST, LUNCH, SNACK, DINNER
@@ -483,7 +485,17 @@ ABSOLUTELY FORBIDDEN at this budget:
   ✗ Salmon / steak / shrimp / any expensive seafood
   ✗ Fresh berries  ✗ Avocado  ✗ Specialty cheeses  ✗ Organic items
 
-If macro targets cannot be hit with these ingredients, get as close as possible — budget is the top priority.`;
+If macro targets cannot be hit with these ingredients, get as close as possible — budget is the top priority.
+
+STRICT BUDGET PORTION CAPS — MANDATORY at <$60/week:
+- Breakfast protein: maximum 2–3 eggs OR 3–4 oz of any other protein source
+- Lunch protein: maximum 4–6 oz protein
+- Dinner protein: maximum 6–8 oz protein
+- Snacks: prioritize carb/fat sources (fruit, rice cakes, nuts, oats, yogurt). Do NOT use protein-heavy snacks.
+- Weekly protein cap: ground turkey + chicken thighs + ground beef combined must not exceed 56 oz (3.5 lbs) across Day A (×4 servings) + Day B (×3 servings)
+- Prioritize eggs (18–24 per week maximum) and canned beans as the most cost-efficient protein sources
+- Canned tuna: use sparingly — 2–3 cans maximum across the full week
+- Day A + Day B combined expensive protein (turkey, chicken, beef) must not exceed 56 oz total for the week`;
       } else if (weeklyBudget < 90) {
         budgetLine = `MODERATE BUDGET — $${weeklyBudget}/week.
 Total grocery cost for the week (4A + 3B) should stay at or under $${weeklyBudget}.
@@ -688,6 +700,7 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
       console.log(`[rate-limit] generation_log insert OK for user ${userId}`);
     }
 
+    // TODO V1.5: Validate estimated cost here and retry if >150% of budget
     return res.json({ abPlan, remaining });
   } catch (err) {
     console.error("Generate plan error:", err);
