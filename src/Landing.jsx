@@ -487,28 +487,43 @@ const Landing = () => {
       </section>
 
       {/* ── Why Macra? ─────────────────────────────────────────── */}
-      <section style={{padding:isMobile?"72px 20px":"120px 24px",background:sf,borderTop:"1px solid "+bd,borderBottom:"1px solid "+bd}}>
-        <div style={{maxWidth:960,margin:"0 auto"}}>
-          <div style={{textAlign:"center",marginBottom:isMobile?40:60}}>
+      <section style={{padding:isMobile?"72px 20px":"120px 24px",background:"linear-gradient(180deg, #0a0a0a 0%, #000000 100%)"}}>
+        <div style={{maxWidth:1100,margin:"0 auto"}}>
+          <div style={{textAlign:"center",marginBottom:isMobile?40:64}}>
             <p style={{fontSize:13,fontWeight:600,color:a,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:16}}>Why Macra?</p>
-            <h2 style={{fontSize:"clamp(28px, 5vw, 44px)",fontWeight:800,letterSpacing:"-0.02em",margin:"0 0 12px"}}>Built around <span style={{color:a}}>how you actually eat.</span></h2>
+            <h2 style={{fontSize:"clamp(28px, 5vw, 44px)",fontWeight:800,letterSpacing:"-0.02em",margin:"0 0 14px"}}>Built around <span style={{color:a}}>how you actually eat.</span></h2>
             <p style={{fontSize:16,color:tx2,margin:0,maxWidth:480,marginLeft:"auto",marginRight:"auto",lineHeight:1.6}}>Most nutrition apps treat everyone the same. Macra adapts to your budget, taste, and goals.</p>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:16}}>
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr 1fr",gap:isMobile?24:20}}>
             {[
-              {icon:"💰",title:"Budget-Aware Meal Planning",desc:"Set a weekly food budget and Macra builds plans that stay within it. Eat well without overspending."},
-              {icon:"🌶️",title:"Pickiness Scale",desc:"Rate your cuisine adventurousness from 1 to 5. Picky eaters get familiar comfort foods. Foodies get bold global flavors."},
-              {icon:"🛒",title:"Smart Grocery Lists",desc:"Every meal plan auto-generates a categorized grocery list with exact quantities. Share with one tap before hitting the store."},
-              {icon:"🎯",title:"Macro Accuracy",desc:"AI plans are validated against your daily targets before delivery. Protein, carbs, and fat land within 3% of your goals — every time."},
-              {icon:"🌍",title:"20+ Global Cuisines",desc:"Mediterranean, Japanese, Mexican, Indian, Middle Eastern, and more. Real recipes from real cuisines — not just chicken and rice."},
-              {icon:"🏆",title:"Achievements & Streaks",desc:"Stay motivated with streak tracking, daily check-ins, and milestones. Building habits is easier when progress is visible."},
+              {
+                icon:<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#C8B88A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M15 9H9.5a2.5 2.5 0 0 0 0 5h5a2.5 2.5 0 0 1 0 5H9"/></svg>,
+                title:"Budget-Aware Planning",
+                desc:"Set a weekly food budget and Macra builds plans that stay within it. Eat well without overspending.",
+              },
+              {
+                icon:<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#C8B88A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="6" r="2" fill="#C8B88A" stroke="none"/><circle cx="15" cy="12" r="2" fill="#C8B88A" stroke="none"/><circle cx="11" cy="18" r="2" fill="#C8B88A" stroke="none"/></svg>,
+                title:"Pickiness Scale",
+                desc:"Rate your cuisine adventurousness from 1 to 5. Picky eaters get familiar comfort foods. Foodies get bold global flavors.",
+              },
+              {
+                icon:<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#C8B88A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>,
+                title:"Smart Grocery Lists",
+                desc:"Every meal plan auto-generates a categorized grocery list with exact quantities. Share with one tap before hitting the store.",
+              },
+              {
+                icon:<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#C8B88A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#C8B88A" stroke="none"/></svg>,
+                title:"Macro Accuracy",
+                desc:"AI plans are validated against your daily targets before delivery. Protein, carbs, and fat land within 3% of your goals — every time.",
+              },
             ].map((f,i)=>(
-              <div key={i} style={{padding:"28px 24px",borderRadius:16,border:"1px solid rgba(200,184,138,0.15)",background:"linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)",transition:"all 300ms ease",cursor:"default"}}
-                onMouseEnter={e=>{e.currentTarget.style.borderColor="rgba(200,184,138,0.45)";e.currentTarget.style.boxShadow="0 8px 32px rgba(200,184,138,0.08)";e.currentTarget.style.transform="translateY(-2px)";}}
+              <div key={i}
+                style={{padding:"28px 24px",borderRadius:16,border:"1px solid rgba(200,184,138,0.15)",background:"linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)",textAlign:"center",transition:"all 300ms ease",cursor:"default"}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor="rgba(200,184,138,0.45)";e.currentTarget.style.boxShadow="0 8px 32px rgba(200,184,138,0.1)";e.currentTarget.style.transform="translateY(-4px)";}}
                 onMouseLeave={e=>{e.currentTarget.style.borderColor="rgba(200,184,138,0.15)";e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="none";}}>
-                <div style={{fontSize:28,marginBottom:14}}>{f.icon}</div>
-                <h3 style={{fontSize:16,fontWeight:700,margin:"0 0 8px",letterSpacing:"-0.01em"}}>{f.title}</h3>
-                <p style={{fontSize:13,color:tx2,margin:0,lineHeight:1.65}}>{f.desc}</p>
+                <div style={{display:"flex",justifyContent:"center",marginBottom:20}}>{f.icon}</div>
+                <h3 style={{fontSize:17,fontWeight:700,margin:"0 0 12px",letterSpacing:"-0.01em",fontFamily:"'Cormorant Garamond', serif",color:"#FFFFFF"}}>{f.title}</h3>
+                <p style={{fontSize:13,color:tx2,margin:0,lineHeight:1.7}}>{f.desc}</p>
               </div>
             ))}
           </div>
