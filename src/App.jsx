@@ -2302,30 +2302,52 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
 
   // Convert USDA servingSize + servingSizeUnit → grams.
   // Returns null if the unit can't be resolved or the result is implausible.
-  // Convert USDA servingSize + servingSizeUnit → grams.
   const usdaServingGrams = (size, unit) => {
     if(!size || size<=0) return null;
     const u = (unit||"").toLowerCase().trim();
     let g;
-    if(u==="g"||u==="gram"||u==="grams")     g = size;
-    else if(u==="ml"||u.startsWith("millil")) g = size;
-    else if(u==="oz"||u.startsWith("ounce")) g = size*28.3495;
-    else                                      g = size; // heuristic: treat as grams
+    if(u==="g"||u==="gram"||u==="grams")                 g = size;
+    else if(u==="ml"||u.startsWith("millil"))             g = size;
+    else if(u==="oz"||u.startsWith("ounce"))              g = size * 28.3495;
+    else if(u==="lb"||u.startsWith("pound"))              g = size * 453.592;
+    else if(u==="kg"||u.startsWith("kilogram"))           g = size * 1000;
+    else if(u==="tbsp"||u.startsWith("tablespoon"))       g = size * 15;
+    else if(u==="tsp"||u.startsWith("teaspoon"))          g = size * 5;
+    else if(u==="cup")                                    g = size * 240;
+    else if(u==="fl oz"||u==="floz"||u==="fluid ounce")  g = size * 29.5735;
+    else                                                  g = size; // heuristic: treat as grams
     if(g<3||g>3000) return null;
     return Math.round(g);
   };
 
-  // Keyword-based default serving size for fast food / restaurant items
-  // that have no servingSize in the USDA database.
+  // Keyword-based default serving size for items with no servingSize in USDA.
+  // Covers fast food, restaurant, and common generic whole foods.
   const keywordServingGrams = (description) => {
     const d = description.toLowerCase();
-    if(/\b(burger|sandwich|wrap|taco)\b/.test(d))        return {g:150, est:true};
-    if(/\b(fries|chips)\b/.test(d))                      return {g:117, est:true};
-    if(/\b(nuggets?|tenders?|strips?)\b/.test(d))        return {g:100, est:true};
-    if(/\bsalad\b/.test(d))                              return {g:300, est:true};
-    if(/\b(shake|smoothie|drink|beverage)\b/.test(d))    return {g:350, est:true};
-    if(/\b(cookie|muffin|donut|doughnut)\b/.test(d))     return {g:57,  est:true};
-    if(/\bpizza\b/.test(d))                              return {g:107, est:true};
+    // Fast food / restaurant
+    if(/\b(burger|sandwich|wrap|taco)\b/.test(d))              return {g:150, est:true};
+    if(/\b(fries|chips)\b/.test(d))                            return {g:117, est:true};
+    if(/\b(nuggets?|tenders?|strips?)\b/.test(d))              return {g:100, est:true};
+    if(/\bsalad\b/.test(d))                                    return {g:300, est:true};
+    if(/\b(shake|smoothie|drink|beverage)\b/.test(d))          return {g:350, est:true};
+    if(/\b(cookie|muffin|donut|doughnut)\b/.test(d))           return {g:57,  est:true};
+    if(/\bpizza\b/.test(d))                                    return {g:107, est:true};
+    // Generic whole foods — common 1-serving defaults
+    if(/\bchicken\s+breast/.test(d))                           return {g:113, est:true}; // 4 oz
+    if(/\bground\s+beef/.test(d))                              return {g:113, est:true}; // 4 oz
+    if(/\b(steak|pork\s+chop|pork\s+loin)\b/.test(d))         return {g:113, est:true}; // 4 oz
+    if(/\b(salmon|tilapia|cod|tuna|shrimp)\b/.test(d))         return {g:113, est:true}; // 4 oz
+    if(/\b(egg|eggs)\b/.test(d))                               return {g:50,  est:true}; // 1 large egg
+    if(/\bbanana\b/.test(d))                                   return {g:118, est:true}; // 1 medium
+    if(/\bapple\b/.test(d))                                    return {g:182, est:true}; // 1 medium
+    if(/\b(brown\s+rice|white\s+rice|jasmine\s+rice)\b/.test(d)) return {g:186, est:true}; // 1 cup cooked
+    if(/\brice\b/.test(d))                                     return {g:186, est:true}; // 1 cup cooked
+    if(/\b(pasta|spaghetti|penne|fusilli|noodles?)\b/.test(d)) return {g:140, est:true}; // 1 cup cooked
+    if(/\b(oat|oats|oatmeal)\b/.test(d))                      return {g:81,  est:true}; // 1 cup dry
+    if(/\b(bread|toast)\b/.test(d))                            return {g:30,  est:true}; // 1 slice
+    if(/\b(milk)\b/.test(d))                                   return {g:244, est:true}; // 1 cup
+    if(/\b(greek\s+yogurt|yogurt)\b/.test(d))                  return {g:170, est:true}; // 6 oz
+    if(/\b(sweet\s+potato|potato)\b/.test(d))                  return {g:130, est:true}; // 1 medium
     return null;
   };
 
@@ -2339,12 +2361,19 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
 
     const qLow = query.toLowerCase();
     const words = qLow.split(/\s+/).filter(Boolean);
-    // Brand search heuristic: any word starts with a capital letter in original query
-    const isBrandSearch = words.length>=2 && query.split(/\s+/).some(w=>/^[A-Z]/.test(w));
-    // For generic 2-word food queries (all lowercase): require only 1 word match
+
+    // ── Search type detection ──────────────────────────────────────────────
+    // Branded: any word starts with capital, or contains known chain names
+    const originalWords = query.split(/\s+/);
+    const isBrandSearch = originalWords.some(w=>/^[A-Z]/.test(w)) ||
+      /\b(mcdonald|burger king|wendy|taco bell|kfc|subway|chipotle|starbucks|chick.fil|domino|pizza hut|panera|olive garden|applebee)\b/i.test(query);
+    // Generic: all-lowercase, ≤3 words (e.g. "chicken breast", "brown rice")
+    const isGeneric = !isBrandSearch && words.length<=3 && query===query.toLowerCase();
+    const searchType = isBrandSearch ? "branded" : isGeneric ? "generic" : "mixed";
+    // minMatch: how many query words must appear in name+brand to not be excluded
     const minMatch = words.length<=1 ? 1
                    : isBrandSearch   ? Math.min(2, words.length)
-                   : 1; // generic multi-word: relaxed — just need 1 word
+                   : 1;
 
     // Saved meals — instant local match
     const localMatches = savedMeals.filter(m=>m.name.toLowerCase().includes(qLow)).slice(0,5).map(m=>({
@@ -2356,7 +2385,9 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
     setSearchLoading(true); setSearchError("");
 
     try {
-      const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(query)}&pageSize=25&dataType=Branded,SR%20Legacy,Foundation`;
+      // Fetch more results for generic searches since many get filtered early
+      const pageSize = isGeneric ? 40 : 30;
+      const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(query)}&pageSize=${pageSize}&dataType=Branded,SR%20Legacy,Foundation`;
       const res = await fetch(url, {signal});
       if(signal.aborted) return;
       if(!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -2364,20 +2395,41 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
       const rawCount = (data.foods||[]).length;
 
       let items = (data.foods||[]).map(f=>{
-        const getNut = (id) => {const n=f.foodNutrients?.find(n=>n.nutrientId===id);return n?Math.round(n.value*10)/10:0;};
-        const base = {cal:getNut(1008), protein:getNut(1003), carbs:getNut(1005), fat:getNut(1004)};
+        // ── Calorie extraction: check multiple nutrient IDs ──────────────────
+        // SR Legacy uses 208; Foundation & Branded use 1008; some use 2047/2048.
+        // BUG FIX: previously only checked 1008 → Foundation/SR Legacy items
+        // with calories only under 208 were incorrectly filtered out as zero-cal.
+        const getNut = (id) => {
+          const n = f.foodNutrients?.find(n=>n.nutrientId===id);
+          return n ? Math.round(n.value*10)/10 : 0;
+        };
+        const getCal = () => {
+          for(const id of [1008, 2047, 2048, 208]){
+            const n = f.foodNutrients?.find(n=>n.nutrientId===id);
+            if(n && n.value>0) return Math.round(n.value*10)/10;
+          }
+          return 0;
+        };
+        const base = {cal:getCal(), protein:getNut(1003), carbs:getNut(1005), fat:getNut(1004)};
 
-        // Build portions: branded serving → foodMeasures → keyword default → 100g
+        // ── Serving size: branded serving → foodMeasures → keyword → 100g ──
         const portions = [];
         const sg = usdaServingGrams(f.servingSize, f.servingSizeUnit);
         if(sg){
           const sizeLabel = `${Math.round((f.servingSize||sg)*10)/10}${f.servingSizeUnit||"g"}`;
           portions.push({label:sizeLabel, gramWeight:sg, est:false});
         }
+        // foodMeasures: secondary serving options (e.g. "1 cup", "1 slice")
         (f.foodMeasures||[]).forEach(m=>{
           if(m.gramWeight>0 && m.disseminationText && m.disseminationText!=="Quantity not specified")
             portions.push({label:m.disseminationText, gramWeight:Math.round(m.gramWeight), est:false});
         });
+        // householdServingFullText: branded items sometimes have this when servingSize is missing
+        if(portions.length===0 && f.householdServingFullText){
+          const hsg = usdaServingGrams(f.servingSize, f.servingSizeUnit);
+          if(hsg) portions.push({label:f.householdServingFullText, gramWeight:hsg, est:false});
+        }
+        // Keyword-based estimate for well-known food types
         if(portions.length===0){
           const kw = keywordServingGrams(f.description||"");
           if(kw) portions.push({label:`est. ${kw.g}g`, gramWeight:kw.g, est:true});
@@ -2388,9 +2440,10 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
         const mult = defP.gramWeight/100;
         const brand = f.brandOwner || f.brandName || "";
         const hasServing = defP.label!=="100g";
+        const dataType = f.dataType || "";
 
         return {
-          id:"usda-"+f.fdcId, name:f.description||"", brand,
+          id:"usda-"+f.fdcId, name:f.description||"", brand, dataType,
           servingLabel: hasServing
             ? (defP.est ? `Per serving (est. ${defP.gramWeight}g)` : `Per serving (${defP.gramWeight}g)`)
             : "Per 100g",
@@ -2406,19 +2459,41 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
       const afterCalFilter = items.filter(f=>f.hasNutrition);
       items = afterCalFilter;
 
-      // Relevance scoring
+      // ── Relevance scoring ──────────────────────────────────────────────────
+      // Lower score = better. Infinity = exclude.
       const scoreItem = (item) => {
         const name     = item.name.toLowerCase();
         const brand    = item.brand.toLowerCase();
         const combined = name+" "+brand;
         const matchCount = words.filter(w=>combined.includes(w)).length;
         if(matchCount<minMatch) return Infinity;
-        if(name.startsWith(qLow))                   return 0;
-        if(words.every(w=>name.includes(w)))         return 1;
-        if(combined.includes(qLow))                  return 2;
-        if(matchCount===words.length)                return 3;
-        if(matchCount/words.length>=0.75)            return 4;
-        return 5;
+
+        let score;
+        if(name===qLow)                                    score = 0;   // exact match
+        else if(name.startsWith(qLow))                     score = 5;   // starts with full query
+        else if(name.includes(qLow))                       score = 10;  // contains exact phrase
+        else if(words.every(w=>name.includes(w)))          score = 20;  // all words in name
+        else if(words.every(w=>combined.includes(w)))      score = 30;  // all words in name+brand
+        else if(matchCount/words.length>=0.75)             score = 50;  // ≥75% word match
+        else                                               score = 70;
+
+        // ── Data type adjustments ──────────────────────────────────────────
+        const dt = item.dataType.toLowerCase();
+        if(searchType==="generic"){
+          // For plain food terms, prefer authoritative whole-food databases
+          if(dt==="foundation")  score -= 8;
+          else if(dt==="sr legacy") score -= 5;
+          // Penalise branded items with very long descriptions (e.g. "Chicken Breast Strips With Rib Meat, Grilled, Frozen, Fully Cooked")
+          if(dt==="branded" && name.split(/\s+/).length>7) score += 12;
+        } else if(searchType==="branded"){
+          // For brand searches, prefer Branded database entries
+          if(dt==="branded") score -= 8;
+          // Penalise if the brand owner doesn't match the leading capitalised word
+          const firstCap = originalWords.find(w=>/^[A-Z]/.test(w));
+          if(firstCap && brand && !brand.toLowerCase().includes(firstCap.toLowerCase())) score += 15;
+        }
+
+        return score;
       };
 
       const afterRelevance = items.filter(item=>scoreItem(item)<Infinity);
@@ -2428,7 +2503,7 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
         .slice(0,8)
         .map(({_s,...item})=>item);
 
-      console.log(`[usda] "${query}" — raw:${rawCount} after-cal:${afterCalFilter.length} after-relevance:${afterRelevance.length} shown:${final.length} | isBrand:${isBrandSearch} minMatch:${minMatch}`);
+      console.log(`[usda] "${query}" type:${searchType} — raw:${rawCount} after-cal:${afterCalFilter.length} after-relevance:${afterRelevance.length} shown:${final.length} | minMatch:${minMatch}`);
 
       if(!signal.aborted) setUsdaResults(final);
     } catch(e){
