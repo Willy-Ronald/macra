@@ -2279,6 +2279,7 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
   const [qtyUnit,setQtyUnit]=useState("servings"); // servings | g | oz
   const [editNutrition,setEditNutrition]=useState(null);
   const [searchLogSuccess,setSearchLogSuccess]=useState(false);
+  const [hasSearched,setHasSearched]=useState(false); // true only after explicit Enter/Search trigger
   const debounceRef = useRef(null);
   const abortRef = useRef(null);
 
@@ -2298,6 +2299,7 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
     setSearchQuery("");setSavedResults([]);setUsdaResults([]);
     setSelectedFood(null);setSelectedPortion(null);setQtyValue("1");setQtyUnit("servings");
     setSearchError("");setEditNutrition(null);setSearchLogSuccess(false);setSearchLoading(false);
+    setHasSearched(false);
   };
 
   // Convert USDA servingSize + servingSizeUnit → grams.
@@ -2390,6 +2392,7 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
       const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(query)}&pageSize=${pageSize}&dataType=Branded,SR%20Legacy,Foundation`;
       const res = await fetch(url, {signal});
       if(signal.aborted) return;
+      if(res.status===429) throw new Error("RATE_LIMIT");
       if(!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const rawCount = (data.foods||[]).length;
@@ -2510,7 +2513,12 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
       if(e.name==="AbortError"||signal.aborted) return;
       console.error("[usda] search error:", e.message);
       setUsdaResults([]);
-      if(localMatches.length===0) setSearchError("Food search temporarily unavailable. Try manual entry.");
+      if(localMatches.length===0){
+        if(e.message==="RATE_LIMIT")
+          setSearchError("⚠️ Search limit reached — please wait a few minutes and try again.");
+        else
+          setSearchError("Food search temporarily unavailable. Try manual entry.");
+      }
     } finally {
       if(!signal.aborted) setSearchLoading(false);
     }
@@ -2530,6 +2538,7 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
   const handleSearchInput = (val) => {
     setSearchQuery(val);
     setSelectedFood(null);setSelectedPortion(null);setSearchLogSuccess(false);
+    setHasSearched(false); // reset so "no results" prompt doesn't linger while typing
     // Clear stale results when the user edits the query
     if(savedResults.length>0||usdaResults.length>0){
       setSavedResults([]);setUsdaResults([]);
@@ -2546,6 +2555,7 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
     const q = searchQuery.trim();
     if(!q||q.length<2){ setSearchError("Enter at least 2 characters to search."); return; }
     setSearchError("");
+    setHasSearched(true);
     searchFoods(q);
   };
 
@@ -2751,10 +2761,21 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
       {/* Expanding soon note */}
       {!searchQuery && <p style={{fontSize:11,color:T.txM,margin:"6px 4px 0",lineHeight:1.5}}>Food database expanding soon — manual entry always available for unlisted items.</p>}
 
-      {/* Search error — only when both APIs fail */}
-      {searchError && !searchLoading && !hasResults && <Card style={{padding:"14px 16px",marginTop:4}}>
-        <p style={{fontSize:13,color:T.txM,margin:0}}>{searchError}</p>
-      </Card>}
+      {/* Search error — styled gold for rate limit, muted for other errors */}
+      {searchError && !searchLoading && !hasResults && (
+        <div style={{padding:"12px 14px",marginTop:6,borderRadius:10,
+          background:searchError.includes("limit")?"rgba(201,168,76,0.08)":"rgba(255,255,255,0.03)",
+          border:`1px solid ${searchError.includes("limit")?"rgba(201,168,76,0.35)":T.bd}`}}>
+          <p style={{fontSize:13,color:searchError.includes("limit")?"#C9A84C":T.txM,margin:0,lineHeight:1.5}}>{searchError}</p>
+        </div>
+      )}
+
+      {/* "Press Enter" nudge — only while typing ≥2 chars, before any search is run */}
+      {!hasSearched && !searchLoading && !searchError && searchQuery.length>=2 && !hasResults && !selectedFood && (
+        <p style={{fontSize:12,color:T.acc,margin:"8px 4px 0",lineHeight:1.4,fontStyle:"italic"}}>
+          Press Enter or tap Search to find "{searchQuery}"
+        </p>
+      )}
 
       {/* Search results */}
       {hasResults && !selectedFood && <div style={{marginTop:4,maxHeight:400,overflowY:"auto",borderRadius:T.r,border:`1px solid ${T.bd}`,background:T.sf}}>
@@ -2787,8 +2808,8 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
         </div>}
       </div>}
 
-      {/* No results after search completes */}
-      {searchQuery.length>=2 && !searchLoading && !hasResults && !searchError && !selectedFood && <Card style={{padding:"14px 16px",marginTop:4}}>
+      {/* No results — only shown after an explicit search returned nothing */}
+      {hasSearched && !searchLoading && !hasResults && !searchError && !selectedFood && <Card style={{padding:"14px 16px",marginTop:4}}>
         <p style={{fontSize:13,color:T.txM,margin:0}}>No results found for "{searchQuery}". Try a different name or use manual entry.</p>
       </Card>}
     </div>
