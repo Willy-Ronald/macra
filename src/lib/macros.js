@@ -71,7 +71,9 @@ export function calcMacros(profile) {
   const bmi = weightKg / (heightM * heightM);
 
   const proteinMult = getProteinMultiplier(bmi, goal, activity, diet);
-  const proteinG = Math.max(100, Math.round(weightLbs * proteinMult));
+  const baseProteinG = Math.max(100, Math.round(weightLbs * proteinMult));
+  // Reduce whole food protein by 60g if user supplements with protein shakes (2×30g)
+  const proteinG = profile.includeProteinShakes ? Math.max(100, baseProteinG - 60) : baseProteinG;
 
   // Remaining calories after protein; split 50/50 between carbs and fat
   const proteinCal = proteinG * 4;
@@ -84,7 +86,7 @@ export function calcMacros(profile) {
   const fatPct     = Math.round((fatG  * 9   / target) * 100);
 
   const rule = bmi > 35 ? "BMI>35 cap" : diet.includes("High Protein") ? "high_protein preference" : `${goal}+${activity}`;
-  console.log(`[macros] protein rule: ${rule} → ${proteinMult}g/lb = ${proteinG}g | BMR:${Math.round(bmr)} TDEE:${tdee} target:${target}`);
+  console.log(`[macros] protein rule: ${rule} → ${proteinMult}g/lb = ${baseProteinG}g${profile.includeProteinShakes ? ` → ${proteinG}g (shake-adjusted)` : ""} | BMR:${Math.round(bmr)} TDEE:${tdee} target:${target}`);
   console.log(`[macros] split — protein: ${proteinPct}% carbs: ${carbPct}% fat: ${fatPct}% (${proteinG}g / ${carbG}g / ${fatG}g)`);
 
   return { bmr: Math.round(bmr), tdee, target, proteinG, fatG, carbG,
