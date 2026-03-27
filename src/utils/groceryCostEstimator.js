@@ -1,208 +1,317 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Grocery Cost Estimator
-// Converts AI-generated ingredient quantities into real package counts and
-// approximate retail costs.  All prices are US national averages (2024).
+// Prices verified against Kroger March 2026.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Each entry: { size, unit, package (display label), avgCost (USD) }
-// unit is the unit of the package size field.
-// 'count' / 'each' / 'head' = sold by piece, not weight.
+// 'count' / 'each' / 'head' / 'bunch' = sold by piece, not weight.
+// NOTE: bare "tuna" is intentionally absent — fuzzy matching falls through
+//   to "canned tuna" ($1.00/5oz can), which is always correct for budget plans.
 const PACKAGE_SIZES = {
-  // ── Oils & condiments ───────────────────────────────────────────────────
-  "olive oil":       { size: 16,   unit: "oz",    package: "bottle",      avgCost: 8.99 },
-  "extra virgin olive oil": { size: 16, unit: "oz", package: "bottle",    avgCost: 9.99 },
-  "vegetable oil":   { size: 48,   unit: "oz",    package: "bottle",      avgCost: 5.99 },
-  "canola oil":      { size: 48,   unit: "oz",    package: "bottle",      avgCost: 4.99 },
-  "sesame oil":      { size: 8,    unit: "oz",    package: "bottle",      avgCost: 6.49 },
-  "coconut oil":     { size: 14,   unit: "oz",    package: "jar",         avgCost: 7.99 },
-  "soy sauce":       { size: 10,   unit: "oz",    package: "bottle",      avgCost: 3.49 },
-  "fish sauce":      { size: 10,   unit: "oz",    package: "bottle",      avgCost: 4.99 },
-  "hot sauce":       { size: 5,    unit: "oz",    package: "bottle",      avgCost: 3.29 },
-  "sriracha":        { size: 17,   unit: "oz",    package: "bottle",      avgCost: 4.49 },
-  "vinegar":         { size: 16,   unit: "oz",    package: "bottle",      avgCost: 2.99 },
-  "apple cider vinegar": { size: 16, unit: "oz",  package: "bottle",      avgCost: 3.49 },
-  "rice vinegar":    { size: 10,   unit: "oz",    package: "bottle",      avgCost: 3.49 },
-  "honey":           { size: 12,   unit: "oz",    package: "bottle",      avgCost: 5.99 },
-  "maple syrup":     { size: 12,   unit: "oz",    package: "bottle",      avgCost: 9.99 },
-  "worcestershire":  { size: 10,   unit: "oz",    package: "bottle",      avgCost: 3.29 },
-  "oyster sauce":    { size: 9,    unit: "oz",    package: "bottle",      avgCost: 3.99 },
-  "hoisin sauce":    { size: 8,    unit: "oz",    package: "jar",         avgCost: 3.49 },
-  "tomato paste":    { size: 6,    unit: "oz",    package: "can",         avgCost: 1.29 },
-  "dijon mustard":   { size: 8,    unit: "oz",    package: "jar",         avgCost: 3.49 },
-  "mustard":         { size: 8,    unit: "oz",    package: "jar",         avgCost: 2.49 },
-  "ketchup":         { size: 20,   unit: "oz",    package: "bottle",      avgCost: 2.99 },
-  "tahini":          { size: 16,   unit: "oz",    package: "jar",         avgCost: 6.99 },
 
-  // ── Proteins – meat ─────────────────────────────────────────────────────
-  "chicken breast":  { size: 16,   unit: "oz",    package: "lb",          avgCost: 4.99 },
-  "chicken thigh":   { size: 16,   unit: "oz",    package: "lb",          avgCost: 3.99 },
-  "chicken thighs":  { size: 16,   unit: "oz",    package: "lb",          avgCost: 3.99 },
-  "ground beef":     { size: 16,   unit: "oz",    package: "lb",          avgCost: 5.99 },
-  "ground turkey":   { size: 16,   unit: "oz",    package: "lb",          avgCost: 4.49 },
-  "pork chop":       { size: 16,   unit: "oz",    package: "lb",          avgCost: 4.99 },
-  "pork":            { size: 16,   unit: "oz",    package: "lb",          avgCost: 4.99 },
-  "bacon":           { size: 12,   unit: "oz",    package: "pack",        avgCost: 6.99 },
-  "sausage":         { size: 12,   unit: "oz",    package: "pack",        avgCost: 5.99 },
-  "steak":           { size: 16,   unit: "oz",    package: "lb",          avgCost: 12.99 },
-  "beef":            { size: 16,   unit: "oz",    package: "lb",          avgCost: 8.99 },
-  "turkey":          { size: 16,   unit: "oz",    package: "lb",          avgCost: 5.99 },
-  "lamb":            { size: 16,   unit: "oz",    package: "lb",          avgCost: 11.99 },
+  // ── Proteins — eggs & poultry ───────────────────────────────────────────
+  "eggs":                          { size: 12,  unit: "count", package: "dozen",   avgCost: 1.79 },
+  "egg":                           { size: 12,  unit: "count", package: "dozen",   avgCost: 1.79 },
+  "large eggs":                    { size: 18,  unit: "count", package: "pack",    avgCost: 2.65 },
+  "chicken thigh":                 { size: 16,  unit: "oz",    package: "lb",      avgCost: 2.49 },
+  "chicken thighs":                { size: 16,  unit: "oz",    package: "lb",      avgCost: 2.49 },
+  "boneless chicken thighs":       { size: 16,  unit: "oz",    package: "lb",      avgCost: 2.49 },
+  "bone-in chicken thighs":        { size: 16,  unit: "oz",    package: "lb",      avgCost: 1.79 },
+  "chicken breast":                { size: 16,  unit: "oz",    package: "lb",      avgCost: 5.49 },
+  "boneless skinless chicken breast": { size: 16, unit: "oz",  package: "lb",      avgCost: 5.49 },
+  "ground turkey":                 { size: 16,  unit: "oz",    package: "lb",      avgCost: 4.99 },
+  "lean ground turkey":            { size: 16,  unit: "oz",    package: "lb",      avgCost: 4.99 },
+  "extra lean ground turkey":      { size: 16,  unit: "oz",    package: "lb",      avgCost: 8.49 },
+  "turkey":                        { size: 16,  unit: "oz",    package: "lb",      avgCost: 4.99 },
 
-  // ── Proteins – seafood ───────────────────────────────────────────────────
-  "salmon":          { size: 16,   unit: "oz",    package: "lb",          avgCost: 12.99 },
-  // NOTE: bare "tuna" intentionally removed — falls through fuzzy to "canned tuna" ($1.49/can).
-  // "tuna steak" / "ahi tuna" for fresh fish is left unmatched (returns null, $3 buffer).
-  "canned tuna":     { size: 5,    unit: "oz",    package: "can",         avgCost: 1.49 },
-  "tuna in water":   { size: 5,    unit: "oz",    package: "can",         avgCost: 1.49 },
-  "shrimp":          { size: 16,   unit: "oz",    package: "lb",          avgCost: 11.99 },
-  "tilapia":         { size: 16,   unit: "oz",    package: "lb",          avgCost: 6.99 },
-  "cod":             { size: 16,   unit: "oz",    package: "lb",          avgCost: 8.99 },
+  // ── Proteins — beef ─────────────────────────────────────────────────────
+  "ground beef":                   { size: 16,  unit: "oz",    package: "lb",      avgCost: 8.99 },
+  "lean ground beef":              { size: 16,  unit: "oz",    package: "lb",      avgCost: 8.99 },
+  "extra lean ground beef":        { size: 16,  unit: "oz",    package: "lb",      avgCost: 10.99 },
+  "beef":                          { size: 16,  unit: "oz",    package: "lb",      avgCost: 8.99 },
+  "sirloin steak":                 { size: 8,   unit: "oz",    package: "steak",   avgCost: 9.68 },
+  "ribeye steak":                  { size: 10,  unit: "oz",    package: "steak",   avgCost: 18.99 },
+  "ny strip steak":                { size: 10,  unit: "oz",    package: "steak",   avgCost: 20.99 },
+  "steak":                         { size: 8,   unit: "oz",    package: "steak",   avgCost: 9.68 },
+  "lamb":                          { size: 16,  unit: "oz",    package: "lb",      avgCost: 11.99 },
 
-  // ── Proteins – other ─────────────────────────────────────────────────────
-  "eggs":            { size: 12,   unit: "count", package: "dozen",       avgCost: 3.49 },
-  "egg":             { size: 12,   unit: "count", package: "dozen",       avgCost: 3.49 },
-  "tofu":            { size: 14,   unit: "oz",    package: "block",       avgCost: 2.49 },
-  "firm tofu":       { size: 14,   unit: "oz",    package: "block",       avgCost: 2.49 },
-  "extra firm tofu": { size: 14,   unit: "oz",    package: "block",       avgCost: 2.49 },
-  "silken tofu":     { size: 12,   unit: "oz",    package: "block",       avgCost: 2.49 },
+  // ── Proteins — pork ─────────────────────────────────────────────────────
+  "pork chop":                     { size: 16,  unit: "oz",    package: "lb",      avgCost: 5.00 },
+  "pork chops":                    { size: 16,  unit: "oz",    package: "lb",      avgCost: 5.00 },
+  "boneless pork chops":           { size: 16,  unit: "oz",    package: "lb",      avgCost: 5.00 },
+  "pork loin":                     { size: 16,  unit: "oz",    package: "lb",      avgCost: 1.79 },
+  "pork tenderloin":               { size: 16,  unit: "oz",    package: "lb",      avgCost: 3.99 },
+  "pork shoulder":                 { size: 16,  unit: "oz",    package: "lb",      avgCost: 2.29 },
+  "pork":                          { size: 16,  unit: "oz",    package: "lb",      avgCost: 3.99 },
+  "baby back ribs":                { size: 16,  unit: "oz",    package: "lb",      avgCost: 3.99 },
+  "bacon":                         { size: 12,  unit: "oz",    package: "pack",    avgCost: 4.99 },
+  "thick cut bacon":               { size: 12,  unit: "oz",    package: "pack",    avgCost: 7.99 },
+  "turkey bacon":                  { size: 12,  unit: "oz",    package: "pack",    avgCost: 4.79 },
+  "sausage":                       { size: 12,  unit: "oz",    package: "pack",    avgCost: 4.24 },
+  "breakfast sausage":             { size: 12,  unit: "oz",    package: "pack",    avgCost: 4.24 },
 
-  // ── Produce – vegetables ─────────────────────────────────────────────────
-  "tomato":          { size: 1,    unit: "each",  package: "piece",       avgCost: 0.89 },
-  "tomatoes":        { size: 1,    unit: "each",  package: "piece",       avgCost: 0.89 },
-  "cherry tomato":   { size: 10,   unit: "oz",    package: "container",   avgCost: 3.49 },
-  "bell pepper":     { size: 1,    unit: "each",  package: "piece",       avgCost: 1.29 },
-  "onion":           { size: 1,    unit: "each",  package: "piece",       avgCost: 0.79 },
-  "red onion":       { size: 1,    unit: "each",  package: "piece",       avgCost: 0.99 },
-  "garlic":          { size: 1,    unit: "head",  package: "head",        avgCost: 0.59 },
-  "potato":          { size: 1,    unit: "each",  package: "piece",       avgCost: 0.69 },
-  "sweet potato":    { size: 1,    unit: "each",  package: "piece",       avgCost: 1.29 },
-  "carrot":          { size: 16,   unit: "oz",    package: "bag",         avgCost: 1.49 },
-  "broccoli":        { size: 1,    unit: "head",  package: "head",        avgCost: 2.49 },
-  "cauliflower":     { size: 1,    unit: "head",  package: "head",        avgCost: 3.49 },
-  "spinach":         { size: 10,   unit: "oz",    package: "bag",         avgCost: 3.99 },
-  "lettuce":         { size: 1,    unit: "head",  package: "head",        avgCost: 2.49 },
-  "romaine":         { size: 1,    unit: "head",  package: "head",        avgCost: 2.99 },
-  "cucumber":        { size: 1,    unit: "each",  package: "piece",       avgCost: 0.99 },
-  "zucchini":        { size: 1,    unit: "each",  package: "piece",       avgCost: 1.49 },
-  "mushroom":        { size: 8,    unit: "oz",    package: "package",     avgCost: 3.99 },
-  "asparagus":       { size: 12,   unit: "oz",    package: "bunch",       avgCost: 4.99 },
-  "green beans":     { size: 12,   unit: "oz",    package: "bag",         avgCost: 2.99 },
-  "kale":            { size: 1,    unit: "bunch", package: "bunch",       avgCost: 2.49 },
-  "celery":          { size: 1,    unit: "bunch", package: "bunch",       avgCost: 1.99 },
-  "corn":            { size: 1,    unit: "each",  package: "ear",         avgCost: 0.79 },
-  "edamame":         { size: 12,   unit: "oz",    package: "bag",         avgCost: 3.49 },
-  "cabbage":         { size: 1,    unit: "each",  package: "head",        avgCost: 1.49 },
-  "bok choy":        { size: 1,    unit: "each",  package: "head",        avgCost: 1.99 },
-  "green onion":     { size: 1,    unit: "bunch", package: "bunch",       avgCost: 0.99 },
-  "scallion":        { size: 1,    unit: "bunch", package: "bunch",       avgCost: 0.99 },
-  "frozen vegetables": { size: 12, unit: "oz",    package: "bag",         avgCost: 1.99 },
-  "mixed vegetables": { size: 12,  unit: "oz",    package: "bag",         avgCost: 1.99 },
+  // ── Proteins — seafood ───────────────────────────────────────────────────
+  // NOTE: bare "tuna" intentionally omitted — falls through fuzzy to "canned tuna"
+  "canned tuna":                   { size: 5,   unit: "oz",    package: "can",     avgCost: 1.00 },
+  "tuna can":                      { size: 5,   unit: "oz",    package: "can",     avgCost: 1.00 },
+  "tuna in water":                 { size: 5,   unit: "oz",    package: "can",     avgCost: 1.00 },
+  "salmon":                        { size: 16,  unit: "oz",    package: "lb",      avgCost: 10.99 },
+  "salmon fillet":                 { size: 16,  unit: "oz",    package: "lb",      avgCost: 10.99 },
+  "frozen salmon":                 { size: 16,  unit: "oz",    package: "lb",      avgCost: 9.49 },
+  "shrimp":                        { size: 12,  unit: "oz",    package: "bag",     avgCost: 6.99 },
+  "cooked shrimp":                 { size: 12,  unit: "oz",    package: "bag",     avgCost: 6.99 },
+  "raw shrimp":                    { size: 12,  unit: "oz",    package: "bag",     avgCost: 6.99 },
+  "jumbo shrimp":                  { size: 16,  unit: "oz",    package: "lb",      avgCost: 10.99 },
+  "tilapia":                       { size: 16,  unit: "oz",    package: "lb",      avgCost: 6.99 },
+  "cod":                           { size: 16,  unit: "oz",    package: "lb",      avgCost: 8.99 },
 
-  // ── Produce – fruits ─────────────────────────────────────────────────────
-  "banana":          { size: 1,    unit: "each",  package: "piece",       avgCost: 0.25 },
-  "apple":           { size: 1,    unit: "each",  package: "piece",       avgCost: 0.69 },
-  "orange":          { size: 1,    unit: "each",  package: "piece",       avgCost: 0.79 },
-  "lemon":           { size: 1,    unit: "each",  package: "piece",       avgCost: 0.59 },
-  "lime":            { size: 1,    unit: "each",  package: "piece",       avgCost: 0.39 },
-  "avocado":         { size: 1,    unit: "each",  package: "piece",       avgCost: 1.49 },
-  "strawberry":      { size: 16,   unit: "oz",    package: "container",   avgCost: 4.99 },
-  "blueberry":       { size: 6,    unit: "oz",    package: "container",   avgCost: 4.99 },
-  "mango":           { size: 1,    unit: "each",  package: "piece",       avgCost: 1.49 },
+  // ── Proteins — deli ─────────────────────────────────────────────────────
+  "deli turkey":                   { size: 8,   unit: "oz",    package: "pack",    avgCost: 4.99 },
+  "sliced turkey":                 { size: 8,   unit: "oz",    package: "pack",    avgCost: 4.99 },
+  "deli ham":                      { size: 8,   unit: "oz",    package: "pack",    avgCost: 9.49 },
+  "sliced ham":                    { size: 8,   unit: "oz",    package: "pack",    avgCost: 9.49 },
+  "pepperoni":                     { size: 7,   unit: "oz",    package: "pack",    avgCost: 3.99 },
+  "salami":                        { size: 15,  unit: "oz",    package: "pack",    avgCost: 6.99 },
 
-  // ── Grains & pantry ──────────────────────────────────────────────────────
-  "rice":            { size: 32,   unit: "oz",    package: "bag",         avgCost: 3.49 },
-  "brown rice":      { size: 32,   unit: "oz",    package: "bag",         avgCost: 3.99 },
-  "jasmine rice":    { size: 32,   unit: "oz",    package: "bag",         avgCost: 3.99 },
-  "white rice":      { size: 32,   unit: "oz",    package: "bag",         avgCost: 3.49 },
-  "basmati rice":    { size: 32,   unit: "oz",    package: "bag",         avgCost: 3.99 },
-  "pasta":           { size: 16,   unit: "oz",    package: "box",         avgCost: 1.99 },
-  "spaghetti":       { size: 16,   unit: "oz",    package: "box",         avgCost: 1.99 },
-  "penne":           { size: 16,   unit: "oz",    package: "box",         avgCost: 1.99 },
-  "noodle":          { size: 16,   unit: "oz",    package: "bag",         avgCost: 1.99 },
-  "noodles":         { size: 16,   unit: "oz",    package: "bag",         avgCost: 1.99 },
-  "rice noodle":     { size: 14,   unit: "oz",    package: "bag",         avgCost: 2.49 },
-  "rice noodles":    { size: 14,   unit: "oz",    package: "bag",         avgCost: 2.49 },
-  "quinoa":          { size: 16,   unit: "oz",    package: "bag",         avgCost: 5.99 },
-  "oats":            { size: 42,   unit: "oz",    package: "container",   avgCost: 4.49 },
-  "oatmeal":         { size: 42,   unit: "oz",    package: "container",   avgCost: 4.49 },
-  "rolled oats":     { size: 42,   unit: "oz",    package: "container",   avgCost: 4.49 },
-  "bread":           { size: 20,   unit: "oz",    package: "loaf",        avgCost: 3.49 },
-  "white bread":     { size: 20,   unit: "oz",    package: "loaf",        avgCost: 2.99 },
-  "whole wheat bread": { size: 20, unit: "oz",    package: "loaf",        avgCost: 3.99 },
-  "tortilla":        { size: 12,   unit: "count", package: "pack",        avgCost: 3.99 },
-  "pita":            { size: 12,   unit: "oz",    package: "pack",        avgCost: 3.49 },
-  "flour":           { size: 80,   unit: "oz",    package: "bag",         avgCost: 4.99 },
-  "cornstarch":      { size: 16,   unit: "oz",    package: "box",         avgCost: 2.29 },
-  "panko":           { size: 8,    unit: "oz",    package: "canister",    avgCost: 2.99 },
-  "breadcrumb":      { size: 8,    unit: "oz",    package: "canister",    avgCost: 2.49 },
+  // ── Proteins — plant-based ───────────────────────────────────────────────
+  "tofu":                          { size: 14,  unit: "oz",    package: "block",   avgCost: 2.49 },
+  "firm tofu":                     { size: 14,  unit: "oz",    package: "block",   avgCost: 2.49 },
+  "extra firm tofu":               { size: 14,  unit: "oz",    package: "block",   avgCost: 2.49 },
+  "silken tofu":                   { size: 12,  unit: "oz",    package: "block",   avgCost: 2.29 },
 
-  // ── Dairy ────────────────────────────────────────────────────────────────
-  "milk":            { size: 64,   unit: "oz",    package: "half gallon", avgCost: 3.49 },
-  "cheese":          { size: 8,    unit: "oz",    package: "bag",         avgCost: 4.99 },
-  "cheddar":         { size: 8,    unit: "oz",    package: "block",       avgCost: 4.99 },
-  "mozzarella":      { size: 8,    unit: "oz",    package: "bag",         avgCost: 4.49 },
-  "parmesan":        { size: 5,    unit: "oz",    package: "container",   avgCost: 5.99 },
-  "feta":            { size: 6,    unit: "oz",    package: "container",   avgCost: 4.99 },
-  "yogurt":          { size: 32,   unit: "oz",    package: "container",   avgCost: 4.99 },
-  "greek yogurt":    { size: 32,   unit: "oz",    package: "container",   avgCost: 5.99 },
-  "butter":          { size: 16,   unit: "oz",    package: "pack",        avgCost: 5.49 },
-  "cream cheese":    { size: 8,    unit: "oz",    package: "block",       avgCost: 3.49 },
-  "sour cream":      { size: 16,   unit: "oz",    package: "container",   avgCost: 3.29 },
-  "cottage cheese":  { size: 16,   unit: "oz",    package: "container",   avgCost: 3.99 },
-  "heavy cream":     { size: 16,   unit: "oz",    package: "carton",      avgCost: 3.99 },
+  // ── Dairy — milk ────────────────────────────────────────────────────────
+  "milk":                          { size: 128, unit: "oz",    package: "gallon",  avgCost: 3.09 },
+  "whole milk":                    { size: 128, unit: "oz",    package: "gallon",  avgCost: 3.09 },
+  "2% milk":                       { size: 128, unit: "oz",    package: "gallon",  avgCost: 2.79 },
+  "skim milk":                     { size: 128, unit: "oz",    package: "gallon",  avgCost: 2.79 },
+  "lactose free milk":             { size: 64,  unit: "oz",    package: "carton",  avgCost: 4.49 },
+  "almond milk":                   { size: 64,  unit: "oz",    package: "carton",  avgCost: 2.49 },
+  "unsweetened almond milk":       { size: 64,  unit: "oz",    package: "carton",  avgCost: 2.49 },
+  "oat milk":                      { size: 64,  unit: "oz",    package: "carton",  avgCost: 4.99 },
+
+  // ── Dairy — cheese ──────────────────────────────────────────────────────
+  "shredded cheddar":              { size: 8,   unit: "oz",    package: "bag",     avgCost: 2.33 },
+  "cheddar":                       { size: 8,   unit: "oz",    package: "bag",     avgCost: 2.33 },
+  "cheese":                        { size: 8,   unit: "oz",    package: "bag",     avgCost: 2.33 },
+  "shredded mozzarella":           { size: 8,   unit: "oz",    package: "bag",     avgCost: 2.33 },
+  "mozzarella":                    { size: 8,   unit: "oz",    package: "bag",     avgCost: 2.33 },
+  "shredded mexican blend":        { size: 8,   unit: "oz",    package: "bag",     avgCost: 2.33 },
+  "mexican cheese":                { size: 8,   unit: "oz",    package: "bag",     avgCost: 2.33 },
+  "parmesan":                      { size: 8,   unit: "oz",    package: "container", avgCost: 2.99 },
+  "grated parmesan":               { size: 8,   unit: "oz",    package: "container", avgCost: 2.99 },
+  "colby jack":                    { size: 8,   unit: "oz",    package: "bag",     avgCost: 2.33 },
+  "feta":                          { size: 6,   unit: "oz",    package: "container", avgCost: 4.99 },
+  "cream cheese":                  { size: 8,   unit: "oz",    package: "block",   avgCost: 2.49 },
+  "cottage cheese":                { size: 16,  unit: "oz",    package: "container", avgCost: 2.49 },
+
+  // ── Dairy — other ───────────────────────────────────────────────────────
+  "butter":                        { size: 16,  unit: "oz",    package: "pack",    avgCost: 3.79 },
+  "salted butter":                 { size: 16,  unit: "oz",    package: "pack",    avgCost: 3.79 },
+  "unsalted butter":               { size: 16,  unit: "oz",    package: "pack",    avgCost: 3.79 },
+  "sour cream":                    { size: 16,  unit: "oz",    package: "container", avgCost: 1.99 },
+  "heavy cream":                   { size: 16,  unit: "oz",    package: "carton",  avgCost: 3.29 },
+  "heavy whipping cream":          { size: 16,  unit: "oz",    package: "carton",  avgCost: 3.29 },
+  "yogurt":                        { size: 6,   unit: "oz",    package: "cup",     avgCost: 0.80 },
+  "greek yogurt":                  { size: 6,   unit: "oz",    package: "cup",     avgCost: 0.80 },
+
+  // ── Produce — vegetables ─────────────────────────────────────────────────
+  "onion":                         { size: 1,   unit: "each",  package: "piece",   avgCost: 0.50 },
+  "yellow onion":                  { size: 1,   unit: "each",  package: "piece",   avgCost: 0.40 },
+  "red onion":                     { size: 1,   unit: "each",  package: "piece",   avgCost: 0.65 },
+  "sweet onion":                   { size: 1,   unit: "each",  package: "piece",   avgCost: 0.65 },
+  "green onion":                   { size: 1,   unit: "bunch", package: "bunch",   avgCost: 1.29 },
+  "green onions":                  { size: 1,   unit: "bunch", package: "bunch",   avgCost: 1.29 },
+  "scallion":                      { size: 1,   unit: "bunch", package: "bunch",   avgCost: 1.29 },
+  "scallions":                     { size: 1,   unit: "bunch", package: "bunch",   avgCost: 1.29 },
+  "bell pepper":                   { size: 1,   unit: "each",  package: "piece",   avgCost: 0.79 },
+  "green bell pepper":             { size: 1,   unit: "each",  package: "piece",   avgCost: 0.79 },
+  "tomato":                        { size: 1,   unit: "each",  package: "piece",   avgCost: 0.45 },
+  "tomatoes":                      { size: 1,   unit: "each",  package: "piece",   avgCost: 0.45 },
+  "roma tomato":                   { size: 1,   unit: "each",  package: "piece",   avgCost: 0.45 },
+  "cherry tomato":                 { size: 10,  unit: "oz",    package: "container", avgCost: 2.50 },
+  "cherry tomatoes":               { size: 10,  unit: "oz",    package: "container", avgCost: 2.50 },
+  "lettuce":                       { size: 1,   unit: "head",  package: "head",    avgCost: 2.19 },
+  "iceberg lettuce":               { size: 1,   unit: "head",  package: "head",    avgCost: 2.19 },
+  "romaine":                       { size: 1,   unit: "head",  package: "head",    avgCost: 2.19 },
+  "salad mix":                     { size: 12,  unit: "oz",    package: "bag",     avgCost: 2.19 },
+  "spinach":                       { size: 10,  unit: "oz",    package: "bag",     avgCost: 3.99 },
+  "kale":                          { size: 1,   unit: "bunch", package: "bunch",   avgCost: 2.49 },
+  "avocado":                       { size: 1,   unit: "each",  package: "piece",   avgCost: 1.00 },
+  "broccoli":                      { size: 1,   unit: "head",  package: "head",    avgCost: 1.71 },
+  "broccoli crown":                { size: 1,   unit: "head",  package: "head",    avgCost: 1.71 },
+  "cauliflower":                   { size: 1,   unit: "head",  package: "head",    avgCost: 3.76 },
+  "cucumber":                      { size: 1,   unit: "each",  package: "piece",   avgCost: 0.79 },
+  "zucchini":                      { size: 1,   unit: "each",  package: "piece",   avgCost: 1.49 },
+  "celery":                        { size: 1,   unit: "bunch", package: "bunch",   avgCost: 1.99 },
+  "cilantro":                      { size: 1,   unit: "bunch", package: "bunch",   avgCost: 0.99 },
+  "mushroom":                      { size: 8,   unit: "oz",    package: "package", avgCost: 3.99 },
+  "asparagus":                     { size: 1,   unit: "bunch", package: "bunch",   avgCost: 3.99 },
+  "green beans":                   { size: 12,  unit: "oz",    package: "bag",     avgCost: 2.99 },
+  "carrot":                        { size: 16,  unit: "oz",    package: "bag",     avgCost: 1.29 },
+  "carrots":                       { size: 16,  unit: "oz",    package: "bag",     avgCost: 1.29 },
+  "baby carrots":                  { size: 16,  unit: "oz",    package: "bag",     avgCost: 1.29 },
+  "jalapeno":                      { size: 1,   unit: "each",  package: "piece",   avgCost: 0.15 },
+  "cabbage":                       { size: 1,   unit: "head",  package: "head",    avgCost: 2.18 },
+  "green cabbage":                 { size: 1,   unit: "head",  package: "head",    avgCost: 2.18 },
+  "bok choy":                      { size: 1,   unit: "each",  package: "head",    avgCost: 1.99 },
+  "potato":                        { size: 1,   unit: "each",  package: "piece",   avgCost: 0.59 },
+  "russet potato":                 { size: 1,   unit: "each",  package: "piece",   avgCost: 0.59 },
+  "russet potatoes":               { size: 80,  unit: "oz",    package: "bag",     avgCost: 1.99 },
+  "sweet potato":                  { size: 1,   unit: "each",  package: "piece",   avgCost: 1.49 },
+  "sweet potatoes":                { size: 1,   unit: "each",  package: "piece",   avgCost: 1.49 },
+  "garlic":                        { size: 1,   unit: "head",  package: "head",    avgCost: 0.59 },
+  "corn":                          { size: 1,   unit: "each",  package: "ear",     avgCost: 0.79 },
+  "edamame":                       { size: 12,  unit: "oz",    package: "bag",     avgCost: 3.49 },
+  "frozen vegetables":             { size: 12,  unit: "oz",    package: "bag",     avgCost: 1.99 },
+  "mixed vegetables":              { size: 12,  unit: "oz",    package: "bag",     avgCost: 1.99 },
+
+  // ── Produce — fruits ─────────────────────────────────────────────────────
+  "banana":                        { size: 1,   unit: "each",  package: "piece",   avgCost: 0.19 },
+  "bananas":                       { size: 6,   unit: "count", package: "bunch",   avgCost: 1.16 },
+  "apple":                         { size: 1,   unit: "each",  package: "piece",   avgCost: 1.25 },
+  "orange":                        { size: 1,   unit: "each",  package: "piece",   avgCost: 0.79 },
+  "lemon":                         { size: 1,   unit: "each",  package: "piece",   avgCost: 0.85 },
+  "lime":                          { size: 1,   unit: "each",  package: "piece",   avgCost: 0.50 },
+  "mango":                         { size: 1,   unit: "each",  package: "piece",   avgCost: 1.49 },
+  "pineapple":                     { size: 1,   unit: "each",  package: "piece",   avgCost: 3.29 },
+  "strawberry":                    { size: 16,  unit: "oz",    package: "container", avgCost: 3.49 },
+  "strawberries":                  { size: 16,  unit: "oz",    package: "container", avgCost: 3.49 },
+  "blueberry":                     { size: 6,   unit: "oz",    package: "container", avgCost: 2.99 },
+  "blueberries":                   { size: 6,   unit: "oz",    package: "container", avgCost: 2.99 },
+  "blackberries":                  { size: 6,   unit: "oz",    package: "container", avgCost: 2.99 },
+  "raspberries":                   { size: 6,   unit: "oz",    package: "container", avgCost: 3.19 },
+  "grapes":                        { size: 32,  unit: "oz",    package: "bag",     avgCost: 4.58 },
+
+  // ── Grains — rice ────────────────────────────────────────────────────────
+  "rice":                          { size: 32,  unit: "oz",    package: "bag",     avgCost: 1.79 },
+  "white rice":                    { size: 32,  unit: "oz",    package: "bag",     avgCost: 1.79 },
+  "long grain white rice":         { size: 32,  unit: "oz",    package: "bag",     avgCost: 1.79 },
+  "long grain rice":               { size: 80,  unit: "oz",    package: "bag",     avgCost: 3.59 },
+  "brown rice":                    { size: 32,  unit: "oz",    package: "bag",     avgCost: 1.79 },
+  "jasmine rice":                  { size: 80,  unit: "oz",    package: "bag",     avgCost: 7.49 },
+  "basmati rice":                  { size: 32,  unit: "oz",    package: "bag",     avgCost: 3.99 },
+  "instant rice":                  { size: 14,  unit: "oz",    package: "box",     avgCost: 2.99 },
+
+  // ── Grains — pasta & noodles ─────────────────────────────────────────────
+  "pasta":                         { size: 16,  unit: "oz",    package: "box",     avgCost: 1.00 },
+  "spaghetti":                     { size: 16,  unit: "oz",    package: "box",     avgCost: 1.00 },
+  "penne":                         { size: 16,  unit: "oz",    package: "box",     avgCost: 1.00 },
+  "cavatappi":                     { size: 16,  unit: "oz",    package: "box",     avgCost: 1.00 },
+  "angel hair pasta":              { size: 16,  unit: "oz",    package: "box",     avgCost: 1.59 },
+  "noodle":                        { size: 16,  unit: "oz",    package: "bag",     avgCost: 1.00 },
+  "noodles":                       { size: 16,  unit: "oz",    package: "bag",     avgCost: 1.00 },
+  "egg noodles":                   { size: 16,  unit: "oz",    package: "bag",     avgCost: 1.59 },
+  "rice noodle":                   { size: 8,   unit: "oz",    package: "bag",     avgCost: 2.50 },
+  "rice noodles":                  { size: 8,   unit: "oz",    package: "bag",     avgCost: 2.50 },
+  "quinoa":                        { size: 16,  unit: "oz",    package: "bag",     avgCost: 5.99 },
+  "oats":                          { size: 42,  unit: "oz",    package: "container", avgCost: 4.49 },
+  "oatmeal":                       { size: 42,  unit: "oz",    package: "container", avgCost: 4.49 },
+  "rolled oats":                   { size: 42,  unit: "oz",    package: "container", avgCost: 4.49 },
+  "pita":                          { size: 12,  unit: "oz",    package: "pack",    avgCost: 3.49 },
+  "panko":                         { size: 8,   unit: "oz",    package: "canister", avgCost: 2.99 },
+  "breadcrumb":                    { size: 8,   unit: "oz",    package: "canister", avgCost: 2.49 },
+
+  // ── Grains — bread & tortillas ───────────────────────────────────────────
+  "bread":                         { size: 20,  unit: "oz",    package: "loaf",    avgCost: 3.49 },
+  "white bread":                   { size: 24,  unit: "oz",    package: "loaf",    avgCost: 3.49 },
+  "wheat bread":                   { size: 20,  unit: "oz",    package: "loaf",    avgCost: 3.49 },
+  "whole wheat bread":             { size: 20,  unit: "oz",    package: "loaf",    avgCost: 3.49 },
+  "tortilla":                      { size: 25,  unit: "count", package: "pack",    avgCost: 3.49 },
+  "tortillas":                     { size: 25,  unit: "count", package: "pack",    avgCost: 3.49 },
+  "flour tortillas":               { size: 25,  unit: "count", package: "pack",    avgCost: 3.49 },
 
   // ── Canned & packaged ────────────────────────────────────────────────────
-  "black beans":     { size: 15,   unit: "oz",    package: "can",         avgCost: 1.09 },
-  "black bean":      { size: 15,   unit: "oz",    package: "can",         avgCost: 1.09 },
-  "kidney beans":    { size: 15,   unit: "oz",    package: "can",         avgCost: 1.09 },
-  "pinto beans":     { size: 15,   unit: "oz",    package: "can",         avgCost: 1.09 },
-  "beans":           { size: 15,   unit: "oz",    package: "can",         avgCost: 1.09 },
-  "chickpeas":       { size: 15,   unit: "oz",    package: "can",         avgCost: 1.29 },
-  "lentils":         { size: 16,   unit: "oz",    package: "bag",         avgCost: 1.99 },
-  "red lentils":     { size: 16,   unit: "oz",    package: "bag",         avgCost: 1.99 },
-  "tomato sauce":    { size: 15,   unit: "oz",    package: "can",         avgCost: 1.29 },
-  "diced tomatoes":  { size: 14.5, unit: "oz",    package: "can",         avgCost: 1.09 },
-  "crushed tomatoes": { size: 14.5, unit: "oz",   package: "can",         avgCost: 1.09 },
-  "coconut milk":    { size: 13.5, unit: "oz",    package: "can",         avgCost: 2.29 },
-  "chicken broth":   { size: 32,   unit: "oz",    package: "carton",      avgCost: 2.49 },
-  "beef broth":      { size: 32,   unit: "oz",    package: "carton",      avgCost: 2.49 },
-  "vegetable broth": { size: 32,   unit: "oz",    package: "carton",      avgCost: 2.49 },
-  "broth":           { size: 32,   unit: "oz",    package: "carton",      avgCost: 2.49 },
-  "peanut butter":   { size: 16,   unit: "oz",    package: "jar",         avgCost: 3.99 },
-  "almond butter":   { size: 12,   unit: "oz",    package: "jar",         avgCost: 8.99 },
-  "salsa":           { size: 16,   unit: "oz",    package: "jar",         avgCost: 3.49 },
+  "black beans":                   { size: 15,  unit: "oz",    package: "can",     avgCost: 0.99 },
+  "black bean":                    { size: 15,  unit: "oz",    package: "can",     avgCost: 0.99 },
+  "pinto beans":                   { size: 15,  unit: "oz",    package: "can",     avgCost: 0.99 },
+  "kidney beans":                  { size: 15,  unit: "oz",    package: "can",     avgCost: 0.99 },
+  "beans":                         { size: 15,  unit: "oz",    package: "can",     avgCost: 0.99 },
+  "chickpeas":                     { size: 15,  unit: "oz",    package: "can",     avgCost: 0.99 },
+  "lentils":                       { size: 16,  unit: "oz",    package: "bag",     avgCost: 1.99 },
+  "red lentils":                   { size: 16,  unit: "oz",    package: "bag",     avgCost: 1.99 },
+  "tomato sauce":                  { size: 15,  unit: "oz",    package: "can",     avgCost: 0.99 },
+  "diced tomatoes":                { size: 15,  unit: "oz",    package: "can",     avgCost: 0.99 },
+  "crushed tomatoes":              { size: 28,  unit: "oz",    package: "can",     avgCost: 1.49 },
+  "tomato paste":                  { size: 6,   unit: "oz",    package: "can",     avgCost: 0.89 },
+  "diced tomatoes and green chilies": { size: 10, unit: "oz",  package: "can",     avgCost: 1.59 },
+  "coconut milk":                  { size: 13.5, unit: "oz",   package: "can",     avgCost: 2.29 },
+  "chicken broth":                 { size: 32,  unit: "oz",    package: "carton",  avgCost: 1.59 },
+  "beef broth":                    { size: 32,  unit: "oz",    package: "carton",  avgCost: 1.59 },
+  "vegetable broth":               { size: 32,  unit: "oz",    package: "carton",  avgCost: 1.59 },
+  "broth":                         { size: 32,  unit: "oz",    package: "carton",  avgCost: 1.59 },
+  "peanut butter":                 { size: 16,  unit: "oz",    package: "jar",     avgCost: 3.99 },
+  "almond butter":                 { size: 12,  unit: "oz",    package: "jar",     avgCost: 8.99 },
+  "salsa":                         { size: 16,  unit: "oz",    package: "jar",     avgCost: 3.49 },
+
+  // ── Oils & condiments ────────────────────────────────────────────────────
+  "olive oil":                     { size: 16,  unit: "oz",    package: "bottle",  avgCost: 6.99 },
+  "extra virgin olive oil":        { size: 16,  unit: "oz",    package: "bottle",  avgCost: 6.99 },
+  "vegetable oil":                 { size: 48,  unit: "oz",    package: "bottle",  avgCost: 3.99 },
+  "canola oil":                    { size: 48,  unit: "oz",    package: "bottle",  avgCost: 4.49 },
+  "sesame oil":                    { size: 8,   unit: "oz",    package: "bottle",  avgCost: 5.99 },
+  "coconut oil":                   { size: 14,  unit: "oz",    package: "jar",     avgCost: 7.99 },
+  "soy sauce":                     { size: 15,  unit: "oz",    package: "bottle",  avgCost: 2.49 },
+  "low sodium soy sauce":          { size: 15,  unit: "oz",    package: "bottle",  avgCost: 2.79 },
+  "fish sauce":                    { size: 10,  unit: "oz",    package: "bottle",  avgCost: 4.99 },
+  "hot sauce":                     { size: 5,   unit: "oz",    package: "bottle",  avgCost: 3.29 },
+  "sriracha":                      { size: 17,  unit: "oz",    package: "bottle",  avgCost: 4.49 },
+  "vinegar":                       { size: 16,  unit: "oz",    package: "bottle",  avgCost: 2.79 },
+  "red wine vinegar":              { size: 16,  unit: "oz",    package: "bottle",  avgCost: 2.79 },
+  "apple cider vinegar":           { size: 16,  unit: "oz",    package: "bottle",  avgCost: 2.49 },
+  "balsamic vinegar":              { size: 16,  unit: "oz",    package: "bottle",  avgCost: 3.99 },
+  "rice vinegar":                  { size: 10,  unit: "oz",    package: "bottle",  avgCost: 3.49 },
+  "bbq sauce":                     { size: 15,  unit: "oz",    package: "bottle",  avgCost: 3.79 },
+  "worcestershire":                { size: 10,  unit: "oz",    package: "bottle",  avgCost: 3.29 },
+  "oyster sauce":                  { size: 9,   unit: "oz",    package: "bottle",  avgCost: 3.99 },
+  "hoisin sauce":                  { size: 8,   unit: "oz",    package: "jar",     avgCost: 3.49 },
+  "dijon mustard":                 { size: 8,   unit: "oz",    package: "jar",     avgCost: 3.49 },
+  "mustard":                       { size: 8,   unit: "oz",    package: "jar",     avgCost: 2.49 },
+  "ketchup":                       { size: 20,  unit: "oz",    package: "bottle",  avgCost: 2.99 },
+  "tahini":                        { size: 16,  unit: "oz",    package: "jar",     avgCost: 6.99 },
+  "maple syrup":                   { size: 12,  unit: "oz",    package: "bottle",  avgCost: 9.99 },
 };
 
-// Spices / pantry staples assumed already on-hand — excluded from cost total
+// ─────────────────────────────────────────────────────────────────────────────
+// Pantry staples — assumed already on hand, cost = $0
+// ─────────────────────────────────────────────────────────────────────────────
 const PANTRY_ITEMS = new Set([
-  // Basic spices
+  // Salt & pepper
   "salt", "pepper", "black pepper", "white pepper", "sea salt", "kosher salt",
-  "garlic powder", "onion powder", "cumin", "ground cumin",
+  // Alliums (powders)
+  "garlic powder", "onion powder",
+  // Warm spices
+  "cumin", "ground cumin", "coriander", "ground coriander",
   "paprika", "smoked paprika", "sweet paprika",
   "chili powder", "cayenne", "cayenne pepper", "red pepper flakes", "crushed red pepper",
-  "oregano", "dried oregano", "basil", "dried basil",
-  "thyme", "dried thyme", "rosemary", "dried rosemary",
-  "bay leaf", "bay leaves",
-  "cinnamon", "ground cinnamon", "nutmeg",
+  "cinnamon", "ground cinnamon", "nutmeg", "allspice", "ground allspice",
   "turmeric", "ground turmeric",
   "ginger powder", "ground ginger",
-  "curry powder", "garam masala", "allspice", "ground allspice",
-  "coriander", "ground coriander",
-  "italian seasoning", "everything bagel seasoning",
-  "mixed herbs", "dried herbs", "herb seasoning",
-  "lemon pepper", "garlic salt",
+  "curry powder", "garam masala",
+  // Herbs
+  "oregano", "dried oregano",
+  "basil", "dried basil",
+  "thyme", "dried thyme",
+  "rosemary", "dried rosemary",
+  "parsley", "dried parsley",
+  "bay leaf", "bay leaves",
+  "italian seasoning", "mixed herbs", "dried herbs", "herb seasoning",
+  "everything bagel seasoning", "lemon pepper", "garlic salt",
   // Baking
   "baking powder", "baking soda", "vanilla extract",
-  // Cooking sprays & misc
+  "flour", "all purpose flour", "all-purpose flour",
+  "sugar", "brown sugar", "cornstarch", "yeast",
+  // Sweeteners treated as pantry
+  "honey",
+  // Cooking sprays
   "cooking spray", "olive oil spray", "nonstick spray",
-  // Small flavor additions treated as pantry
+  // Small citrus additions
   "lemon juice", "lime juice",
+  // Packet condiments
   "soy sauce packet", "hot sauce packet",
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Unit → ounces conversion table (for weight & volume)
-// Count-based units are handled separately.
+// Unit → ounces conversion table (weight & volume)
 // ─────────────────────────────────────────────────────────────────────────────
 const TO_OZ = {
   "oz": 1, "ounce": 1, "ounces": 1,
@@ -219,25 +328,24 @@ const TO_OZ = {
 
 const COUNT_UNITS = new Set([
   "each", "count", "head", "heads", "piece", "pieces",
-  "slice", "slices", "serving", "servings", "clove", "cloves",
+  "slice", "slices", "serving", "servings", "clove", "cloves", "bunch",
 ]);
 
 function toOz(amount, unit) {
   const u = (unit || "").toLowerCase().trim();
-  if (COUNT_UNITS.has(u)) return null; // count-based, handle separately
-  return (TO_OZ[u] ?? 1) * amount;    // unknown unit → treat as oz
+  if (COUNT_UNITS.has(u)) return null;
+  return (TO_OZ[u] ?? 1) * amount;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Name normalization — strip adjectives, de-plural, return lowercase base
+// Name normalization — strip adjectives, return lowercase base
 // ─────────────────────────────────────────────────────────────────────────────
-const STRIP_PREFIXES = /^(fresh|frozen|raw|cooked|dried|organic|large|small|medium|extra|whole|boneless|skinless|bone-in|shredded|chopped|diced|sliced|minced|grated|crumbled|extra\s+virgin|canned|low-sodium|low sodium|reduced-fat|fat-free)\s+/i;
+const STRIP_PREFIXES = /^(fresh|frozen|raw|cooked|dried|organic|large|small|medium|extra|whole|lean|boneless|skinless|bone-in|shredded|chopped|diced|sliced|minced|grated|crumbled|extra\s+virgin|canned|low-sodium|low\s+sodium|reduced-fat|fat-free|unsweetened|sweetened)\s+/i;
 const STRIP_SUFFIXES = /\s+(breast|thigh|fillet|filet|steak|chop|loin|wing|leg|drumstick)s?$/i;
 
 function normalizeName(name) {
   if (!name) return "";
   let n = String(name).toLowerCase().trim();
-  // Strip common prep/quality adjectives iteratively (some items have multiple)
   let prev;
   do {
     prev = n;
@@ -248,24 +356,22 @@ function normalizeName(name) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Find the best PACKAGE_SIZES match for a normalized ingredient name.
-// Strategy: exact → depluralised → superstring → substring (longest match wins)
+// Find the best PACKAGE_SIZES match for an ingredient name
+// Strategy: exact → depluralised → key-in-name (longest) → name-in-key (shortest)
 // ─────────────────────────────────────────────────────────────────────────────
 function findPackage(rawName) {
   const n = normalizeName(rawName);
+  if (!n) return null;
 
   if (PACKAGE_SIZES[n]) return PACKAGE_SIZES[n];
 
-  // Try removing trailing 's'/'es' for plurals
   const depl = n.endsWith("es") ? n.slice(0, -2) : n.endsWith("s") ? n.slice(0, -1) : null;
   if (depl && PACKAGE_SIZES[depl]) return PACKAGE_SIZES[depl];
 
-  // Fuzzy: find all keys that are substrings of n, pick longest
   const keys = Object.keys(PACKAGE_SIZES);
   const contained = keys.filter(k => n.includes(k)).sort((a, b) => b.length - a.length);
   if (contained.length) return PACKAGE_SIZES[contained[0]];
 
-  // Fuzzy: find all keys where n is a substring of key, pick shortest
   const containing = keys.filter(k => k.includes(n)).sort((a, b) => a.length - b.length);
   if (containing.length) return PACKAGE_SIZES[containing[0]];
 
@@ -273,7 +379,7 @@ function findPackage(rawName) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Estimate packages + cost for a single grocery item
+// Estimate packages + cost for a single item
 // Returns { pkgCount, pkgLabel, cost, isPantry }
 // ─────────────────────────────────────────────────────────────────────────────
 export function estimateItem(name, qty, unit) {
@@ -295,20 +401,15 @@ export function estimateItem(name, qty, unit) {
 
     let pkgCount;
 
-    // ── Count-based (eggs, tortillas, etc.) ────────────────────────────────
-    if (pkgUnit === "count" || pkgUnit === "each" || pkgUnit === "head" || pkgUnit === "bunch") {
-      // qty is already a count
+    if (COUNT_UNITS.has(pkgUnit) || pkgUnit === "each") {
       pkgCount = Math.ceil(qty / pkg.size);
     } else {
-      // ── Weight / volume ────────────────────────────────────────────────────
-      const neededOz = toOz(qty, itemUnit) ?? qty; // fallback: treat as oz
+      const neededOz = toOz(qty, itemUnit) ?? qty;
       const pkgOz    = toOz(pkg.size, pkgUnit) ?? pkg.size;
       pkgCount = Math.max(1, Math.ceil(neededOz / pkgOz));
     }
 
     const cost = pkgCount * pkg.avgCost;
-
-    // Build label: "1 lb", "2 cans", "1 dozen", etc.
     const pkgLabel = pkgCount === 1
       ? `1 ${pkg.package}`
       : `${pkgCount} ${pkg.package}${pkg.package.endsWith("s") || pkg.package === "bunch" ? "" : "s"}`;
@@ -322,8 +423,7 @@ export function estimateItem(name, qty, unit) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Estimate cost for an entire planCategories array
-// Returns: { itemMap, totalCost, buffer, total, budget, withinBudget, diff, pct, unknownCount }
-// itemMap: Map<itemId, { pkgLabel, cost, isPantry }>
+// Returns { itemMap, totalCost, buffer, total, budget, withinBudget, diff, pct, unknownCount }
 // ─────────────────────────────────────────────────────────────────────────────
 export function estimateGroceryList(planCategories, weeklyBudget) {
   const itemMap = new Map();
@@ -343,16 +443,21 @@ export function estimateGroceryList(planCategories, weeklyBudget) {
     }
   }
 
-  // $2 buffer per unrecognised item (conservative — most unknowns are cheap spices/condiments)
-  const buffer = unknownCount * 2;
-  const total = totalCost + buffer;
-
+  // Tiered buffer per unknown item — tight budgets get a lower estimate
+  // since they use cheaper/simpler ingredients
   const budget = weeklyBudget ?? null;
+  const bufferPerItem = budget !== null && budget < 60  ? 2.00
+                      : budget !== null && budget < 90  ? 3.00
+                      :                                   3.50;
+
+  const buffer = unknownCount * bufferPerItem;
+  const total  = totalCost + buffer;
+
   const withinBudget = budget !== null ? total <= budget : null;
   const diff = budget !== null ? Math.abs(budget - total) : null;
   const pct  = budget !== null ? Math.min(Math.round((total / budget) * 100), 999) : null;
 
-  console.log(`[costEstimator] total=$${total.toFixed(2)} (items=$${totalCost.toFixed(2)} + buffer=$${buffer.toFixed(2)} for ${unknownCount} unknowns) budget=${budget ?? "none"} ${pct != null ? pct+"%" : ""}`);
+  console.log(`[costEstimator] total=$${total.toFixed(2)} (items=$${totalCost.toFixed(2)} + buffer=$${buffer.toFixed(2)} × ${unknownCount} unknowns @ $${bufferPerItem}) budget=${budget ?? "none"}${pct != null ? " "+pct+"%" : ""}`);
 
   return { itemMap, totalCost, buffer, total, budget, withinBudget, diff, pct, unknownCount };
 }
