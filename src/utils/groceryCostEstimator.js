@@ -20,6 +20,7 @@ const PACKAGE_SIZES = {
   "hot sauce":       { size: 5,    unit: "oz",    package: "bottle",      avgCost: 3.29 },
   "sriracha":        { size: 17,   unit: "oz",    package: "bottle",      avgCost: 4.49 },
   "vinegar":         { size: 16,   unit: "oz",    package: "bottle",      avgCost: 2.99 },
+  "apple cider vinegar": { size: 16, unit: "oz",  package: "bottle",      avgCost: 3.49 },
   "rice vinegar":    { size: 10,   unit: "oz",    package: "bottle",      avgCost: 3.49 },
   "honey":           { size: 12,   unit: "oz",    package: "bottle",      avgCost: 5.99 },
   "maple syrup":     { size: 12,   unit: "oz",    package: "bottle",      avgCost: 9.99 },
@@ -28,10 +29,14 @@ const PACKAGE_SIZES = {
   "hoisin sauce":    { size: 8,    unit: "oz",    package: "jar",         avgCost: 3.49 },
   "tomato paste":    { size: 6,    unit: "oz",    package: "can",         avgCost: 1.29 },
   "dijon mustard":   { size: 8,    unit: "oz",    package: "jar",         avgCost: 3.49 },
+  "mustard":         { size: 8,    unit: "oz",    package: "jar",         avgCost: 2.49 },
+  "ketchup":         { size: 20,   unit: "oz",    package: "bottle",      avgCost: 2.99 },
+  "tahini":          { size: 16,   unit: "oz",    package: "jar",         avgCost: 6.99 },
 
   // ── Proteins – meat ─────────────────────────────────────────────────────
   "chicken breast":  { size: 16,   unit: "oz",    package: "lb",          avgCost: 4.99 },
   "chicken thigh":   { size: 16,   unit: "oz",    package: "lb",          avgCost: 3.99 },
+  "chicken thighs":  { size: 16,   unit: "oz",    package: "lb",          avgCost: 3.99 },
   "ground beef":     { size: 16,   unit: "oz",    package: "lb",          avgCost: 5.99 },
   "ground turkey":   { size: 16,   unit: "oz",    package: "lb",          avgCost: 4.49 },
   "pork chop":       { size: 16,   unit: "oz",    package: "lb",          avgCost: 4.99 },
@@ -45,16 +50,21 @@ const PACKAGE_SIZES = {
 
   // ── Proteins – seafood ───────────────────────────────────────────────────
   "salmon":          { size: 16,   unit: "oz",    package: "lb",          avgCost: 12.99 },
-  "tuna":            { size: 16,   unit: "oz",    package: "lb",          avgCost: 9.99 },
+  // NOTE: bare "tuna" intentionally removed — falls through fuzzy to "canned tuna" ($1.49/can).
+  // "tuna steak" / "ahi tuna" for fresh fish is left unmatched (returns null, $3 buffer).
+  "canned tuna":     { size: 5,    unit: "oz",    package: "can",         avgCost: 1.49 },
+  "tuna in water":   { size: 5,    unit: "oz",    package: "can",         avgCost: 1.49 },
   "shrimp":          { size: 16,   unit: "oz",    package: "lb",          avgCost: 11.99 },
   "tilapia":         { size: 16,   unit: "oz",    package: "lb",          avgCost: 6.99 },
   "cod":             { size: 16,   unit: "oz",    package: "lb",          avgCost: 8.99 },
-  "canned tuna":     { size: 5,    unit: "oz",    package: "can",         avgCost: 1.49 },
 
   // ── Proteins – other ─────────────────────────────────────────────────────
-  "eggs":            { size: 12,   unit: "count", package: "dozen",       avgCost: 4.29 },
-  "egg":             { size: 12,   unit: "count", package: "dozen",       avgCost: 4.29 },
-  "tofu":            { size: 14,   unit: "oz",    package: "block",       avgCost: 2.99 },
+  "eggs":            { size: 12,   unit: "count", package: "dozen",       avgCost: 3.49 },
+  "egg":             { size: 12,   unit: "count", package: "dozen",       avgCost: 3.49 },
+  "tofu":            { size: 14,   unit: "oz",    package: "block",       avgCost: 2.49 },
+  "firm tofu":       { size: 14,   unit: "oz",    package: "block",       avgCost: 2.49 },
+  "extra firm tofu": { size: 14,   unit: "oz",    package: "block",       avgCost: 2.49 },
+  "silken tofu":     { size: 12,   unit: "oz",    package: "block",       avgCost: 2.49 },
 
   // ── Produce – vegetables ─────────────────────────────────────────────────
   "tomato":          { size: 1,    unit: "each",  package: "piece",       avgCost: 0.89 },
@@ -81,6 +91,12 @@ const PACKAGE_SIZES = {
   "celery":          { size: 1,    unit: "bunch", package: "bunch",       avgCost: 1.99 },
   "corn":            { size: 1,    unit: "each",  package: "ear",         avgCost: 0.79 },
   "edamame":         { size: 12,   unit: "oz",    package: "bag",         avgCost: 3.49 },
+  "cabbage":         { size: 1,    unit: "each",  package: "head",        avgCost: 1.49 },
+  "bok choy":        { size: 1,    unit: "each",  package: "head",        avgCost: 1.99 },
+  "green onion":     { size: 1,    unit: "bunch", package: "bunch",       avgCost: 0.99 },
+  "scallion":        { size: 1,    unit: "bunch", package: "bunch",       avgCost: 0.99 },
+  "frozen vegetables": { size: 12, unit: "oz",    package: "bag",         avgCost: 1.99 },
+  "mixed vegetables": { size: 12,  unit: "oz",    package: "bag",         avgCost: 1.99 },
 
   // ── Produce – fruits ─────────────────────────────────────────────────────
   "banana":          { size: 1,    unit: "each",  package: "piece",       avgCost: 0.25 },
@@ -94,21 +110,31 @@ const PACKAGE_SIZES = {
   "mango":           { size: 1,    unit: "each",  package: "piece",       avgCost: 1.49 },
 
   // ── Grains & pantry ──────────────────────────────────────────────────────
-  "rice":            { size: 32,   unit: "oz",    package: "bag",         avgCost: 3.99 },
-  "brown rice":      { size: 32,   unit: "oz",    package: "bag",         avgCost: 4.99 },
-  "jasmine rice":    { size: 32,   unit: "oz",    package: "bag",         avgCost: 4.49 },
-  "white rice":      { size: 32,   unit: "oz",    package: "bag",         avgCost: 3.99 },
+  "rice":            { size: 32,   unit: "oz",    package: "bag",         avgCost: 3.49 },
+  "brown rice":      { size: 32,   unit: "oz",    package: "bag",         avgCost: 3.99 },
+  "jasmine rice":    { size: 32,   unit: "oz",    package: "bag",         avgCost: 3.99 },
+  "white rice":      { size: 32,   unit: "oz",    package: "bag",         avgCost: 3.49 },
+  "basmati rice":    { size: 32,   unit: "oz",    package: "bag",         avgCost: 3.99 },
   "pasta":           { size: 16,   unit: "oz",    package: "box",         avgCost: 1.99 },
   "spaghetti":       { size: 16,   unit: "oz",    package: "box",         avgCost: 1.99 },
+  "penne":           { size: 16,   unit: "oz",    package: "box",         avgCost: 1.99 },
+  "noodle":          { size: 16,   unit: "oz",    package: "bag",         avgCost: 1.99 },
+  "noodles":         { size: 16,   unit: "oz",    package: "bag",         avgCost: 1.99 },
+  "rice noodle":     { size: 14,   unit: "oz",    package: "bag",         avgCost: 2.49 },
+  "rice noodles":    { size: 14,   unit: "oz",    package: "bag",         avgCost: 2.49 },
   "quinoa":          { size: 16,   unit: "oz",    package: "bag",         avgCost: 5.99 },
-  "oats":            { size: 42,   unit: "oz",    package: "container",   avgCost: 5.49 },
-  "oatmeal":         { size: 42,   unit: "oz",    package: "container",   avgCost: 5.49 },
+  "oats":            { size: 42,   unit: "oz",    package: "container",   avgCost: 4.49 },
+  "oatmeal":         { size: 42,   unit: "oz",    package: "container",   avgCost: 4.49 },
+  "rolled oats":     { size: 42,   unit: "oz",    package: "container",   avgCost: 4.49 },
   "bread":           { size: 20,   unit: "oz",    package: "loaf",        avgCost: 3.49 },
+  "white bread":     { size: 20,   unit: "oz",    package: "loaf",        avgCost: 2.99 },
+  "whole wheat bread": { size: 20, unit: "oz",    package: "loaf",        avgCost: 3.99 },
   "tortilla":        { size: 12,   unit: "count", package: "pack",        avgCost: 3.99 },
   "pita":            { size: 12,   unit: "oz",    package: "pack",        avgCost: 3.49 },
   "flour":           { size: 80,   unit: "oz",    package: "bag",         avgCost: 4.99 },
   "cornstarch":      { size: 16,   unit: "oz",    package: "box",         avgCost: 2.29 },
   "panko":           { size: 8,    unit: "oz",    package: "canister",    avgCost: 2.99 },
+  "breadcrumb":      { size: 8,    unit: "oz",    package: "canister",    avgCost: 2.49 },
 
   // ── Dairy ────────────────────────────────────────────────────────────────
   "milk":            { size: 64,   unit: "oz",    package: "half gallon", avgCost: 3.49 },
@@ -126,30 +152,52 @@ const PACKAGE_SIZES = {
   "heavy cream":     { size: 16,   unit: "oz",    package: "carton",      avgCost: 3.99 },
 
   // ── Canned & packaged ────────────────────────────────────────────────────
-  "black beans":     { size: 15,   unit: "oz",    package: "can",         avgCost: 1.29 },
-  "beans":           { size: 15,   unit: "oz",    package: "can",         avgCost: 1.29 },
-  "chickpeas":       { size: 15,   unit: "oz",    package: "can",         avgCost: 1.49 },
-  "lentils":         { size: 16,   unit: "oz",    package: "bag",         avgCost: 2.49 },
-  "tomato sauce":    { size: 15,   unit: "oz",    package: "can",         avgCost: 1.49 },
-  "diced tomatoes":  { size: 14.5, unit: "oz",    package: "can",         avgCost: 1.29 },
-  "coconut milk":    { size: 13.5, unit: "oz",    package: "can",         avgCost: 2.49 },
-  "chicken broth":   { size: 32,   unit: "oz",    package: "carton",      avgCost: 2.99 },
-  "beef broth":      { size: 32,   unit: "oz",    package: "carton",      avgCost: 2.99 },
-  "broth":           { size: 32,   unit: "oz",    package: "carton",      avgCost: 2.99 },
-  "peanut butter":   { size: 16,   unit: "oz",    package: "jar",         avgCost: 4.49 },
+  "black beans":     { size: 15,   unit: "oz",    package: "can",         avgCost: 1.09 },
+  "black bean":      { size: 15,   unit: "oz",    package: "can",         avgCost: 1.09 },
+  "kidney beans":    { size: 15,   unit: "oz",    package: "can",         avgCost: 1.09 },
+  "pinto beans":     { size: 15,   unit: "oz",    package: "can",         avgCost: 1.09 },
+  "beans":           { size: 15,   unit: "oz",    package: "can",         avgCost: 1.09 },
+  "chickpeas":       { size: 15,   unit: "oz",    package: "can",         avgCost: 1.29 },
+  "lentils":         { size: 16,   unit: "oz",    package: "bag",         avgCost: 1.99 },
+  "red lentils":     { size: 16,   unit: "oz",    package: "bag",         avgCost: 1.99 },
+  "tomato sauce":    { size: 15,   unit: "oz",    package: "can",         avgCost: 1.29 },
+  "diced tomatoes":  { size: 14.5, unit: "oz",    package: "can",         avgCost: 1.09 },
+  "crushed tomatoes": { size: 14.5, unit: "oz",   package: "can",         avgCost: 1.09 },
+  "coconut milk":    { size: 13.5, unit: "oz",    package: "can",         avgCost: 2.29 },
+  "chicken broth":   { size: 32,   unit: "oz",    package: "carton",      avgCost: 2.49 },
+  "beef broth":      { size: 32,   unit: "oz",    package: "carton",      avgCost: 2.49 },
+  "vegetable broth": { size: 32,   unit: "oz",    package: "carton",      avgCost: 2.49 },
+  "broth":           { size: 32,   unit: "oz",    package: "carton",      avgCost: 2.49 },
+  "peanut butter":   { size: 16,   unit: "oz",    package: "jar",         avgCost: 3.99 },
   "almond butter":   { size: 12,   unit: "oz",    package: "jar",         avgCost: 8.99 },
+  "salsa":           { size: 16,   unit: "oz",    package: "jar",         avgCost: 3.49 },
 };
 
 // Spices / pantry staples assumed already on-hand — excluded from cost total
 const PANTRY_ITEMS = new Set([
-  "salt", "pepper", "black pepper", "white pepper",
-  "garlic powder", "onion powder", "cumin", "paprika", "smoked paprika",
-  "chili powder", "cayenne", "cayenne pepper", "red pepper flakes",
-  "oregano", "basil", "thyme", "rosemary", "bay leaf", "bay leaves",
-  "cinnamon", "nutmeg", "turmeric", "ginger powder", "curry powder",
+  // Basic spices
+  "salt", "pepper", "black pepper", "white pepper", "sea salt", "kosher salt",
+  "garlic powder", "onion powder", "cumin", "ground cumin",
+  "paprika", "smoked paprika", "sweet paprika",
+  "chili powder", "cayenne", "cayenne pepper", "red pepper flakes", "crushed red pepper",
+  "oregano", "dried oregano", "basil", "dried basil",
+  "thyme", "dried thyme", "rosemary", "dried rosemary",
+  "bay leaf", "bay leaves",
+  "cinnamon", "ground cinnamon", "nutmeg",
+  "turmeric", "ground turmeric",
+  "ginger powder", "ground ginger",
+  "curry powder", "garam masala", "allspice", "ground allspice",
+  "coriander", "ground coriander",
   "italian seasoning", "everything bagel seasoning",
+  "mixed herbs", "dried herbs", "herb seasoning",
+  "lemon pepper", "garlic salt",
+  // Baking
   "baking powder", "baking soda", "vanilla extract",
-  "cooking spray", "olive oil spray",
+  // Cooking sprays & misc
+  "cooking spray", "olive oil spray", "nonstick spray",
+  // Small flavor additions treated as pantry
+  "lemon juice", "lime juice",
+  "soy sauce packet", "hot sauce packet",
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -183,7 +231,7 @@ function toOz(amount, unit) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Name normalization — strip adjectives, de-plural, return lowercase base
 // ─────────────────────────────────────────────────────────────────────────────
-const STRIP_PREFIXES = /^(fresh|frozen|raw|cooked|dried|organic|large|small|medium|extra|whole|boneless|skinless|bone-in|shredded|chopped|diced|sliced|minced|grated|crumbled|extra\s+virgin)\s+/i;
+const STRIP_PREFIXES = /^(fresh|frozen|raw|cooked|dried|organic|large|small|medium|extra|whole|boneless|skinless|bone-in|shredded|chopped|diced|sliced|minced|grated|crumbled|extra\s+virgin|canned|low-sodium|low sodium|reduced-fat|fat-free)\s+/i;
 const STRIP_SUFFIXES = /\s+(breast|thigh|fillet|filet|steak|chop|loin|wing|leg|drumstick)s?$/i;
 
 function normalizeName(name) {
@@ -201,7 +249,7 @@ function normalizeName(name) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Find the best PACKAGE_SIZES match for a normalized ingredient name.
-// Strategy: exact → prefix → superstring → substring (longest match wins)
+// Strategy: exact → depluralised → superstring → substring (longest match wins)
 // ─────────────────────────────────────────────────────────────────────────────
 function findPackage(rawName) {
   const n = normalizeName(rawName);
@@ -230,39 +278,42 @@ function findPackage(rawName) {
 // ─────────────────────────────────────────────────────────────────────────────
 export function estimateItem(name, qty, unit) {
   try {
-  if (!name) return { pkgCount: null, pkgLabel: null, cost: null, isPantry: false };
-  const normalized = normalizeName(name);
-  const isPantry = PANTRY_ITEMS.has(normalized);
+    if (!name) return { pkgCount: null, pkgLabel: null, cost: null, isPantry: false };
+    const normalized = normalizeName(name);
+    const isPantry = PANTRY_ITEMS.has(normalized);
 
-  if (isPantry) return { pkgCount: 0, pkgLabel: null, cost: 0, isPantry: true };
+    if (isPantry) return { pkgCount: 0, pkgLabel: null, cost: 0, isPantry: true };
 
-  const pkg = findPackage(name);
-  if (!pkg) return { pkgCount: null, pkgLabel: null, cost: null, isPantry: false };
+    const pkg = findPackage(name);
+    if (!pkg) {
+      console.log(`[costEstimator] no match: "${name}" (normalized: "${normalized}")`);
+      return { pkgCount: null, pkgLabel: null, cost: null, isPantry: false };
+    }
 
-  const pkgUnit = pkg.unit.toLowerCase();
-  const itemUnit = (unit || "").toLowerCase().trim();
+    const pkgUnit = pkg.unit.toLowerCase();
+    const itemUnit = (unit || "").toLowerCase().trim();
 
-  let pkgCount;
+    let pkgCount;
 
-  // ── Count-based (eggs, tortillas, etc.) ────────────────────────────────
-  if (pkgUnit === "count" || pkgUnit === "each" || pkgUnit === "head" || pkgUnit === "bunch") {
-    // qty is already a count
-    pkgCount = Math.ceil(qty / pkg.size);
-  } else {
-    // ── Weight / volume ────────────────────────────────────────────────────
-    const neededOz = toOz(qty, itemUnit) ?? qty; // fallback: treat as oz
-    const pkgOz    = toOz(pkg.size, pkgUnit) ?? pkg.size;
-    pkgCount = Math.max(1, Math.ceil(neededOz / pkgOz));
-  }
+    // ── Count-based (eggs, tortillas, etc.) ────────────────────────────────
+    if (pkgUnit === "count" || pkgUnit === "each" || pkgUnit === "head" || pkgUnit === "bunch") {
+      // qty is already a count
+      pkgCount = Math.ceil(qty / pkg.size);
+    } else {
+      // ── Weight / volume ────────────────────────────────────────────────────
+      const neededOz = toOz(qty, itemUnit) ?? qty; // fallback: treat as oz
+      const pkgOz    = toOz(pkg.size, pkgUnit) ?? pkg.size;
+      pkgCount = Math.max(1, Math.ceil(neededOz / pkgOz));
+    }
 
-  const cost = pkgCount * pkg.avgCost;
+    const cost = pkgCount * pkg.avgCost;
 
-  // Build label: "1 lb", "2 cans", "1 dozen", etc.
-  const pkgLabel = pkgCount === 1
-    ? `1 ${pkg.package}`
-    : `${pkgCount} ${pkg.package}${pkg.package.endsWith("s") || pkg.package === "bunch" ? "" : "s"}`;
+    // Build label: "1 lb", "2 cans", "1 dozen", etc.
+    const pkgLabel = pkgCount === 1
+      ? `1 ${pkg.package}`
+      : `${pkgCount} ${pkg.package}${pkg.package.endsWith("s") || pkg.package === "bunch" ? "" : "s"}`;
 
-  return { pkgCount, pkgLabel, cost, isPantry: false };
+    return { pkgCount, pkgLabel, cost, isPantry: false };
   } catch (e) {
     console.error("[estimateItem] error for:", name, e);
     return { pkgCount: null, pkgLabel: null, cost: null, isPantry: false };
@@ -271,7 +322,7 @@ export function estimateItem(name, qty, unit) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Estimate cost for an entire planCategories array
-// Returns: { itemMap, totalCost, withinBudget, overBy, underBy, pctOfBudget }
+// Returns: { itemMap, totalCost, buffer, total, budget, withinBudget, diff, pct, unknownCount }
 // itemMap: Map<itemId, { pkgLabel, cost, isPantry }>
 // ─────────────────────────────────────────────────────────────────────────────
 export function estimateGroceryList(planCategories, weeklyBudget) {
@@ -292,14 +343,16 @@ export function estimateGroceryList(planCategories, weeklyBudget) {
     }
   }
 
-  // Add a $3 buffer per item with no pricing data (covers misc spices, produce, etc.)
-  const buffer = unknownCount * 3;
+  // $2 buffer per unrecognised item (conservative — most unknowns are cheap spices/condiments)
+  const buffer = unknownCount * 2;
   const total = totalCost + buffer;
 
   const budget = weeklyBudget ?? null;
   const withinBudget = budget !== null ? total <= budget : null;
   const diff = budget !== null ? Math.abs(budget - total) : null;
   const pct  = budget !== null ? Math.min(Math.round((total / budget) * 100), 999) : null;
+
+  console.log(`[costEstimator] total=$${total.toFixed(2)} (items=$${totalCost.toFixed(2)} + buffer=$${buffer.toFixed(2)} for ${unknownCount} unknowns) budget=${budget ?? "none"} ${pct != null ? pct+"%" : ""}`);
 
   return { itemMap, totalCost, buffer, total, budget, withinBudget, diff, pct, unknownCount };
 }

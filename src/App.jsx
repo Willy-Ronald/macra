@@ -3150,7 +3150,15 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade,profile}) => {
   );
 
   return <div style={{padding:"0 20px 24px"}}>
-    <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"4px 0 16px",letterSpacing:"-0.02em"}}>List</h1>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",margin:"4px 0 16px"}}>
+      <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:0,letterSpacing:"-0.02em"}}>List</h1>
+      {activeTab==="planlist" && hasPlan && isPro && (
+        <button onClick={handleSharePlanList} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:10,border:`1px solid ${T.acc}`,background:"transparent",color:T.acc,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:T.font}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          Share
+        </button>
+      )}
+    </div>
 
     {/* Tabs */}
     <Card data-tour="grocery-list" style={{display:"flex",padding:4,marginBottom:20}}>
@@ -3203,13 +3211,9 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade,profile}) => {
               </div>
             </div>
           </Card>
-          <Card style={{padding:"12px 16px",marginBottom:16,background:T.accG,border:`1px solid ${T.accM}`,textAlign:"center"}}>
+          <Card style={{padding:"10px 16px",marginBottom:16,background:T.accG,border:`1px solid ${T.accM}`,textAlign:"center"}}>
             <p style={{fontSize:12,fontWeight:700,color:T.acc,letterSpacing:"0.08em",textTransform:"uppercase",margin:"0 0 2px"}}>Total Needed for Week</p>
             <p style={{fontSize:11,color:T.tx2,margin:0}}>4 Day A meals + 3 Day B meals · amounts combined</p>
-            <button onClick={handleSharePlanList} style={{flexShrink:0,padding:"6px 12px",borderRadius:8,border:`1px solid ${T.acc}`,background:"transparent",color:T.acc,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:T.font,display:"flex",alignItems:"center",gap:5}}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-              Share
-            </button>
           </Card>
           {planCategories.map(cat=>{
             const catDone = cat.items.filter(it=>planChecked[it.id]).length;
