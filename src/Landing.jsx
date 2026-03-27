@@ -71,9 +71,9 @@ const Landing = () => {
   const bd = "#1E1E22";
   const txM = "#52525B";
   const tx2 = "#A1A1AA";
-  const pro = "#7C9CF5";
-  const carb = "#D4A853";
-  const fat = "#C084A6";
+  const pro = "#C4714A";
+  const carb = "#C9A84C";
+  const fat = "#7A9E7E";
   const ok = "#6BCB77";
   const Check = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a} strokeWidth="2" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>;
   const MacroRow = ({cal,p,c,f,size=9}) => (
@@ -111,7 +111,7 @@ const Landing = () => {
         </div>
       </div>
       <p style={{fontSize:9,fontWeight:600,color:tx2,margin:"0 0 6px"}}>Eaten Today</p>
-      {[{n:"Egg & Avocado Toast",cal:420,p:24,c:38,f:18},{n:"Grilled Chicken Bowl",cal:580,p:48,c:52,f:22},{n:"Protein Shake",cal:340,p:35,c:12,f:14}].map((m,i)=>
+      {[{n:"Jerk Chicken & Sweet Potato Hash",cal:420,p:38,c:42,f:14},{n:"Mongolian Beef with Brown Rice",cal:565,p:52,c:45,f:18},{n:"Lemongrass Pork Banh Mi Bowl",cal:705,p:65,c:62,f:19}].map((m,i)=>
         <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 8px",marginBottom:3,background:bg,borderRadius:8,border:"1px solid "+bd}}>
           <div><p style={{fontSize:9,fontWeight:600,margin:0}}>{m.n}</p><MacroRow cal={m.cal} p={m.p} c={m.c} f={m.f} size={7}/></div>
           <div style={{width:5,height:5,borderRadius:"50%",background:ok}}/>
@@ -128,11 +128,14 @@ const Landing = () => {
           <div key={i} style={{flex:1,padding:"5px 0",borderRadius:5,background:i===2?a:"transparent",textAlign:"center",fontSize:9,fontWeight:600,color:i===2?bg:txM}}>{d}</div>
         )}
       </div>
-      {[{type:"BREAKFAST",name:"Spinach Egg Cups",cal:340,p:26,c:8,f:24,time:"20 min"},{type:"LUNCH",name:"Thai Chicken Bowl",cal:650,p:52,c:58,f:20,time:"20 min"},{type:"SNACK",name:"Cottage Cheese & Berries",cal:280,p:24,c:22,f:10,time:"3 min"},{type:"DINNER",name:"Steak Fajita Plate",cal:720,p:56,c:48,f:30,time:"25 min"}].map((m,i)=>
+      {[{type:"BREAKFAST",name:"Chicken & Grits Bowl",cal:435,p:40,c:43,f:13,time:"25 min",done:true},{type:"LUNCH",name:"Orange Chicken & Steamed Rice",cal:575,p:53,c:48,f:18,time:"30 min",done:true},{type:"DINNER",name:"Grilled Beef Pho Bowl",cal:715,p:66,c:65,f:20,time:"35 min",done:false}].map((m,i)=>
         <div key={i} style={{padding:"8px 10px",marginBottom:5,background:bg,borderRadius:10,border:"1px solid "+bd}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
             <span style={{fontSize:8,fontWeight:600,color:a,letterSpacing:"0.12em"}}>{m.type}</span>
-            <span style={{fontSize:8,color:txM}}>{m.time}</span>
+            <div style={{display:"flex",alignItems:"center",gap:4}}>
+              <span style={{fontSize:8,color:txM}}>{m.time}</span>
+              {m.done&&<div style={{width:12,height:12,borderRadius:"50%",background:ok,display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke={bg} strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg></div>}
+            </div>
           </div>
           <p style={{fontSize:11,fontWeight:600,margin:"0 0 4px"}}>{m.name}</p>
           <MacroRow cal={m.cal} p={m.p} c={m.c} f={m.f} size={8}/>
@@ -148,11 +151,11 @@ const Landing = () => {
         <span style={{fontSize:8,fontWeight:700,color:bg,background:a,padding:"2px 6px",borderRadius:3}}>PRO</span>
       </div>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-        <span style={{fontSize:10,color:tx2}}>18 of 43 items</span>
-        <span style={{fontSize:10,color:a,fontFamily:"'DM Mono',monospace"}}>42%</span>
+        <span style={{fontSize:10,color:tx2}}>18 of 24 items</span>
+        <span style={{fontSize:10,color:a,fontFamily:"'DM Mono',monospace"}}>75%</span>
       </div>
-      <div style={{height:3,borderRadius:2,background:bd,marginBottom:14}}><div style={{height:"100%",width:"42%",borderRadius:2,background:a}}/></div>
-      {[{cat:"Protein & Meat",items:[{n:"Chicken breast, 2 lbs",done:true},{n:"Salmon fillets, 1 lb",done:true},{n:"Large eggs, 1 dozen",done:false},{n:"Flank steak, 1 lb",done:false}]},{cat:"Produce",items:[{n:"Avocados, 4 ct",done:true},{n:"Sweet potatoes, 3",done:false},{n:"Spinach, 5 oz bag",done:false},{n:"Bell peppers, 3 ct",done:false}]}].map(c=>
+      <div style={{height:3,borderRadius:2,background:bd,marginBottom:14}}><div style={{height:"100%",width:"75%",borderRadius:2,background:a}}/></div>
+      {[{cat:"PRODUCE",items:[{n:"Spinach, 5 oz bag",done:true},{n:"Cherry Tomatoes, 1 pt",done:true},{n:"Bell Peppers, 3 ct",done:false}]},{cat:"MEAT & SEAFOOD",items:[{n:"Chicken Breast, 2 lbs",done:true},{n:"Flank Steak, 1 lb",done:false}]},{cat:"DAIRY",items:[{n:"Eggs, 1 dozen",done:true},{n:"Cottage Cheese, 16 oz",done:true},{n:"Feta Cheese, 4 oz",done:false}]}].map(c=>
         <div key={c.cat} style={{marginBottom:10}}>
           <span style={{fontSize:8,fontWeight:600,color:a,letterSpacing:"0.1em"}}>{c.cat}</span>
           {c.items.map((it,i)=>
@@ -242,13 +245,13 @@ const Landing = () => {
 
   return (
     <div style={{background:bg,color:"#FAFAF9",fontFamily:"'Outfit',sans-serif",minHeight:"100vh",overflowX:"hidden"}}>
-      <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet"/>
-      <nav style={{position:"fixed",top:0,left:0,right:0,zIndex:100,padding:"18px 24px",display:"flex",justifyContent:"space-between",alignItems:"center",background:scrollY>50?"rgba(9,9,11,0.92)":"linear-gradient(180deg, "+bg+" 60%, transparent)",backdropFilter:scrollY>50?"blur(20px)":"none",borderBottom:scrollY>50?"1px solid "+bd:"1px solid transparent",transition:"all 0.3s"}}>
+      <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Cormorant+Garamond:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+      <nav style={{position:"fixed",top:0,left:0,right:0,zIndex:100,padding:"16px 24px",display:"flex",justifyContent:"space-between",alignItems:"center",background:scrollY>50?"rgba(0,0,0,0.95)":"linear-gradient(180deg, "+bg+" 60%, transparent)",backdropFilter:scrollY>50?"blur(10px)":"none",borderBottom:"1px solid rgba(200,184,138,0.1)",transition:"all 0.3s"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:32,height:32,borderRadius:8,background:"linear-gradient(135deg, "+a+", #A89560)",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:17,fontWeight:800,color:bg}}>M</span></div>
-          <span style={{fontSize:18,fontWeight:700,letterSpacing:"-0.02em"}}>Macra</span>
+          <img src="/icon-192.png" alt="Macra" style={{width:40,height:40,borderRadius:10,display:"block"}}/>
+          <span style={{fontSize:30,fontWeight:600,letterSpacing:"0.5px",fontFamily:"'Cormorant Garamond', serif",color:a,lineHeight:1}}>Macra</span>
         </div>
-        <a href="/app" style={{padding:"10px 24px",borderRadius:10,background:a,color:bg,fontSize:14,fontWeight:700,textDecoration:"none"}}>Get Started</a>
+        <a href="/app" style={{padding:"10px 24px",borderRadius:12,background:"linear-gradient(135deg, #C4714A 0%, #B86340 100%)",color:"#FFFFFF",fontSize:14,fontWeight:700,textDecoration:"none",boxShadow:"0 4px 16px rgba(196,113,74,0.3)"}}>Get Started</a>
       </nav>
       <section style={{display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"center",textAlign:"center",padding:"120px 24px 40px",position:"relative"}}>
         <div style={{position:"absolute",top:"8%",left:"30%",width:400,height:400,borderRadius:"50%",background:"radial-gradient(circle, rgba(200,184,138,0.06) 0%, transparent 70%)",pointerEvents:"none"}}/>
@@ -258,8 +261,8 @@ const Landing = () => {
           <p style={{fontSize:"clamp(15px, 2.5vw, 20px)",color:tx2,lineHeight:1.6,maxWidth:520,margin:"0 auto 16px",fontWeight:400}}>AI builds your meal plan. You hit your macros.<br/>No guesswork. No spreadsheets. No wasted meals.</p>
           <p style={{fontSize:14,color:txM,margin:"0 0 40px"}}>Free to start · 7-day Pro trial · No credit card required</p>
           <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
-            <a href="/app" style={{padding:"16px 36px",borderRadius:12,background:a,color:bg,fontSize:16,fontWeight:700,textDecoration:"none",boxShadow:"0 4px 24px rgba(200,184,138,0.2)"}}>Start Free →</a>
-            <a href="#features" style={{padding:"16px 36px",borderRadius:12,border:"1px solid "+bd,background:"transparent",color:tx2,fontSize:16,fontWeight:500,textDecoration:"none"}}>See How It Works</a>
+            <a href="/app" style={{padding:"16px 36px",borderRadius:12,background:"linear-gradient(135deg, #C4714A 0%, #B86340 100%)",color:"#FFFFFF",fontSize:16,fontWeight:700,textDecoration:"none",boxShadow:"0 4px 24px rgba(196,113,74,0.35)"}}>Start Free →</a>
+            <a href="#features" style={{padding:"16px 36px",borderRadius:12,border:"1px solid rgba(200,184,138,0.35)",background:"transparent",color:a,fontSize:16,fontWeight:500,textDecoration:"none"}}>See How It Works</a>
           </div>
         </div>
         {isMobile ? (
@@ -397,17 +400,22 @@ const Landing = () => {
         <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       </section>
 
-      <section style={{padding:"40px 24px",textAlign:"center",borderTop:"1px solid "+bd,borderBottom:"1px solid "+bd}}>
-        <div style={{display:"flex",justifyContent:"center",gap:isMobile?24:48,flexWrap:"wrap"}}>
-          {[{n:"60 sec",l:"From signup to your first meal plan"},{n:"1,000+",l:"Foods & brands in search database"},{n:"$6.99",l:"Per month for all Pro features"}].map((s,i)=>
-            <div key={i} style={{textAlign:"center"}}>
-              <p style={{fontSize:isMobile?22:28,fontWeight:800,color:a,margin:"0 0 4px",fontFamily:"'DM Mono',monospace"}}>{s.n}</p>
-              <p style={{fontSize:11,color:txM,margin:0,fontWeight:500,letterSpacing:"0.04em"}}>{s.l}</p>
+      <section style={{padding:"48px 24px",textAlign:"center",borderTop:"1px solid "+bd,borderBottom:"1px solid "+bd}}>
+        <div style={{display:"flex",justifyContent:"center",gap:isMobile?32:64,flexWrap:"wrap",maxWidth:860,margin:"0 auto"}}>
+          {[
+            {n:"2.3 hrs",l:"Average weekly time saved",sub:"vs. manual meal planning"},
+            {n:"$40/mo",l:"Average grocery savings",sub:"from zero-waste shopping lists"},
+            {n:"95%",l:"Macro accuracy",sub:"AI meals hit targets within ±15g"},
+          ].map((s,i)=>
+            <div key={i} style={{textAlign:"center",flex:"1 1 160px"}}>
+              <p style={{fontSize:isMobile?40:52,fontWeight:800,color:a,margin:"0 0 6px",fontFamily:"'DM Mono',monospace",lineHeight:1}}>{s.n}</p>
+              <p style={{fontSize:13,color:"#FAFAF9",margin:"0 0 3px",fontWeight:600}}>{s.l}</p>
+              <p style={{fontSize:12,color:tx2,margin:0,lineHeight:1.4}}>{s.sub}</p>
             </div>
           )}
         </div>
       </section>
-      <section id="features" style={{padding:isMobile?"60px 20px":"100px 24px",maxWidth:900,margin:"0 auto"}}>
+      <section id="features" style={{padding:isMobile?"72px 20px":"120px 24px",maxWidth:900,margin:"0 auto"}}>
         <div style={{textAlign:"center",marginBottom:isMobile?40:64}}>
           <p style={{fontSize:13,fontWeight:600,color:a,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:16}}>How It Works</p>
           <h2 style={{fontSize:"clamp(28px, 5vw, 44px)",fontWeight:800,letterSpacing:"-0.02em",margin:0}}>Your nutrition,<br/><span style={{color:a}}>engineered.</span></h2>
@@ -432,7 +440,7 @@ const Landing = () => {
       </section>
 
       {/* ── Why Macra? ─────────────────────────────────────────── */}
-      <section style={{padding:isMobile?"60px 20px":"100px 24px",background:sf,borderTop:"1px solid "+bd,borderBottom:"1px solid "+bd}}>
+      <section style={{padding:isMobile?"72px 20px":"120px 24px",background:sf,borderTop:"1px solid "+bd,borderBottom:"1px solid "+bd}}>
         <div style={{maxWidth:960,margin:"0 auto"}}>
           <div style={{textAlign:"center",marginBottom:isMobile?40:60}}>
             <p style={{fontSize:13,fontWeight:600,color:a,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:16}}>Why Macra?</p>
@@ -448,16 +456,18 @@ const Landing = () => {
               {icon:"🌍",title:"20+ Global Cuisines",desc:"Mediterranean, Japanese, Mexican, Indian, Middle Eastern, and more. Real recipes from real cuisines — not just chicken and rice."},
               {icon:"🏆",title:"Achievements & Streaks",desc:"Stay motivated with streak tracking, daily check-ins, and milestones. Building habits is easier when progress is visible."},
             ].map((f,i)=>(
-              <div key={i} style={{padding:"22px 20px",borderRadius:16,border:"1px solid "+bd,background:bg}}>
-                <div style={{fontSize:28,marginBottom:12}}>{f.icon}</div>
+              <div key={i} style={{padding:"28px 24px",borderRadius:16,border:"1px solid rgba(200,184,138,0.15)",background:"linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)",transition:"all 300ms ease",cursor:"default"}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor="rgba(200,184,138,0.45)";e.currentTarget.style.boxShadow="0 8px 32px rgba(200,184,138,0.08)";e.currentTarget.style.transform="translateY(-2px)";}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor="rgba(200,184,138,0.15)";e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="none";}}>
+                <div style={{fontSize:28,marginBottom:14}}>{f.icon}</div>
                 <h3 style={{fontSize:16,fontWeight:700,margin:"0 0 8px",letterSpacing:"-0.01em"}}>{f.title}</h3>
-                <p style={{fontSize:13,color:tx2,margin:0,lineHeight:1.6}}>{f.desc}</p>
+                <p style={{fontSize:13,color:tx2,margin:0,lineHeight:1.65}}>{f.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
-      <section style={{padding:"80px 20px",maxWidth:1100,margin:"0 auto"}}>
+      <section style={{padding:isMobile?"72px 20px":"120px 24px",maxWidth:1100,margin:"0 auto"}}>
         <div style={{textAlign:"center",marginBottom:48}}>
           <p style={{fontSize:13,fontWeight:600,color:a,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:16}}>Pricing</p>
           <h2 style={{fontSize:"clamp(28px, 5vw, 40px)",fontWeight:800,letterSpacing:"-0.02em",margin:"0 0 8px"}}>Start free. Go Pro when ready.</h2>
@@ -465,12 +475,14 @@ const Landing = () => {
         </div>
         <div style={{display:"flex",gap:14,justifyContent:"center",flexWrap:"wrap",alignItems:"stretch"}}>
           {[
-            {tier:"Free",price:"$0",per:"forever",desc:"Everything to get started",features:["Personalized macro targets","3 intro AI meal plans","1 AI plan per week after","Food database search","Manual meal logging"],cta:"Get Started Free",ctaStyle:{border:"1px solid "+bd,color:"#FAFAF9",background:"transparent"},highlight:false},
-            {tier:"Pro Monthly",price:"$6.99",per:"/month",desc:"7-day free trial · cancel anytime",features:["Everything in Free","2 AI plans per day · 30/month","Smart grocery lists","Custom macro split sliders","Budget-aware meal generation","20+ global cuisine styles","All achievements & streaks"],cta:"Start Free Trial",ctaStyle:{border:"none",background:a,color:bg,boxShadow:"0 4px 16px rgba(200,184,138,0.15)"},highlight:false},
-            {tier:"Pro Annual",price:"$59.99",per:"/year",desc:"$5/month · Save 29%",features:["Everything in Pro Monthly","2 AI plans per day · 30/month","All future Pro features","Priority support"],cta:"Subscribe",ctaStyle:{border:"none",background:a,color:bg,boxShadow:"0 4px 16px rgba(200,184,138,0.15)"},highlight:true,badge:"BEST VALUE",save:"SAVE 29%"},
+            {tier:"Free",price:"$0",per:"",desc:"Everything to get started",features:["Personalized macro targets","3 intro AI meal plans","1 AI plan per week after","Food database search","Manual meal logging"],cta:"Get Started Free",ctaStyle:{border:"1px solid "+bd,color:"#FAFAF9",background:"transparent"},highlight:false},
+            {tier:"Pro Monthly",price:"$6.99",per:"/month",desc:"7-day free trial · cancel anytime",features:["Everything in Free","2 AI plans per day · 30/month","Smart grocery lists","Custom macro split sliders","Budget-aware meal generation","Early access to new features","All achievements & streaks"],cta:"Start Free Trial",ctaStyle:{border:"none",background:a,color:bg,boxShadow:"0 4px 16px rgba(200,184,138,0.15)"},highlight:false},
+            {tier:"Pro Annual",price:"$59.99",per:"/year",desc:"$5/month · Save 29%",features:["Everything in Pro Monthly","2 AI plans per day · 30/month","Early access to new features","Priority support"],cta:"Subscribe",ctaStyle:{border:"none",background:a,color:bg,boxShadow:"0 4px 16px rgba(200,184,138,0.15)"},highlight:true,badge:"BEST VALUE",save:"SAVE 29%"},
             {tier:"Lifetime",price:"$99",per:"one-time",desc:"First 200 users only — then gone",features:["Everything in Pro, forever","2 AI plans per day · 30/month","All future Pro features","No subscription ever","Founding member status"],cta:"Get Lifetime Access",ctaStyle:{border:"1.5px solid #E05252",color:"#E05252",background:"transparent"},highlight:false,badge:"LIMITED",badgeColor:"#E05252"},
           ].map((p,i)=>
-            <div key={i} style={{flex:"1 1 220px",maxWidth:260,padding:24,borderRadius:20,border:p.highlight?"1.5px solid "+a:"1px solid "+bd,background:p.highlight?"rgba(200,184,138,0.06)":sf,position:"relative",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+            <div key={i} style={{flex:"1 1 220px",maxWidth:260,padding:"28px 24px",borderRadius:20,border:p.highlight?"1.5px solid "+a:"1px solid rgba(200,184,138,0.15)",background:p.highlight?"rgba(200,184,138,0.06)":"linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)",position:"relative",overflow:"hidden",display:"flex",flexDirection:"column",transition:"all 300ms ease"}}
+              onMouseEnter={e=>{if(!p.highlight){e.currentTarget.style.borderColor="rgba(200,184,138,0.4)";e.currentTarget.style.boxShadow="0 8px 32px rgba(200,184,138,0.08)";e.currentTarget.style.transform="translateY(-2px)";}}}
+              onMouseLeave={e=>{if(!p.highlight){e.currentTarget.style.borderColor="rgba(200,184,138,0.15)";e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="none";}}}>
               {p.highlight&&<div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"linear-gradient(90deg, transparent, "+a+", transparent)"}}/>}
               {p.save&&<div style={{position:"absolute",top:14,right:12}}><span style={{fontSize:10,fontWeight:700,color:ok,background:"rgba(107,203,119,0.1)",padding:"3px 8px",borderRadius:6,border:"1px solid rgba(107,203,119,0.2)"}}>{p.save}</span></div>}
               {p.badge&&!p.save&&<div style={{position:"absolute",top:14,right:12}}><span style={{fontSize:9,fontWeight:700,color:p.badgeColor?p.badgeColor:bg,background:p.badgeColor?"rgba(224,82,82,0.1)":a,padding:"3px 8px",borderRadius:6,border:p.badgeColor?"1px solid rgba(224,82,82,0.25)":"none"}}>{p.badge}</span></div>}
@@ -493,7 +505,7 @@ const Landing = () => {
         </div>
       </section>
       {/* ── FAQ ─────────────────────────────────────────────────── */}
-      <section style={{padding:isMobile?"60px 20px":"100px 24px",maxWidth:720,margin:"0 auto"}}>
+      <section style={{padding:isMobile?"72px 20px":"120px 24px",maxWidth:720,margin:"0 auto"}}>
         <div style={{textAlign:"center",marginBottom:isMobile?40:56}}>
           <p style={{fontSize:13,fontWeight:600,color:a,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:16}}>FAQ</p>
           <h2 style={{fontSize:"clamp(26px, 5vw, 38px)",fontWeight:800,letterSpacing:"-0.02em",margin:0}}>Common questions</h2>
@@ -517,12 +529,12 @@ const Landing = () => {
         <h2 style={{fontSize:"clamp(32px, 6vw, 52px)",fontWeight:800,letterSpacing:"-0.03em",margin:"0 0 16px"}}>Your macros won't<br/><span style={{fontFamily:"'Playfair Display', serif",fontStyle:"italic",fontWeight:400,color:a}}>track themselves.</span></h2>
         <p style={{fontSize:18,color:txM,margin:"0 0 12px"}}>Free forever. Pro when you're ready.</p>
         <p style={{fontSize:14,color:txM,margin:"0 0 36px"}}>7-day Pro trial included with every account.</p>
-        <a href="/app" style={{display:"inline-block",padding:"18px 48px",borderRadius:14,background:a,color:bg,fontSize:17,fontWeight:700,textDecoration:"none",boxShadow:"0 6px 32px rgba(200,184,138,0.25)"}}>Start Tracking Free →</a>
+        <a href="/app" style={{display:"inline-block",padding:"18px 48px",borderRadius:14,background:"linear-gradient(135deg, #C4714A 0%, #B86340 100%)",color:"#FFFFFF",fontSize:17,fontWeight:700,textDecoration:"none",boxShadow:"0 6px 32px rgba(196,113,74,0.35)"}}>Start Tracking Free →</a>
       </section>
       <footer style={{padding:"40px 24px",borderTop:"1px solid "+bd,display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:900,margin:"0 auto",flexWrap:"wrap",gap:16}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <div style={{width:24,height:24,borderRadius:6,background:"linear-gradient(135deg, "+a+", #A89560)",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:13,fontWeight:800,color:bg}}>M</span></div>
-          <span style={{fontSize:14,fontWeight:600}}>Macra</span>
+          <img src="/icon-192.png" alt="Macra" style={{width:28,height:28,borderRadius:7,display:"block"}}/>
+          <span style={{fontSize:20,fontWeight:600,fontFamily:"'Cormorant Garamond', serif",color:a,letterSpacing:"0.5px"}}>Macra</span>
         </div>
         <p style={{fontSize:12,color:txM,margin:0}}>© 2026 Macra. All rights reserved.</p>
       </footer>
