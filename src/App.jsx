@@ -1799,8 +1799,12 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,o
       }
       setPlansLoaded(true);
 
-      // Derive remaining from live usage (mirrors api/generate-plan.js limits)
-      if(usage){
+      // Dev accounts are never rate-limited — skip all usage calculations
+      if(profile?.isDevAccount){
+        setRemaining({ phase:"dev", daily:999, monthly:999 });
+        setLimitHit(false);
+      } else if(usage){
+        // Derive remaining from live usage (mirrors api/generate-plan.js limits)
         if(!isPro){
           if(usage.lifetimeCount < FREE_INTRO_LIMIT){
             // Intro phase
@@ -1830,7 +1834,7 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,o
         }
       }
     })();
-  },[userId,plansLoaded,isPro]);
+  },[userId,plansLoaded,isPro,profile?.isDevAccount]);
 
 
   const generatePlan = async () => {
@@ -2047,7 +2051,7 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,o
       {usageLine() && <p style={{fontSize:11,color:T.txM,textAlign:"center",margin:"10px 0 0",fontFamily:T.mono}}>
         {usageLine()}
       </p>}
-      {!isPro && !limitHit && <p style={{fontSize:11,color:T.txM,textAlign:"center",margin:"4px 0 0"}}>
+      {!isPro && !limitHit && !profile?.isDevAccount && <p style={{fontSize:11,color:T.txM,textAlign:"center",margin:"4px 0 0"}}>
         Go Pro for 2/day · 30/month generations
       </p>}
     </>}
