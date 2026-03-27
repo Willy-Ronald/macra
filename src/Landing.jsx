@@ -248,10 +248,13 @@ const Landing = () => {
       <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Cormorant+Garamond:wght@400;500;600;700&display=swap" rel="stylesheet"/>
       <nav style={{position:"fixed",top:0,left:0,right:0,zIndex:100,padding:"16px 24px",display:"flex",justifyContent:"space-between",alignItems:"center",background:scrollY>50?"rgba(0,0,0,0.95)":"linear-gradient(180deg, "+bg+" 60%, transparent)",backdropFilter:scrollY>50?"blur(10px)":"none",borderBottom:"1px solid rgba(200,184,138,0.1)",transition:"all 0.3s"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <img src="/icon-192.png" alt="Macra" style={{width:40,height:40,borderRadius:10,display:"block"}}/>
+          <svg width="44" height="44" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="47" stroke="#C8B88A" strokeWidth="2" fill="none"/>
+            <text x="50" y="50" textAnchor="middle" dominantBaseline="central" fontFamily="Cormorant Garamond, serif" fontSize="52" fontWeight="600" fill="#C8B88A">M</text>
+          </svg>
           <span style={{fontSize:30,fontWeight:600,letterSpacing:"0.5px",fontFamily:"'Cormorant Garamond', serif",color:a,lineHeight:1}}>Macra</span>
         </div>
-        <a href="/app" style={{padding:"10px 24px",borderRadius:12,background:"linear-gradient(135deg, #C4714A 0%, #B86340 100%)",color:"#FFFFFF",fontSize:14,fontWeight:700,textDecoration:"none",boxShadow:"0 4px 16px rgba(196,113,74,0.3)"}}>Get Started</a>
+        <a href="/app" style={{padding:"10px 24px",borderRadius:12,background:"linear-gradient(135deg, #7A9E7E 0%, #6A8E6E 100%)",color:"#FFFFFF",fontSize:14,fontWeight:700,textDecoration:"none",boxShadow:"0 4px 16px rgba(122,158,126,0.3)"}}>Get Started</a>
       </nav>
       <section style={{display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"center",textAlign:"center",padding:"120px 24px 40px",position:"relative"}}>
         <div style={{position:"absolute",top:"8%",left:"30%",width:400,height:400,borderRadius:"50%",background:"radial-gradient(circle, rgba(200,184,138,0.06) 0%, transparent 70%)",pointerEvents:"none"}}/>
@@ -261,7 +264,7 @@ const Landing = () => {
           <p style={{fontSize:"clamp(15px, 2.5vw, 20px)",color:tx2,lineHeight:1.6,maxWidth:520,margin:"0 auto 16px",fontWeight:400}}>AI builds your meal plan. You hit your macros.<br/>No guesswork. No spreadsheets. No wasted meals.</p>
           <p style={{fontSize:14,color:txM,margin:"0 0 40px"}}>Free to start · 7-day Pro trial · No credit card required</p>
           <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
-            <a href="/app" style={{padding:"16px 36px",borderRadius:12,background:"linear-gradient(135deg, #C4714A 0%, #B86340 100%)",color:"#FFFFFF",fontSize:16,fontWeight:700,textDecoration:"none",boxShadow:"0 4px 24px rgba(196,113,74,0.35)"}}>Start Free →</a>
+            <a href="/app" style={{padding:"16px 36px",borderRadius:12,background:"linear-gradient(135deg, #7A9E7E 0%, #6A8E6E 100%)",color:"#FFFFFF",fontSize:16,fontWeight:700,textDecoration:"none",boxShadow:"0 4px 24px rgba(122,158,126,0.35)"}}>Start Free →</a>
             <a href="#features" style={{padding:"16px 36px",borderRadius:12,border:"1px solid rgba(200,184,138,0.35)",background:"transparent",color:a,fontSize:16,fontWeight:500,textDecoration:"none"}}>See How It Works</a>
           </div>
         </div>
@@ -357,8 +360,8 @@ const Landing = () => {
                     padding:"0 28px",
                     borderRadius:12,
                     border:"none",
-                    background:"#C4714A",
-                    color:"#FAFAF9",
+                    background:"linear-gradient(135deg, #7A9E7E 0%, #6A8E6E 100%)",
+                    color:"#FFFFFF",
                     fontSize:15,
                     fontWeight:700,
                     cursor: wlStatus==='loading' ? "wait" : "pointer",
@@ -437,6 +440,50 @@ const Landing = () => {
             </div>
           </div>
         )}
+      </section>
+
+      {/* ── The Science ─────────────────────────────────────────── */}
+      <section style={{padding:isMobile?"72px 20px":"120px 24px",background:"linear-gradient(180deg, #000000 0%, #0a0a0a 100%)"}}>
+        <div style={{maxWidth:1100,margin:"0 auto"}}>
+          <div style={{textAlign:"center",marginBottom:isMobile?40:64}}>
+            <p style={{fontSize:13,fontWeight:600,color:a,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:16}}>Evidence-Based</p>
+            <h2 style={{fontSize:"clamp(28px, 5vw, 44px)",fontWeight:800,letterSpacing:"-0.02em",margin:"0 0 14px"}}>The Science Behind <span style={{color:a}}>Your Plan</span></h2>
+            <p style={{fontSize:16,color:tx2,margin:0,maxWidth:480,marginLeft:"auto",marginRight:"auto",lineHeight:1.6}}>Every macro target, every meal, every ingredient — grounded in clinical research and validated data.</p>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr 1fr",gap:isMobile?24:20}}>
+            {[
+              {
+                icon:<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#C8B88A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/></svg>,
+                title:"Clinical-Grade Formulas",
+                body:"We use the Mifflin-St Jeor equation — the gold standard in clinical nutrition — to calculate your BMR and TDEE. Your macro targets are based on peer-reviewed science, not guesswork.",
+              },
+              {
+                icon:<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#C8B88A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>,
+                title:"AI-Powered Macro Accuracy",
+                body:"Our AI generates meals within ±15g of your protein, carb, and fat targets. Every plan is validated server-side before delivery. If macros miss the threshold, the AI automatically regenerates — no manual tweaks needed.",
+              },
+              {
+                icon:<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#C8B88A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>,
+                title:"USDA-Verified Database",
+                body:"Every ingredient pulls from verified nutritional data including USDA FoodData Central. No user-submitted guesses, no outdated entries — just accurate, reliable macro data you can trust to hit your goals.",
+              },
+              {
+                icon:<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#C8B88A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
+                title:"Adaptive Protein Scaling",
+                body:"Protein targets adjust based on your goal and activity level using evidence-based multipliers: 1.6–2.2g/kg for muscle gain, 2.0–2.4g/kg for fat loss. The math adapts to you automatically.",
+              },
+            ].map((card,i)=>(
+              <div key={i}
+                style={{padding:"28px 24px",borderRadius:16,border:"1px solid rgba(200,184,138,0.15)",background:"linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)",textAlign:"center",transition:"all 300ms ease",cursor:"default"}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor="rgba(200,184,138,0.45)";e.currentTarget.style.boxShadow="0 8px 32px rgba(200,184,138,0.1)";e.currentTarget.style.transform="translateY(-4px)";}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor="rgba(200,184,138,0.15)";e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="none";}}>
+                <div style={{display:"flex",justifyContent:"center",marginBottom:20}}>{card.icon}</div>
+                <h3 style={{fontSize:17,fontWeight:700,margin:"0 0 12px",letterSpacing:"-0.01em",fontFamily:"'Cormorant Garamond', serif",color:"#FFFFFF"}}>{card.title}</h3>
+                <p style={{fontSize:13,color:tx2,margin:0,lineHeight:1.7}}>{card.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* ── Why Macra? ─────────────────────────────────────────── */}
@@ -529,11 +576,14 @@ const Landing = () => {
         <h2 style={{fontSize:"clamp(32px, 6vw, 52px)",fontWeight:800,letterSpacing:"-0.03em",margin:"0 0 16px"}}>Your macros won't<br/><span style={{fontFamily:"'Playfair Display', serif",fontStyle:"italic",fontWeight:400,color:a}}>track themselves.</span></h2>
         <p style={{fontSize:18,color:txM,margin:"0 0 12px"}}>Free forever. Pro when you're ready.</p>
         <p style={{fontSize:14,color:txM,margin:"0 0 36px"}}>7-day Pro trial included with every account.</p>
-        <a href="/app" style={{display:"inline-block",padding:"18px 48px",borderRadius:14,background:"linear-gradient(135deg, #C4714A 0%, #B86340 100%)",color:"#FFFFFF",fontSize:17,fontWeight:700,textDecoration:"none",boxShadow:"0 6px 32px rgba(196,113,74,0.35)"}}>Start Tracking Free →</a>
+        <a href="/app" style={{display:"inline-block",padding:"18px 48px",borderRadius:14,background:"linear-gradient(135deg, #7A9E7E 0%, #6A8E6E 100%)",color:"#FFFFFF",fontSize:17,fontWeight:700,textDecoration:"none",boxShadow:"0 6px 32px rgba(122,158,126,0.35)"}}>Start Tracking Free →</a>
       </section>
       <footer style={{padding:"40px 24px",borderTop:"1px solid "+bd,display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:900,margin:"0 auto",flexWrap:"wrap",gap:16}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <img src="/icon-192.png" alt="Macra" style={{width:28,height:28,borderRadius:7,display:"block"}}/>
+          <svg width="36" height="36" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="47" stroke="#C8B88A" strokeWidth="2" fill="none"/>
+            <text x="50" y="50" textAnchor="middle" dominantBaseline="central" fontFamily="Cormorant Garamond, serif" fontSize="52" fontWeight="600" fill="#C8B88A">M</text>
+          </svg>
           <span style={{fontSize:20,fontWeight:600,fontFamily:"'Cormorant Garamond', serif",color:a,letterSpacing:"0.5px"}}>Macra</span>
         </div>
         <p style={{fontSize:12,color:txM,margin:0}}>© 2026 Macra. All rights reserved.</p>
