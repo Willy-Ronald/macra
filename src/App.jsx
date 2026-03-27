@@ -16,6 +16,7 @@ import {
 } from "./lib/supabase";
 import { generateMealPlan } from "./lib/claude";
 import { estimateGroceryList } from "./utils/groceryCostEstimator";
+import { calculateMinimumBudget } from "./utils/macroCalculator";
 import OnboardingTour from "./components/OnboardingTour";
 import PricingModal from "./components/PricingModal";
 
@@ -453,6 +454,20 @@ const Onboarding = ({onComplete}) => {
           style={{flex:1,padding:"14px 16px",borderRadius:`0 ${T.r} ${T.r} 0`,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,fontFamily:T.font,fontWeight:500,outline:"none",boxSizing:"border-box",height:50}}
         />
       </div>
+      {(()=>{
+        try {
+          const budgetVal = parseInt(budgetInput, 10);
+          if (!budgetInput || isNaN(budgetVal) || budgetVal <= 0) return null;
+          const protein = calcMacros(profile).proteinG;
+          const { minimumBudget, suggestedBudget } = calculateMinimumBudget(protein);
+          if (budgetVal >= minimumBudget) return null;
+          return (
+            <p style={{fontSize:12,color:"#C9A84C",margin:"0 0 10px",lineHeight:1.5,fontWeight:400}}>
+              ⚠️ Your protein target of {protein}g/day typically requires at least ${minimumBudget}/week in groceries. We recommend ${suggestedBudget}/week for comfortable meal variety.
+            </p>
+          );
+        } catch { return null; }
+      })()}
       <p style={{fontSize:12,color:T.txM,margin:"0 0 12px",lineHeight:1.6}}>
         This helps us tailor your meal plans to fit your budget. Without a budget set, suggested meals and ingredients may be more extensive or costly.
       </p>
@@ -2030,6 +2045,32 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,o
           </p>
         )}
       </Card>}
+
+      {/* Budget-too-low warning */}
+      {(()=>{
+        try {
+          const budget = profile?.weeklyBudget;
+          const protein = profile?.macros?.proteinG;
+          if (!budget || !protein) return null;
+          const { minimumBudget, suggestedBudget } = calculateMinimumBudget(protein);
+          if (budget >= minimumBudget) return null;
+          return (
+            <div style={{padding:"14px 16px",borderRadius:T.r,border:"1px solid rgba(201,168,76,0.35)",background:"rgba(201,168,76,0.07)",marginBottom:10}}>
+              <p style={{fontSize:12,color:"#C9A84C",margin:"0 0 12px",lineHeight:1.5,fontWeight:400}}>
+                Your current budget of ${budget} may not cover your protein needs ({protein}g/day). Plans may exceed your budget. Consider updating your budget in the You tab to at least ${minimumBudget}/week.
+              </p>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={generatePlan} disabled={limitHit} style={{flex:1,padding:"9px 12px",borderRadius:T.r,border:`1px solid rgba(201,168,76,0.5)`,background:"transparent",color:"#C9A84C",fontSize:12,fontWeight:600,cursor:limitHit?"not-allowed":"pointer",fontFamily:T.font}}>
+                  Generate Anyway
+                </button>
+                <button onClick={()=>setTab&&setTab("profile")} style={{flex:1,padding:"9px 12px",borderRadius:T.r,border:"none",background:"rgba(201,168,76,0.2)",color:"#C9A84C",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:T.font}}>
+                  Update Budget
+                </button>
+              </div>
+            </div>
+          );
+        } catch { return null; }
+      })()}
 
       {/* Generate / Regenerate button */}
       <button
@@ -3863,6 +3904,21 @@ const ProfileScreen = ({profile, userId, userEmail, isPro, onProfileUpdate, onSi
         <span style={{padding:"14px 0 14px 16px",borderRadius:`${T.r} 0 0 ${T.r}`,border:`1px solid ${T.bd}`,borderRight:"none",background:T.sf,color:T.txM,fontSize:16,fontWeight:600,display:"flex",alignItems:"center"}}>$</span>
         <input type="number" inputMode="numeric" placeholder="e.g. 100" value={draftBudget} onChange={e=>setDraftBudget(e.target.value.replace(/[^0-9]/g,""))} style={{flex:1,padding:"14px 16px",borderRadius:`0 ${T.r} ${T.r} 0`,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,fontFamily:T.font,fontWeight:500,outline:"none",boxSizing:"border-box"}}/>
       </div>
+      {(()=>{
+        try {
+          const budgetVal = parseInt(draftBudget, 10);
+          if (!draftBudget || isNaN(budgetVal) || budgetVal <= 0) return null;
+          const protein = profile?.macros?.proteinG;
+          if (!protein) return null;
+          const { minimumBudget, suggestedBudget } = calculateMinimumBudget(protein);
+          if (budgetVal >= minimumBudget) return null;
+          return (
+            <p style={{fontSize:12,color:"#C9A84C",margin:"0 0 10px",lineHeight:1.5,fontWeight:400}}>
+              ⚠️ Your protein target of {protein}g/day typically requires at least ${minimumBudget}/week in groceries. We recommend ${suggestedBudget}/week for comfortable meal variety.
+            </p>
+          );
+        } catch { return null; }
+      })()}
       <p style={{fontSize:12,color:T.txM,margin:"0 0 10px",lineHeight:1.6}}>This helps us tailor your meal plans to fit your budget. Without a budget set, suggested meals and ingredients may be more extensive or costly.</p>
       <p style={{fontSize:10,color:T.txM,margin:"0 0 24px",lineHeight:1.6,opacity:0.7}}>Note: Macra cannot guarantee exact budget accuracy. Grocery prices vary by location, store, and season. Budget guidance is approximate and intended as a helpful starting point only.</p>
       <SaveBtn onClick={()=>{
