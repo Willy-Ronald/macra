@@ -2985,7 +2985,7 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
 };
 
 // ─── GROCERY ───────────────────────────────────────────────────
-const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade}) => {
+const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade,profile}) => {
   const [activeTab,setActiveTab]=useState("mylist"); // "planlist" | "mylist"
 
   // ── My List state (FREE) ──
@@ -4790,7 +4790,7 @@ export default function App() {
     }}/>,
     log:<LogMeal savedMeals={savedMeals} onSaveMeal={handleSaveMeal} todayLog={todayLog} onLogMeal={handleLogMeal} userId={user?.id} onDeleteSavedMeal={handleDeleteSavedMeal} defaultMealType={defaultLogMealType}/>,
     stats:<StatsTab profile={profile} userId={user?.id} isPro={isPro}/>,
-    grocery:<Grocery isPro={isPro} setIsPro={handleSetIsPro} weekPlans={weekPlans} userId={user?.id} onUpgrade={()=>setShowPricingModal(true)}/>,
+    grocery:<Grocery isPro={isPro} setIsPro={handleSetIsPro} weekPlans={weekPlans} userId={user?.id} onUpgrade={()=>setShowPricingModal(true)} profile={profile}/>,
     profile:<ProfileScreen profile={profile} userId={user?.id} userEmail={user?.email} isPro={isPro} onProfileUpdate={p=>setProfile(p)} onSignOut={handleSignOut} onUpgrade={()=>setShowPricingModal(true)} onSetIsPro={handleSetIsPro}/>
   };
 
