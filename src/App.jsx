@@ -15,6 +15,7 @@ import {
   startFast, endFast, getFastingLog,
 } from "./lib/supabase";
 import { generateMealPlan } from "./lib/claude";
+import { estimateGroceryList } from "./utils/groceryCostEstimator";
 import OnboardingTour from "./components/OnboardingTour";
 import PricingModal from "./components/PricingModal";
 
@@ -3096,6 +3097,8 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade}) => {
   const planCategories = hasPlan ? parsePlanItems() : [];
   const allPlanItems = planCategories.flatMap(c=>c.items);
   const planCheckedCount = Object.values(planChecked).filter(Boolean).length;
+  // Cost estimate — derived from planCategories each render (pure, no state needed)
+  const costEstimate = (hasPlan && isPro) ? estimateGroceryList(planCategories, profile?.weeklyBudget) : null;
 
   async function handleSharePlanList() {
     const lines = ["🛒 Macra Weekly Grocery List\n"];
@@ -3209,12 +3212,52 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade}) => {
               {cat.items.map(it=>{
                 const done=!!planChecked[it.id];
                 const dispQty = Number.isInteger(it.qty) ? it.qty : Math.round(it.qty*10)/10;
-                return <CheckRow key={it.id} id={it.id} name={it.name} fmtQty={`${dispQty} ${it.unit}`} done={done}
+                const pkg = costEstimate?.itemMap?.get(it.id);
+                // Show "1 lb · 16 oz" when package info is available, else plain qty
+                const fmtQtyStr = pkg?.pkgLabel
+                  ? `${pkg.pkgLabel} · ${dispQty} ${it.unit}`
+                  : `${dispQty} ${it.unit}`;
+                return <CheckRow key={it.id} id={it.id} name={it.name} fmtQty={fmtQtyStr} done={done}
                   onToggle={()=>setPlanChecked(p=>({...p,[it.id]:!p[it.id]}))}
                 />;
               })}
             </div>;
           })}
+
+          {/* ── Cost estimate summary card ── */}
+          {costEstimate && (
+            <div style={{marginTop:8,padding:"16px 18px",borderRadius:14,background:"linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))",border:`1.5px solid ${costEstimate.withinBudget===false?"rgba(201,168,76,0.5)":"rgba(200,184,138,0.25)"}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:12}}>
+                <span style={{fontSize:11,fontWeight:600,color:T.acc,letterSpacing:"0.1em",textTransform:"uppercase"}}>Est. Weekly Cost</span>
+                <span style={{fontSize:26,fontWeight:800,color:T.tx,fontFamily:T.mono}}>${costEstimate.total.toFixed(2)}</span>
+              </div>
+              {costEstimate.unknownCount>0 && (
+                <p style={{fontSize:11,color:T.txM,margin:"0 0 10px",lineHeight:1.4}}>
+                  Includes ~${costEstimate.buffer.toFixed(0)} estimate for {costEstimate.unknownCount} unlisted item{costEstimate.unknownCount!==1?"s":""}.
+                </p>
+              )}
+              {costEstimate.budget !== null && (
+                <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:costEstimate.withinBudget?"rgba(107,203,119,0.07)":"rgba(201,168,76,0.07)",border:`1px solid ${costEstimate.withinBudget?"rgba(107,203,119,0.2)":"rgba(201,168,76,0.25)"}`}}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={costEstimate.withinBudget?T.ok:"#C9A84C"} strokeWidth="2" strokeLinecap="round">
+                    {costEstimate.withinBudget
+                      ? <path d="M20 6L9 17l-5-5"/>
+                      : <><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>}
+                  </svg>
+                  <div style={{flex:1}}>
+                    <p style={{fontSize:13,fontWeight:600,color:costEstimate.withinBudget?T.ok:"#C9A84C",margin:0}}>
+                      {costEstimate.withinBudget
+                        ? `$${costEstimate.diff.toFixed(2)} under your $${costEstimate.budget} budget`
+                        : `$${costEstimate.diff.toFixed(2)} over your $${costEstimate.budget} budget`}
+                    </p>
+                    <p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>{costEstimate.pct}% of weekly budget used</p>
+                  </div>
+                </div>
+              )}
+              {costEstimate.budget === null && (
+                <p style={{fontSize:11,color:T.txM,margin:0,lineHeight:1.4}}>Set a weekly budget in Settings to see budget tracking.</p>
+              )}
+            </div>
+          )}
         </>
       )}
     </>}
