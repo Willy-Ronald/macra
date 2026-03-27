@@ -183,11 +183,12 @@ function toOz(amount, unit) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Name normalization — strip adjectives, de-plural, return lowercase base
 // ─────────────────────────────────────────────────────────────────────────────
-const STRIP_PREFIXES = /^(fresh|frozen|raw|cooked|dried|organic|large|small|medium|extra|whole|boneless|skinless|bone-in|shredded|chopped|diced|sliced|minced|grated|crumbled|extra\s+virgin)\s+/gi;
+const STRIP_PREFIXES = /^(fresh|frozen|raw|cooked|dried|organic|large|small|medium|extra|whole|boneless|skinless|bone-in|shredded|chopped|diced|sliced|minced|grated|crumbled|extra\s+virgin)\s+/i;
 const STRIP_SUFFIXES = /\s+(breast|thigh|fillet|filet|steak|chop|loin|wing|leg|drumstick)s?$/i;
 
 function normalizeName(name) {
-  let n = name.toLowerCase().trim();
+  if (!name) return "";
+  let n = String(name).toLowerCase().trim();
   // Strip common prep/quality adjectives iteratively (some items have multiple)
   let prev;
   do {
@@ -228,6 +229,8 @@ function findPackage(rawName) {
 // Returns { pkgCount, pkgLabel, cost, isPantry }
 // ─────────────────────────────────────────────────────────────────────────────
 export function estimateItem(name, qty, unit) {
+  try {
+  if (!name) return { pkgCount: null, pkgLabel: null, cost: null, isPantry: false };
   const normalized = normalizeName(name);
   const isPantry = PANTRY_ITEMS.has(normalized);
 
@@ -260,6 +263,10 @@ export function estimateItem(name, qty, unit) {
     : `${pkgCount} ${pkg.package}${pkg.package.endsWith("s") || pkg.package === "bunch" ? "" : "s"}`;
 
   return { pkgCount, pkgLabel, cost, isPantry: false };
+  } catch (e) {
+    console.error("[estimateItem] error for:", name, e);
+    return { pkgCount: null, pkgLabel: null, cost: null, isPantry: false };
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -272,8 +279,9 @@ export function estimateGroceryList(planCategories, weeklyBudget) {
   let totalCost = 0;
   let unknownCount = 0;
 
-  for (const cat of planCategories) {
-    for (const item of cat.items) {
+  for (const cat of (planCategories || [])) {
+    for (const item of (cat.items || [])) {
+      if (!item) continue;
       const est = estimateItem(item.name, item.qty, item.unit);
       itemMap.set(item.id, est);
       if (est.cost !== null) {

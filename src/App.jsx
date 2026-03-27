@@ -3098,7 +3098,11 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade}) => {
   const allPlanItems = planCategories.flatMap(c=>c.items);
   const planCheckedCount = Object.values(planChecked).filter(Boolean).length;
   // Cost estimate — derived from planCategories each render (pure, no state needed)
-  const costEstimate = (hasPlan && isPro) ? estimateGroceryList(planCategories, profile?.weeklyBudget) : null;
+  let costEstimate = null;
+  if (hasPlan && isPro) {
+    try { costEstimate = estimateGroceryList(planCategories, profile?.weeklyBudget); }
+    catch (e) { console.error("[costEstimate]", e); }
+  }
 
   async function handleSharePlanList() {
     const lines = ["🛒 Macra Weekly Grocery List\n"];
