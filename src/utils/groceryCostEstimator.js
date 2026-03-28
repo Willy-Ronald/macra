@@ -36,7 +36,7 @@ const PACKAGE_SIZES = {
   "lamb":                          { size: 16,  unit: "oz",    package: "lb",      avgCost: 11.99 },
 
   // ── Proteins — pork ─────────────────────────────────────────────────────
-  "pork chop":                     { size: 16,  unit: "oz",    package: "lb",      avgCost: 5.00 },
+  "pork chop":                     { size: 16,  unit: "oz",    package: "lb",      avgCost: 5.99 },
   "pork chops":                    { size: 16,  unit: "oz",    package: "lb",      avgCost: 5.99 },
   "boneless pork chops":           { size: 16,  unit: "oz",    package: "lb",      avgCost: 5.99 },
   "pork loin":                     { size: 16,  unit: "oz",    package: "lb",      avgCost: 1.79 },
@@ -522,12 +522,108 @@ export function estimateItem(name, qty, unit) {
       console.log(`  Unit conversion: ${qty} oz sweet potato → ${workQty} each`);
     }
 
-    // Unit conversion: broccoli cups → heads (1 head broccoli ≈ 2 cups florets)
-    if ((normalized === "broccoli" || normalized === "broccoli crown") &&
+    // Unit conversion: lettuce/romaine cups → heads (1 head ≈ 8 cups shredded); max 2 heads
+    if ((normalized === "lettuce" || normalized === "iceberg lettuce" || normalized === "romaine") &&
         (workUnit === "cup" || workUnit === "cups")) {
-      workQty  = Math.ceil(workQty / 2);
+      workQty  = Math.min(2, Math.ceil(workQty / 8));
       workUnit = "head";
-      console.log(`  Unit conversion: ${qty} cups broccoli → ${workQty} heads`);
+      console.log(`  Unit conversion: ${qty} cups lettuce → ${workQty} heads (max 2 cap)`);
+    }
+
+    // Unit conversion: broccoli cups → heads (÷2) OR oz → heads (÷12); max 3 heads
+    if (normalized === "broccoli" || normalized === "broccoli crown") {
+      if (workUnit === "cup" || workUnit === "cups") {
+        workQty  = Math.min(3, Math.ceil(workQty / 2));
+        workUnit = "head";
+        console.log(`  Unit conversion: ${qty} cups broccoli → ${workQty} heads (max 3 cap)`);
+      } else if (workUnit === "oz" || workUnit === "ounce" || workUnit === "ounces") {
+        workQty  = Math.min(3, Math.ceil(workQty / 12));
+        workUnit = "head";
+        console.log(`  Unit conversion: ${qty} oz broccoli → ${workQty} heads (max 3 cap)`);
+      }
+    }
+
+    // Unit conversion: cauliflower cups → heads (÷2) OR oz → heads (÷24); max 2 heads
+    if (normalized === "cauliflower") {
+      if (workUnit === "cup" || workUnit === "cups") {
+        workQty  = Math.min(2, Math.ceil(workQty / 2));
+        workUnit = "head";
+        console.log(`  Unit conversion: ${qty} cups cauliflower → ${workQty} heads (max 2 cap)`);
+      } else if (workUnit === "oz" || workUnit === "ounce" || workUnit === "ounces") {
+        workQty  = Math.min(2, Math.ceil(workQty / 24));
+        workUnit = "head";
+        console.log(`  Unit conversion: ${qty} oz cauliflower → ${workQty} heads (max 2 cap)`);
+      }
+    }
+
+    // Unit conversion: celery stalks → bunches (1 bunch ≈ 10 stalks); max 2 bunches
+    if ((normalized === "celery" || normalized === "celery stalks") &&
+        (workUnit === "stalk" || workUnit === "stalks" || workUnit === "large")) {
+      workQty  = Math.min(2, Math.ceil(workQty / 10));
+      workUnit = "bunch";
+      console.log(`  Unit conversion: ${qty} stalks celery → ${workQty} bunches (max 2 cap)`);
+    }
+
+    // Unit conversion: asparagus spears → bunches (÷20) OR oz → bunches (÷16); max 2 bunches
+    if (normalized === "asparagus") {
+      if (workUnit === "spear" || workUnit === "spears") {
+        workQty  = Math.min(2, Math.ceil(workQty / 20));
+        workUnit = "bunch";
+        console.log(`  Unit conversion: ${qty} spears asparagus → ${workQty} bunches (max 2 cap)`);
+      } else if (workUnit === "oz" || workUnit === "ounce" || workUnit === "ounces") {
+        workQty  = Math.min(2, Math.ceil(workQty / 16));
+        workUnit = "bunch";
+        console.log(`  Unit conversion: ${qty} oz asparagus → ${workQty} bunches (max 2 cap)`);
+      }
+    }
+
+    // Unit conversion: spinach/baby spinach cups → oz (1 cup fresh spinach ≈ 1 oz, not 8 oz)
+    if ((normalized === "spinach" || normalized === "baby spinach") &&
+        (workUnit === "cup" || workUnit === "cups")) {
+      workQty  = workQty * 1;  // 1 oz per cup
+      workUnit = "oz";
+      console.log(`  Unit conversion: ${qty} cups spinach → ${workQty} oz (spinach density: 1 oz/cup)`);
+    }
+
+    // Unit conversion: shredded cheese cups → oz (1 cup shredded ≈ 4 oz, not 8 oz — air-filled)
+    if ((normalized === "cheddar" || normalized === "cheese" || normalized === "mozzarella" ||
+         normalized === "mexican blend" || normalized === "mexican cheese" || normalized === "colby jack") &&
+        (workUnit === "cup" || workUnit === "cups")) {
+      workQty  = workQty * 4;  // 4 oz per cup shredded
+      workUnit = "oz";
+      console.log(`  Unit conversion: ${qty} cups shredded cheese → ${workQty} oz (4 oz/cup density)`);
+    }
+
+    // Unit conversion: onion/onions each/medium/large → oz (1 medium onion ≈ 8 oz)
+    if ((normalized === "onion" || normalized === "onions") &&
+        (workUnit === "each" || workUnit === "medium" || workUnit === "large")) {
+      workQty  = workQty * 8;  // 8 oz per onion
+      workUnit = "oz";
+      console.log(`  Unit conversion: ${qty} ${unit} onion → ${workQty} oz (8 oz/onion)`);
+    }
+
+    // Unit conversion: pepperoni slices → oz (1 slice ≈ 0.35 oz)
+    if (normalized === "pepperoni" && (workUnit === "slice" || workUnit === "slices")) {
+      workQty  = workQty * 0.35;
+      workUnit = "oz";
+      console.log(`  Unit conversion: ${qty} slices pepperoni → ${workQty.toFixed(1)} oz (0.35 oz/slice)`);
+    }
+
+    // Unit conversion: pita each/pita/piece → oz (1 pita ≈ 2.8 oz)
+    if (normalized.includes("pita") &&
+        (workUnit === "each" || workUnit === "pita" || workUnit === "piece" || workUnit === "pieces")) {
+      workQty  = workQty * 2.8;
+      workUnit = "oz";
+      console.log(`  Unit conversion: ${qty} pitas → ${workQty} oz (2.8 oz/pita)`);
+    }
+
+    // Unit conversion: scallion/green onion tbsp → cap at 1 bunch (garnish amount)
+    if ((normalized === "scallion" || normalized === "scallions" ||
+         normalized === "green onion" || normalized === "green onions") &&
+        (workUnit === "tbsp" || workUnit === "tablespoon" || workUnit === "tablespoons")) {
+      workQty  = 1;
+      workUnit = "bunch";
+      console.log(`  Unit conversion: ${qty} tbsp scallion → 1 bunch (garnish cap)`);
     }
 
     // Unit conversion: scallion/green onion stalks → bunches (1 bunch ≈ 8 stalks); max 2 bunches
@@ -544,6 +640,13 @@ export function estimateItem(name, qty, unit) {
       workQty  = Math.ceil(workQty / 24);
       workUnit = "bunch";
       console.log(`  Unit conversion: ${qty} tbsp cilantro → ${workQty} bunches`);
+    }
+
+    // Unit conversion: coleslaw mix cups → oz (1 cup coleslaw mix ≈ 2 oz, not 8 oz)
+    if (normalized === "coleslaw mix" && (workUnit === "cup" || workUnit === "cups")) {
+      workQty  = workQty * 2;
+      workUnit = "oz";
+      console.log(`  Unit conversion: ${qty} cups coleslaw mix → ${workQty} oz (2 oz/cup density)`);
     }
 
     let pkgCount;
