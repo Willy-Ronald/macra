@@ -21,58 +21,62 @@ import { randomBytes } from "crypto";
 import { calculateIngredientMacros, getNutrition } from '../src/utils/nutritionDatabase.js';
 
 // ── Protein pools by budget tier ────────────────────────────────
+// Plant proteins — breakfast and snack slots only, never lunch or dinner
+const PLANT_PROTEIN_POOL = [
+  { name: 'firm tofu',    unit: 'oz',  proteinPer28g:  2.3, costPerOz:  0.14 },
+  { name: 'black beans',  unit: 'cup', proteinPerCup: 10.1, costPerCup: 0.18 },
+  { name: 'lentils',      unit: 'cup', proteinPerCup: 17.9, costPerCup: 0.22 },
+];
+
 const PROTEIN_POOLS = {
   strict: [
-    { name: 'chicken thighs', unit: 'oz', proteinPer28g: 4.9, costPerOz: 0.156 },
-    { name: 'ground turkey', unit: 'oz', proteinPer28g: 5.6, costPerOz: 0.312 },
-    { name: 'canned tuna', unit: 'oz', proteinPer28g: 7.2, costPerOz: 0.20 },
-    { name: 'eggs', unit: 'each', proteinEach: 6.5, costEach: 0.15 },
-    { name: 'firm tofu', unit: 'oz', proteinPer28g: 2.3, costPerOz: 0.14 },
-    { name: 'black beans', unit: 'cup', proteinPerCup: 10.1, costPerCup: 0.18 },
-    { name: 'lentils', unit: 'cup', proteinPerCup: 17.9, costPerCup: 0.22 },
+    { name: 'chicken thighs', unit: 'oz',  proteinPer28g: 4.9, costPerOz: 0.156 },
+    { name: 'ground turkey',  unit: 'oz',  proteinPer28g: 5.6, costPerOz: 0.312 },
+    { name: 'canned tuna',    unit: 'oz',  proteinPer28g: 7.2, costPerOz: 0.20  },
+    { name: 'eggs',           unit: 'each', proteinEach:  6.5, costEach:  0.15  },
   ],
   moderate: [
-    { name: 'chicken thighs', unit: 'oz', proteinPer28g: 4.9, costPerOz: 0.156 },
-    { name: 'chicken breast', unit: 'oz', proteinPer28g: 6.6, costPerOz: 0.343 },
-    { name: 'ground turkey', unit: 'oz', proteinPer28g: 5.6, costPerOz: 0.312 },
-    { name: 'tilapia', unit: 'oz', proteinPer28g: 5.7, costPerOz: 0.313 },
-    { name: 'canned tuna', unit: 'oz', proteinPer28g: 7.2, costPerOz: 0.20 },
-    { name: 'eggs', unit: 'each', proteinEach: 6.5, costEach: 0.15 },
-    { name: 'deli turkey', unit: 'oz', proteinPer28g: 5.0, costPerOz: 0.443 },
-    { name: 'firm tofu', unit: 'oz', proteinPer28g: 2.3, costPerOz: 0.14 },
-    { name: 'black beans', unit: 'cup', proteinPerCup: 10.1, costPerCup: 0.18 },
-    { name: 'lentils', unit: 'cup', proteinPerCup: 17.9, costPerCup: 0.22 },
+    { name: 'chicken thighs', unit: 'oz',  proteinPer28g: 4.9, costPerOz: 0.156 },
+    { name: 'chicken breast',  unit: 'oz',  proteinPer28g: 6.6, costPerOz: 0.343 },
+    { name: 'ground turkey',   unit: 'oz',  proteinPer28g: 5.6, costPerOz: 0.312 },
+    { name: 'tilapia',         unit: 'oz',  proteinPer28g: 5.7, costPerOz: 0.313 },
+    { name: 'canned tuna',     unit: 'oz',  proteinPer28g: 7.2, costPerOz: 0.20  },
+    { name: 'eggs',            unit: 'each', proteinEach:  6.5, costEach:  0.15  },
+    { name: 'deli turkey',     unit: 'oz',  proteinPer28g: 5.0, costPerOz: 0.443 },
   ],
   flexible: [
-    { name: 'chicken breast', unit: 'oz', proteinPer28g: 6.6, costPerOz: 0.343 },
-    { name: 'chicken thighs', unit: 'oz', proteinPer28g: 4.9, costPerOz: 0.156 },
-    { name: 'ground beef', unit: 'oz', proteinPer28g: 5.7, costPerOz: 0.562 },
-    { name: 'ground turkey', unit: 'oz', proteinPer28g: 5.6, costPerOz: 0.312 },
-    { name: 'salmon', unit: 'oz', proteinPer28g: 5.8, costPerOz: 0.687 },
-    { name: 'shrimp', unit: 'oz', proteinPer28g: 5.9, costPerOz: 0.583 },
-    { name: 'tilapia', unit: 'oz', proteinPer28g: 5.7, costPerOz: 0.313 },
-    { name: 'pork tenderloin', unit: 'oz', proteinPer28g: 5.9, costPerOz: 0.249 },
-    { name: 'pork chops', unit: 'oz', proteinPer28g: 5.5, costPerOz: 0.374 },
-    { name: 'eggs', unit: 'each', proteinEach: 6.5, costEach: 0.15 },
-    { name: 'canned tuna', unit: 'oz', proteinPer28g: 7.2, costPerOz: 0.20 },
+    { name: 'chicken breast',  unit: 'oz',  proteinPer28g: 6.6, costPerOz: 0.343 },
+    { name: 'chicken thighs',  unit: 'oz',  proteinPer28g: 4.9, costPerOz: 0.156 },
+    { name: 'ground beef',     unit: 'oz',  proteinPer28g: 5.7, costPerOz: 0.562 },
+    { name: 'ground turkey',   unit: 'oz',  proteinPer28g: 5.6, costPerOz: 0.312 },
+    { name: 'salmon',          unit: 'oz',  proteinPer28g: 5.8, costPerOz: 0.687 },
+    { name: 'shrimp',          unit: 'oz',  proteinPer28g: 5.9, costPerOz: 0.583 },
+    { name: 'tilapia',         unit: 'oz',  proteinPer28g: 5.7, costPerOz: 0.313 },
+    { name: 'pork tenderloin', unit: 'oz',  proteinPer28g: 5.9, costPerOz: 0.249 },
+    { name: 'pork chops',      unit: 'oz',  proteinPer28g: 5.5, costPerOz: 0.374 },
+    { name: 'eggs',            unit: 'each', proteinEach:  6.5, costEach:  0.15  },
+    { name: 'canned tuna',     unit: 'oz',  proteinPer28g: 7.2, costPerOz: 0.20  },
   ],
   premium: [
-    { name: 'salmon', unit: 'oz', proteinPer28g: 5.8, costPerOz: 0.687 },
-    { name: 'chicken breast', unit: 'oz', proteinPer28g: 6.6, costPerOz: 0.343 },
-    { name: 'ground beef', unit: 'oz', proteinPer28g: 5.7, costPerOz: 0.562 },
-    { name: 'beef sirloin', unit: 'oz', proteinPer28g: 6.0, costPerOz: 0.562 },
-    { name: 'shrimp', unit: 'oz', proteinPer28g: 5.9, costPerOz: 0.583 },
-    { name: 'pork tenderloin', unit: 'oz', proteinPer28g: 5.9, costPerOz: 0.249 },
-    { name: 'ground turkey', unit: 'oz', proteinPer28g: 5.6, costPerOz: 0.312 },
-    { name: 'tilapia', unit: 'oz', proteinPer28g: 5.7, costPerOz: 0.313 },
-    { name: 'turkey bacon', unit: 'slice', proteinPerSlice: 3.96, costPerSlice: 0.40 },
-    { name: 'eggs', unit: 'each', proteinEach: 6.5, costEach: 0.15 },
-    { name: 'deli turkey', unit: 'oz', proteinPer28g: 5.0, costPerOz: 0.443 },
+    { name: 'salmon',          unit: 'oz',   proteinPer28g:   5.8, costPerOz:    0.687 },
+    { name: 'chicken breast',  unit: 'oz',   proteinPer28g:   6.6, costPerOz:    0.343 },
+    { name: 'ground beef',     unit: 'oz',   proteinPer28g:   5.7, costPerOz:    0.562 },
+    { name: 'beef sirloin',    unit: 'oz',   proteinPer28g:   6.0, costPerOz:    0.562 },
+    { name: 'shrimp',          unit: 'oz',   proteinPer28g:   5.9, costPerOz:    0.583 },
+    { name: 'pork tenderloin', unit: 'oz',   proteinPer28g:   5.9, costPerOz:    0.249 },
+    { name: 'ground turkey',   unit: 'oz',   proteinPer28g:   5.6, costPerOz:    0.312 },
+    { name: 'tilapia',         unit: 'oz',   proteinPer28g:   5.7, costPerOz:    0.313 },
+    { name: 'turkey bacon',    unit: 'slice', proteinPerSlice: 3.96, costPerSlice: 0.40 },
+    { name: 'eggs',            unit: 'each',  proteinEach:     6.5, costEach:     0.15  },
+    { name: 'deli turkey',     unit: 'oz',   proteinPer28g:   5.0, costPerOz:    0.443 },
   ],
 };
 
 function selectProteinsForPlan(tier, macros, weeklyBudget) {
-  const pool = PROTEIN_POOLS[tier] || PROTEIN_POOLS.moderate;
+  const mainPool = PROTEIN_POOLS[tier] || PROTEIN_POOLS.moderate;
+  // breakfast/snack can draw from meat+plant combined; lunch/dinner meat only
+  const breakfastSnackPool = [...mainPool, ...PLANT_PROTEIN_POOL];
+
   const dailyProteinG = macros.proteinG;
   const proteinPerMeal = {
     breakfast: Math.round(dailyProteinG * 0.22),
@@ -80,6 +84,7 @@ function selectProteinsForPlan(tier, macros, weeklyBudget) {
     snack:     Math.round(dailyProteinG * 0.14),
     dinner:    Math.round(dailyProteinG * 0.36),
   };
+
   const shuffle = (arr) => {
     const a = [...arr];
     for (let i = a.length - 1; i > 0; i--) {
@@ -88,30 +93,56 @@ function selectProteinsForPlan(tier, macros, weeklyBudget) {
     }
     return a;
   };
-  const shuffled = shuffle(pool);
-  const assignments = {};
-  const mealTypes = ['dayA_breakfast','dayA_lunch','dayA_snack','dayA_dinner','dayB_breakfast','dayB_lunch','dayB_snack','dayB_dinner'];
-  let poolIdx = 0;
+
+  const shuffledMain = shuffle(mainPool);
+  const shuffledBS   = shuffle(breakfastSnackPool);
+
+  const mealTypes = ['dayA_breakfast','dayA_lunch','dayA_snack','dayA_dinner',
+                     'dayB_breakfast','dayB_lunch','dayB_snack','dayB_dinner'];
+
+  // Accumulate totals per protein name across all 8 meals
+  const totalsMap = {};
+  let mainIdx = 0;
+  let bsIdx   = 0;
+
   for (const meal of mealTypes) {
     const type = meal.split('_')[1];
     const targetProtein = proteinPerMeal[type];
-    const protein = shuffled[poolIdx % shuffled.length];
-    poolIdx++;
-    let quantity, unitLabel;
+
+    let protein;
+    if (type === 'lunch' || type === 'dinner') {
+      protein = shuffledMain[mainIdx % shuffledMain.length];
+      mainIdx++;
+    } else {
+      protein = shuffledBS[bsIdx % shuffledBS.length];
+      bsIdx++;
+    }
+
+    let quantity;
     if (protein.unit === 'each') {
       quantity = Math.max(1, Math.round(targetProtein / protein.proteinEach));
-      unitLabel = quantity === 1 ? 'egg' : 'eggs';
     } else if (protein.unit === 'cup') {
       quantity = Math.max(0.5, Math.round((targetProtein / protein.proteinPerCup) * 2) / 2);
-      unitLabel = 'cup';
     } else {
-      const ozNeeded = Math.max(2, Math.round((targetProtein / protein.proteinPer28g) * 28.35 / 28.35 * 10) / 10);
-      quantity = Math.round(ozNeeded);
-      unitLabel = 'oz';
+      quantity = Math.max(2, Math.round(targetProtein / protein.proteinPer28g));
     }
-    assignments[meal] = { protein: protein.name, quantity, unit: unitLabel, targetProteinG: targetProtein };
+
+    if (!totalsMap[protein.name]) {
+      totalsMap[protein.name] = { protein, total: 0 };
+    }
+    totalsMap[protein.name].total += quantity;
   }
-  return assignments;
+
+  // Return flat inventory array
+  return Object.values(totalsMap).map(({ protein, total }) => {
+    if (protein.unit === 'each') {
+      return { name: protein.name, totalCount: Math.round(total), unit: 'each' };
+    } else if (protein.unit === 'cup') {
+      return { name: protein.name, totalQuantity: Math.round(total * 2) / 2, unit: 'cup' };
+    } else {
+      return { name: protein.name, totalQuantity: Math.round(total), unit: protein.unit };
+    }
+  });
 }
 
 // ── Rate limit constants ────────────────────────────────────────
@@ -949,12 +980,15 @@ SPICES — use freely, all are zero cost pantry items: salt, black pepper, garli
 PERMANENTLY PROHIBITED — never generate under any circumstances: sake, galangal, makrut lime, sumac, preserved lemon, lemongrass stalks, pomegranate molasses, doubanjiang, dashi, collagen powder, fermented black beans, dried shrimp, cassava flour, jackfruit, cassava, breadfruit, durian, rambutan, dragonfruit, starfruit, persimmon, quince, gooseberry, pita chips, psyllium husk, nutritional yeast, glutinous rice, sticky rice, sushi rice, matzo, lavash, bone broth, cacao powder, carob, white chocolate, lemongrass paste, lemongrass, lemongrass stalks, tamarind paste, shrimp paste, bonito flakes, oat flour, almond flour, coconut flour, arrowroot, protein powder, whey, matcha, taro, yuca, fig, date, pomegranate, papaya, lychee, guava, passion fruit, elderberry, mulberry, stone ground grits, freekeh, bulgur wheat, wheat berries, spelt, teff, amaranth, millet, sorghum, orzo, couscous, fregola, gnocchi, pierogi, gyoza wrappers, wonton wrappers, spring roll wrappers, rice flour, bagels, croissants, brioche, sourdough, baguette, naan, chapati, roti, injera, english muffins, whole grain crackers, crackers, granola, muesli, cereal, manchego cheese, gruyere, brie, camembert, gouda, havarti, provolone, swiss cheese, pepper jack, blue cheese, gorgonzola, stilton, halloumi, burrata, buffalo mozzarella, queso fresco, queso blanco, paneer, labneh, goat cheese, mascarpone, creme fraiche, kefir, buttermilk, evaporated milk, condensed milk, powdered milk, coconut cream, coconut water, coconut flakes, shredded coconut, coconut butter, chocolate chips, dark chocolate, vanilla bean, black bean sauce, harissa, za atar.`;
       parts.push(ingredientConstraints);
 
-      if (proteinAssignments) {
-        const proteinSpec = 'PROTEIN ASSIGNMENTS — MANDATORY: You must use exactly these proteins in exactly these quantities for each meal. Do not substitute, remove, or change any protein assignment. Build the entire meal around the assigned protein using approved ingredients only. Adjust side dishes, sauces, and preparation methods to create variety and ensure the meal hits macro targets.\n\n' +
-          Object.entries(proteinAssignments).map(([meal, info]) => {
-            const [day, type] = meal.split('_');
-            return day.toUpperCase() + ' ' + type.charAt(0).toUpperCase() + type.slice(1) + ': ' + info.quantity + ' ' + info.unit + ' ' + info.protein + ' (target: ' + info.targetProteinG + 'g protein)';
-          }).join('\n');
+      if (proteinAssignments && proteinAssignments.length > 0) {
+        const lines = proteinAssignments.map(item => {
+          if (item.unit === 'each') {
+            return `${item.totalCount} eggs`;
+          } else {
+            return `${item.totalQuantity} ${item.unit} ${item.name}`;
+          }
+        }).join('\n');
+        const proteinSpec = 'PROTEIN SHOPPING LIST — MANDATORY: The following proteins have been pre-purchased for this plan. You must use ALL of them across the 8 meals (4 meals Day A, 4 meals Day B). Do not add any additional proteins beyond this list. Do not use less than what is listed — all quantities must be used. Distribute them across meals in a way that makes nutritional and culinary sense. Each meal must contain at least one protein from this list.\n\n' + lines;
         parts.push(proteinSpec);
       }
 
