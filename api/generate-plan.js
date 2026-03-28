@@ -643,8 +643,8 @@ Before returning the plan, estimate total grocery cost:
 
 STEP 4 — OUTPUT
 Return the meal plan JSON only after confirming budget compliance.`;
-      } else {
-        budgetLine = `=== FLEXIBLE BUDGET MODE ($90+) ===
+      } else if (weeklyBudget < 150) {
+        budgetLine = `=== FLEXIBLE BUDGET MODE ($90-$149) ===
 Your job is to hit the user's macro targets (${macros.proteinG}g protein, ${macros.carbG}g carbs, ${macros.fatG}g fat per day) while keeping total weekly grocery cost near $${weeklyBudget}.
 
 STEP 1 — PROTEIN SOURCES:
@@ -666,6 +666,141 @@ Before returning the plan, estimate total grocery cost:
 
 STEP 4 — OUTPUT
 Return the meal plan JSON only after confirming budget compliance.`;
+      } else {
+        budgetLine = `=== PREMIUM BUDGET MODE ($150+) ===
+
+🌟 CULINARY EXCELLENCE WITHIN BUDGET 🌟
+
+You MUST generate a plan that costs within 110% of the weekly budget ($${weeklyBudget}).
+
+Budget target: $${weeklyBudget} (max $${Math.ceil(weeklyBudget * 1.1)})
+
+CORE PRINCIPLE:
+Hit macro targets (${macros.proteinG}g protein, ${macros.carbG}g carbs, ${macros.fatG}g fat per day) using PREMIUM INGREDIENTS while staying within budget.
+
+With a $${weeklyBudget} budget, you have the financial flexibility to prioritize QUALITY and VARIETY over cost savings.
+
+---
+
+STEP 1: PREMIUM INGREDIENT PHILOSOPHY
+
+You have a HIGH BUDGET. This changes your priorities:
+
+PROTEINS (choose BEST, not cheapest):
+- Fresh salmon: $10.99/lb — USE FREELY for omega-3s and flavor
+- Fresh shrimp: $6.99/12oz — excellent for variety
+- Grass-fed beef: $7.99/lb — superior to regular beef
+- Pork tenderloin: $3.99/lb — lean and delicious
+- Organic chicken: $4.99/lb — better than regular chicken
+- Lamb: available for Mediterranean/Middle Eastern cuisine
+- Eggs, tofu, beans: still great, use for variety
+
+PRODUCE (choose FRESH over FROZEN):
+- Fresh vegetables: asparagus, bell peppers, zucchini, cherry tomatoes, arugula
+- Fresh fruits: berries, avocados, fresh herbs
+- Fresh herbs: basil, cilantro, mint, parsley, dill (use freely)
+- Specialty produce: heirloom tomatoes, fresh ginger, fresh garlic
+
+GRAINS & SPECIALTY:
+- Quinoa, farro, wild rice (nutritionally superior)
+- Whole grain artisan bread
+- Fresh pasta if desired
+
+FATS & FLAVOR:
+- Extra virgin olive oil (use as primary fat)
+- Avocado oil
+- Nuts and seeds (almonds, walnuts, pine nuts for salads/toppings)
+- Specialty cheeses (feta, goat cheese, parmesan, gruyere)
+
+INTERNATIONAL INGREDIENTS:
+- Tahini, hummus (for Mediterranean)
+- Coconut milk (for Thai/Indian)
+- Miso paste (for Japanese)
+- Fresh lime, lemon (not bottled juice)
+
+---
+
+STEP 2: WHAT THIS BUDGET ALLOWS
+
+At $${weeklyBudget}/week, you can:
+✓ Use fresh salmon 2-3 times per week
+✓ Include grass-fed beef or lamb
+✓ Buy fresh herbs instead of dried
+✓ Use premium cheeses
+✓ Include nuts and seeds as ingredients
+✓ Choose fresh vegetables over frozen
+✓ Create 8-10 different cuisine styles
+✓ Focus on restaurant-quality flavor
+
+You are NOT constrained by cost per meal — you're constrained by TOTAL weekly budget.
+
+---
+
+STEP 3: STILL AVAILABLE AT KROGER
+
+Important: ALL ingredients must be available at a standard American grocery store (Kroger, Safeway, Whole Foods).
+
+DO NOT suggest:
+❌ Truffle oil, caviar, wagyu beef (too specialty)
+❌ Obscure international ingredients not at Kroger
+❌ Fresh lobster, king crab (too expensive even for premium)
+❌ Ingredients requiring specialty shops
+
+KEEP IT: Premium but accessible.
+
+---
+
+STEP 4: APPROACH FOR PREMIUM BUDGETS
+
+PROTEIN STRATEGY:
+- Rotate between salmon, shrimp, grass-fed beef, pork, chicken
+- Use premium proteins 5-6 days/week
+- Quality over quantity
+
+CUISINE VARIETY:
+- 8-10 different cuisine styles across the week
+- Mediterranean, Thai, Japanese, Indian, Mexican, Italian, French, etc.
+- Each meal should be INTERESTING
+
+FLAVOR FOCUS:
+- Use fresh herbs generously
+- Include nuts/seeds for texture
+- Use premium oils (olive, avocado)
+- Create complex flavor profiles
+- Focus on presentation-worthy meals
+
+COST MANAGEMENT (STILL REQUIRED):
+- You MUST stay within $${Math.ceil(weeklyBudget * 1.1)}
+- Track premium items: salmon ($22), grass-fed beef ($15), specialty cheese ($5), etc.
+- Balance premium proteins with affordable sides (rice, beans, vegetables)
+- Don't use EVERY expensive ingredient in EVERY meal
+
+---
+
+STEP 5: VERIFICATION (MANDATORY)
+
+Before returning your plan, estimate total cost:
+
+Proteins (salmon, beef, chicken, etc.): $___
+Produce (fresh vegetables, herbs, fruits): $___
+Grains & specialty items: $___
+Oils, nuts, cheese: $___
+
+ESTIMATED TOTAL COST: $___
+
+Must be ≤ $${Math.ceil(weeklyBudget * 1.1)}
+
+IF OVER BUDGET:
+- Still prioritize quality, but reduce quantities
+- Use salmon 2x instead of 3x
+- Mix premium and standard proteins
+- Reduce specialty cheese usage
+
+TARGET: Within 110% of $${weeklyBudget}
+
+---
+
+Return meal plan JSON that delivers culinary excellence within budget.`;
       }
     }
 
