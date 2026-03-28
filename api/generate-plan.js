@@ -535,7 +535,7 @@ STRICT: no fish/seafood, no beans/legumes, no leafy greens, no ethnic names, no 
       // Budget goes FIRST — highest priority so Claude never forgets it
       if (budgetLine) parts.push(budgetLine);
 
-      parts.push(`Generate an A/B day meal plan. Goal: ${goal}.${profile.includeProteinShakes ? "\nProtein Shakes: Yes (whole food protein target already adjusted — do not add protein shakes as meal ingredients)" : "\nProtein Shakes: No"}`);
+      parts.push(`Generate an A/B day meal plan. Goal: ${goal}.`);
 
       // Dietary constraints — second highest priority
       if (hardConstraints) {

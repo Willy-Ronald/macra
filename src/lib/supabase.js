@@ -91,7 +91,6 @@ export async function saveProfile(userId, profile) {
     custom_carbs_pct:   profile.customCarbsPct ?? null,
     custom_fat_pct:     profile.customFatPct ?? null,
     custom_macro_split: profile.customMacroSplit ?? false,
-    include_protein_shakes: profile.includeProteinShakes ?? false,
     updated_at: new Date().toISOString(),
   });
   return { error };

@@ -458,15 +458,12 @@ const Onboarding = ({onComplete}) => {
         try {
           const budgetVal = parseInt(budgetInput, 10);
           if (!budgetInput || isNaN(budgetVal) || budgetVal <= 0) return null;
-          const shakes = profile.includeProteinShakes ?? false;
           const protein = calcMacros(profile).proteinG;
-          const { minimumBudget, suggestedBudget } = calculateMinimumBudget(protein, shakes);
+          const { minimumBudget, suggestedBudget } = calculateMinimumBudget(protein);
           if (budgetVal >= minimumBudget) return null;
           return (
             <p style={{fontSize:12,color:"#C9A84C",margin:"0 0 10px",lineHeight:1.5,fontWeight:400}}>
-              {shakes
-                ? `⚠️ With protein shakes enabled, your whole food protein target of ${protein}g/day typically requires at least $${minimumBudget}/week in groceries. We recommend $${suggestedBudget}/week for comfortable meal variety.`
-                : `⚠️ Your protein target of ${protein}g/day typically requires at least $${minimumBudget}/week in groceries. Consider enabling protein shakes in settings to reduce grocery costs, or increase your budget to $${suggestedBudget}/week.`}
+              {`⚠️ Your protein target of ${protein}g/day typically requires at least $${minimumBudget}/week in groceries. We recommend $${suggestedBudget}/week for comfortable meal variety.`}
             </p>
           );
         } catch { return null; }
@@ -2055,17 +2052,12 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,o
           const budget = profile?.weeklyBudget;
           const adjustedProtein = profile?.macros?.proteinG;
           if (!budget || !adjustedProtein) return null;
-          const shakes = profile?.includeProteinShakes ?? false;
-          // macros.proteinG is already shake-adjusted; reconstruct base protein to avoid double-subtract
-          const baseProtein = shakes ? adjustedProtein + 60 : adjustedProtein;
-          const { minimumBudget, suggestedBudget } = calculateMinimumBudget(baseProtein, shakes);
+          const { minimumBudget, suggestedBudget } = calculateMinimumBudget(adjustedProtein);
           if (budget >= minimumBudget) return null;
           return (
             <div style={{padding:"14px 16px",borderRadius:T.r,border:"1px solid rgba(201,168,76,0.35)",background:"rgba(201,168,76,0.07)",marginBottom:10}}>
               <p style={{fontSize:12,color:"#C9A84C",margin:"0 0 12px",lineHeight:1.5,fontWeight:400}}>
-                {shakes
-                  ? `With protein shakes enabled, your whole food protein target of ${adjustedProtein}g/day typically requires at least $${minimumBudget}/week in groceries. Plans may exceed your budget. Consider updating your budget in the You tab to at least $${minimumBudget}/week.`
-                  : `Your current budget of $${budget} may not cover your protein needs (${adjustedProtein}g/day). Plans may exceed your budget. Consider enabling protein shakes in settings to reduce grocery costs, or update your budget to at least $${minimumBudget}/week.`}
+                {`Your current budget of $${budget} may not cover your protein needs (${adjustedProtein}g/day). Plans may exceed your budget. Consider updating your budget to at least $${minimumBudget}/week.`}
               </p>
               <div style={{display:"flex",gap:8}}>
                 <button onClick={generatePlan} disabled={limitHit} style={{flex:1,padding:"9px 12px",borderRadius:T.r,border:`1px solid rgba(201,168,76,0.5)`,background:"transparent",color:"#C9A84C",fontSize:12,fontWeight:600,cursor:limitHit?"not-allowed":"pointer",fontFamily:T.font}}>
@@ -3453,7 +3445,6 @@ const ProfileScreen = ({profile, userId, userEmail, isPro, onProfileUpdate, onSi
   const [draftFatPct, setDraftFatPct] = useState(31);
   const [draftIsCustom, setDraftIsCustom] = useState(false);
 
-  const [shakeToast, setShakeToast] = useState("");
   const showSaved = () => { setSavedToast(true); setTimeout(()=>setSavedToast(false),2000); };
   const showAdminToast = (msg) => { setAdminToast(msg); setTimeout(()=>setAdminToast(null),2500); };
 
@@ -3484,7 +3475,7 @@ const ProfileScreen = ({profile, userId, userEmail, isPro, onProfileUpdate, onSi
 
   const saveField = async (updates, returnTo=null) => {
     const merged = {...profile, ...updates};
-    const recalcKeys = ["sex","age","weightLbs","heightFt","heightIn","activity","goal","includeProteinShakes"];
+    const recalcKeys = ["sex","age","weightLbs","heightFt","heightIn","activity","goal"];
     const needsRecalc = Object.keys(updates).some(k => recalcKeys.includes(k));
     const updated = needsRecalc ? {...merged, macros: calcMacros(merged)} : merged;
     onProfileUpdate(updated);
@@ -3919,16 +3910,11 @@ const ProfileScreen = ({profile, userId, userEmail, isPro, onProfileUpdate, onSi
           if (!draftBudget || isNaN(budgetVal) || budgetVal <= 0) return null;
           const adjustedProtein = profile?.macros?.proteinG;
           if (!adjustedProtein) return null;
-          const shakes = profile?.includeProteinShakes ?? false;
-          // macros.proteinG is already shake-adjusted; reconstruct base protein to avoid double-subtract
-          const baseProtein = shakes ? adjustedProtein + 60 : adjustedProtein;
-          const { minimumBudget, suggestedBudget } = calculateMinimumBudget(baseProtein, shakes);
+          const { minimumBudget, suggestedBudget } = calculateMinimumBudget(adjustedProtein);
           if (budgetVal >= minimumBudget) return null;
           return (
             <p style={{fontSize:12,color:"#C9A84C",margin:"0 0 10px",lineHeight:1.5,fontWeight:400}}>
-              {shakes
-                ? `⚠️ With protein shakes enabled, your whole food protein target of ${adjustedProtein}g/day typically requires at least $${minimumBudget}/week in groceries. We recommend $${suggestedBudget}/week for comfortable meal variety.`
-                : `⚠️ Your protein target of ${adjustedProtein}g/day typically requires at least $${minimumBudget}/week in groceries. Consider enabling protein shakes in settings to reduce grocery costs, or increase your budget to $${suggestedBudget}/week.`}
+              {`⚠️ Your protein target of ${adjustedProtein}g/day typically requires at least $${minimumBudget}/week in groceries. We recommend $${suggestedBudget}/week for comfortable meal variety.`}
             </p>
           );
         } catch { return null; }
@@ -4040,28 +4026,6 @@ const ProfileScreen = ({profile, userId, userEmail, isPro, onProfileUpdate, onSi
       </div>
       <Chevron/>
     </Card>
-    <Card style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6}}>
-      <div style={{flex:1,paddingRight:12}}>
-        <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>Protein Shakes</p>
-        <p style={{fontSize:11,color:T.txM,margin:"2px 0 0"}}>I use protein shakes to supplement my whole food protein intake</p>
-      </div>
-      <div
-        onClick={async()=>{
-          const next=!(profile?.includeProteinShakes);
-          const nextProfile={...profile,includeProteinShakes:next};
-          const nextMacros=calcMacros(nextProfile);
-          const status=next?"enabled":"disabled";
-          setShakeToast(`Protein shake mode ${status}. Your meal plans will now target ${nextMacros.proteinG}g of protein from whole foods.`);
-          setTimeout(()=>setShakeToast(""),4000);
-          const saved={...nextProfile,macros:nextMacros};
-          onProfileUpdate(saved);
-          if(userId) await saveProfile(userId,saved);
-        }}
-        style={{width:44,height:26,borderRadius:13,background:profile?.includeProteinShakes?T.acc:T.bd,position:"relative",cursor:"pointer",transition:"background 0.2s",flexShrink:0}}
-      >
-        <div style={{position:"absolute",top:3,left:profile?.includeProteinShakes?21:3,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.25)"}}/>
-      </div>
-    </Card>
     <Card data-tour="macro-split" onClick={()=>enterView("macrosplit")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,cursor:"pointer"}}>
       <div>
         <div style={{display:'flex',alignItems:'center',gap:6}}>
@@ -4150,7 +4114,6 @@ const ProfileScreen = ({profile, userId, userEmail, isPro, onProfileUpdate, onSi
     </div>}
 
     {adminToast&&<div style={{position:"fixed",bottom:100,left:"50%",transform:"translateX(-50%)",background:"#C4714A",color:"#fff",padding:"10px 20px",borderRadius:12,fontSize:12,fontWeight:700,zIndex:200,whiteSpace:"nowrap",boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>{adminToast}</div>}
-    {shakeToast&&<div style={{position:"fixed",bottom:140,left:"50%",transform:"translateX(-50%)",background:"#C9A84C",color:"#fff",padding:"10px 20px",borderRadius:12,fontSize:12,fontWeight:600,zIndex:200,maxWidth:"88vw",textAlign:"center",lineHeight:1.4,boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>{shakeToast}</div>}
 
     {onSignOut&&<button onClick={onSignOut} style={{width:"100%",padding:14,borderRadius:T.r,border:`1px solid rgba(239,68,68,0.3)`,background:"rgba(239,68,68,0.08)",color:"#EF4444",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:T.font,marginTop:20}}>Sign Out</button>}
   </div>;
@@ -4707,7 +4670,6 @@ export default function App() {
             customFatPct:data.custom_fat_pct??null, customMacroSplit:data.custom_macro_split??false,
             onboardingCompleted:data.onboarding_completed??false,
             isDevAccount:data.is_dev_account===true,
-            includeProteinShakes:data.include_protein_shakes===true,
           };
           const hasStats = pBase.sex && pBase.age && pBase.weightLbs && pBase.heightFt != null && pBase.activity && pBase.goal;
           // If user has a custom split, load saved macro grams directly; otherwise recalculate
