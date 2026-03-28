@@ -136,6 +136,9 @@ const PACKAGE_SIZES = {
   "lettuce":                       { size: 1,   unit: "head",  package: "head",    avgCost: 2.19 },
   "iceberg lettuce":               { size: 1,   unit: "head",  package: "head",    avgCost: 2.19 },
   "romaine":                       { size: 1,   unit: "head",  package: "head",    avgCost: 2.19 },
+  "butter lettuce":                { size: 1,   unit: "head",  package: "head",    avgCost: 2.49 },
+  "lemongrass":                    { size: 1,   unit: "each",  package: "stalk",   avgCost: 0.99 },
+  "lemongrass paste":              { size: 1,   unit: "each",  package: "tube",    avgCost: 2.99 },
   "salad mix":                     { size: 12,  unit: "oz",    package: "bag",     avgCost: 2.19 },
   "spinach":                       { size: 10,  unit: "oz",    package: "bag",     avgCost: 2.19 },
   "baby spinach":                  { size: 10,  unit: "oz",    package: "bag",     avgCost: 2.19 },
@@ -523,11 +526,27 @@ export function estimateItem(name, qty, unit) {
     }
 
     // Unit conversion: lettuce/romaine cups → heads (1 head ≈ 8 cups shredded); max 2 heads
-    if ((normalized === "lettuce" || normalized === "iceberg lettuce" || normalized === "romaine") &&
+    if ((normalized.includes("lettuce") || normalized === "romaine") &&
         (workUnit === "cup" || workUnit === "cups")) {
       workQty  = Math.min(2, Math.ceil(workQty / 8));
       workUnit = "head";
       console.log(`  Unit conversion: ${qty} cups lettuce → ${workQty} heads (max 2 cap)`);
+    }
+
+    // Unit conversion: lettuce leaves → heads (1 head ≈ 18 leaves); min 1, max 2 heads
+    if ((normalized.includes("lettuce") || normalized === "romaine") &&
+        (workUnit === "leaf" || workUnit === "leaves")) {
+      workQty  = Math.min(2, Math.max(1, Math.ceil(workQty / 18)));
+      workUnit = "head";
+      console.log(`  Unit conversion: ${qty} leaves lettuce → ${workQty} heads (min 1, max 2 cap)`);
+    }
+
+    // Unit conversion: lemongrass/lemongrass paste tbsp → each (< 6 tbsp = 1 unit; >= 6 tbsp = 2 max)
+    if ((normalized === "lemongrass" || normalized === "lemongrass paste") &&
+        (workUnit === "tbsp" || workUnit === "tablespoon" || workUnit === "tablespoons")) {
+      workQty  = workQty < 6 ? 1 : 2;
+      workUnit = "each";
+      console.log(`  Unit conversion: ${qty} tbsp lemongrass → ${workQty} each`);
     }
 
     // Unit conversion: broccoli cups → heads (÷2) OR oz → heads (÷12); max 3 heads
