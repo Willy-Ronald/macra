@@ -201,6 +201,9 @@ const PACKAGE_SIZES = {
   "basmati rice":                  { size: 32,  unit: "oz",    package: "bag",     avgCost: 3.99 },
   "instant rice":                  { size: 14,  unit: "oz",    package: "box",     avgCost: 2.99 },
   "instant brown rice":            { size: 14,  unit: "oz",    package: "box",     avgCost: 2.99 },
+  "cooked rice":                   { size: 32,  unit: "oz",    package: "bag",     avgCost: 1.79 },
+  "dry rice":                      { size: 32,  unit: "oz",    package: "bag",     avgCost: 1.79 },
+  "uncooked rice":                 { size: 32,  unit: "oz",    package: "bag",     avgCost: 1.79 },
 
   // ── Grains — pasta & noodles ─────────────────────────────────────────────
   "pasta":                         { size: 16,  unit: "oz",    package: "box",     avgCost: 1.00 },
@@ -220,7 +223,10 @@ const PACKAGE_SIZES = {
   "rolled oats":                   { size: 42,  unit: "oz",    package: "container", avgCost: 4.49 },
   "pita":                          { size: 12,  unit: "oz",    package: "pack",    avgCost: 3.49 },
   "panko":                         { size: 8,   unit: "oz",    package: "canister", avgCost: 2.99 },
+  "panko breadcrumbs":             { size: 8,   unit: "oz",    package: "canister", avgCost: 2.99 },
   "breadcrumb":                    { size: 8,   unit: "oz",    package: "canister", avgCost: 2.49 },
+  "breadcrumbs":                   { size: 15,  unit: "oz",    package: "canister", avgCost: 2.49 },
+  "bread crumbs":                  { size: 15,  unit: "oz",    package: "canister", avgCost: 2.49 },
 
   // ── Grains — bread & tortillas ───────────────────────────────────────────
   "bread":                         { size: 20,  unit: "oz",    package: "loaf",    avgCost: 2.99 },
@@ -245,6 +251,9 @@ const PACKAGE_SIZES = {
   "lentils":                       { size: 16,  unit: "oz",    package: "bag",     avgCost: 1.99 },
   "red lentils":                   { size: 16,  unit: "oz",    package: "bag",     avgCost: 1.99 },
   "tomato sauce":                  { size: 14.5, unit: "oz",   package: "can",     avgCost: 0.95 },
+  "marinara sauce":                { size: 24,  unit: "oz",    package: "jar",     avgCost: 2.49 },
+  "pasta sauce":                   { size: 24,  unit: "oz",    package: "jar",     avgCost: 2.49 },
+  "spaghetti sauce":               { size: 24,  unit: "oz",    package: "jar",     avgCost: 2.49 },
   "diced tomatoes":                { size: 14.5, unit: "oz",   package: "can",     avgCost: 0.95 },
   "canned diced tomatoes":         { size: 14.5, unit: "oz",   package: "can",     avgCost: 0.95 },
   "petite diced tomatoes":         { size: 14.5, unit: "oz",   package: "can",     avgCost: 0.95 },
@@ -313,6 +322,8 @@ const PANTRY_ITEMS = new Set([
   "bay leaf", "bay leaves",
   "italian seasoning", "mixed herbs", "dried herbs", "herb seasoning",
   "everything bagel seasoning", "lemon pepper", "garlic salt",
+  "jerk seasoning", "cajun seasoning", "taco seasoning",
+  "ranch seasoning", "fajita seasoning",
   // Baking
   "baking powder", "baking soda", "vanilla extract",
   "flour", "all purpose flour", "all-purpose flour",
