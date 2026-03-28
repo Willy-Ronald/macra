@@ -416,13 +416,23 @@ export function estimateItem(name, qty, unit) {
     const normalized = normalizeName(name);
     const isPantry = PANTRY_ITEMS.has(normalized);
 
-    if (isPantry) return { pkgCount: 0, pkgLabel: null, cost: 0, isPantry: true };
+    console.log(`\n--- Estimating: ${name} (${qty} ${unit || ""}) ---`);
+    console.log(`  Original name: "${name}"`);
+    console.log(`  Normalized name: "${normalized}"`);
+
+    if (isPantry) {
+      console.log(`  ✓ Found in pantry items - Cost: $0.00`);
+      return { pkgCount: 0, pkgLabel: null, cost: 0, isPantry: true };
+    }
 
     const pkg = findPackage(name);
     if (!pkg) {
-      console.log(`[costEstimator] no match: "${name}" (normalized: "${normalized}")`);
+      console.log(`  Database match: NO`);
+      console.log(`  ⚠️ NO DATABASE MATCH - will use buffer in list estimator`);
       return { pkgCount: null, pkgLabel: null, cost: null, isPantry: false };
     }
+
+    console.log(`  Database match: YES`);
 
     const pkgUnit = pkg.unit.toLowerCase();
     const itemUnit = (unit || "").toLowerCase().trim();
@@ -442,6 +452,10 @@ export function estimateItem(name, qty, unit) {
       ? `1 ${pkg.package}`
       : `${pkgCount} ${pkg.package}${pkg.package.endsWith("s") || pkg.package === "bunch" ? "" : "s"}`;
 
+    console.log(`  Package size: ${pkg.size} ${pkg.unit} @ $${pkg.avgCost}`);
+    console.log(`  Packages needed: Math.ceil(${qty} ${unit || ""} → oz / ${pkg.size} ${pkg.unit}) = ${pkgCount}`);
+    console.log(`  Item cost: ${pkgCount} × $${pkg.avgCost} = $${cost.toFixed(2)}`);
+
     return { pkgCount, pkgLabel, cost, isPantry: false };
   } catch (e) {
     console.error("[estimateItem] error for:", name, e);
@@ -457,26 +471,41 @@ export function estimateGroceryList(planCategories, weeklyBudget) {
   const itemMap = new Map();
   let totalCost = 0;
   let unknownCount = 0;
+  let databaseMatchCount = 0;
+  let pantryCount = 0;
 
-  for (const cat of (planCategories || [])) {
-    for (const item of (cat.items || [])) {
-      if (!item) continue;
-      const est = estimateItem(item.name, item.qty, item.unit);
-      itemMap.set(item.id, est);
-      if (est.cost !== null) {
-        totalCost += est.cost;
-      } else {
-        unknownCount++;
-      }
+  const allItems = (planCategories || []).flatMap(cat => (cat.items || []).filter(Boolean));
+  console.log("=== GROCERY COST ESTIMATOR DEBUG ===");
+  console.log("Total items to estimate:", allItems.length);
+
+  for (const item of allItems) {
+    const est = estimateItem(item.name, item.qty, item.unit);
+    itemMap.set(item.id, est);
+    if (est.isPantry) {
+      pantryCount++;
+    } else if (est.cost !== null) {
+      databaseMatchCount++;
+      totalCost += est.cost;
+    } else {
+      unknownCount++;
     }
   }
 
   // Tiered buffer per unknown item — tight budgets get a lower estimate
   // since they use cheaper/simpler ingredients
   const budget = weeklyBudget ?? null;
+  const budgetTier = budget !== null && budget < 60  ? "strict (<$60)"
+                   : budget !== null && budget < 90  ? "moderate (<$90)"
+                   :                                   "flexible";
   const bufferPerItem = budget !== null && budget < 60  ? 2.00
                       : budget !== null && budget < 90  ? 3.00
                       :                                   3.50;
+
+  if (unknownCount > 0) {
+    console.log(`\n--- Buffer items (no database match) ---`);
+    console.log(`  Budget tier: ${budgetTier}`);
+    console.log(`  Buffer amount: $${bufferPerItem.toFixed(2)} × ${unknownCount} items = $${(unknownCount * bufferPerItem).toFixed(2)}`);
+  }
 
   const buffer = unknownCount * bufferPerItem;
   const total  = totalCost + buffer;
@@ -485,6 +514,11 @@ export function estimateGroceryList(planCategories, weeklyBudget) {
   const diff = budget !== null ? Math.abs(budget - total) : null;
   const pct  = budget !== null ? Math.min(Math.round((total / budget) * 100), 999) : null;
 
+  console.log("\n=== FINAL COST BREAKDOWN ===");
+  console.log(`Total estimated cost: $${total.toFixed(2)}`);
+  console.log(`Items from database: ${databaseMatchCount}`);
+  console.log(`Items using buffer: ${unknownCount}`);
+  console.log(`Pantry items (free): ${pantryCount}`);
   console.log(`[costEstimator] total=$${total.toFixed(2)} (items=$${totalCost.toFixed(2)} + buffer=$${buffer.toFixed(2)} × ${unknownCount} unknowns @ $${bufferPerItem}) budget=${budget ?? "none"}${pct != null ? " "+pct+"%" : ""}`);
 
   return { itemMap, totalCost, buffer, total, budget, withinBudget, diff, pct, unknownCount };
