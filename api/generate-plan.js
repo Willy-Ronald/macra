@@ -825,6 +825,35 @@ STRICT: no fish/seafood, no beans/legumes, no leafy greens, no ethnic names, no 
       // Budget goes FIRST — highest priority so Claude never forgets it
       if (budgetLine) parts.push(budgetLine);
 
+      const ingredientConstraints = `APPROVED INGREDIENTS — CRITICAL RULE: You may ONLY use ingredients from the approved list below. Do not generate any ingredient not on this list under any circumstances. Using unlisted ingredients breaks the grocery cost estimator and will cause the plan to fail. If a cuisine style calls for an ingredient not on this list, substitute with the closest approved alternative. Never use any ingredient from the PROHIBITED list regardless of cuisine style or budget tier.
+
+PROTEINS — subject to budget tier restrictions above: eggs, egg whites, chicken thighs, boneless chicken thighs, chicken breast, boneless skinless chicken breast, ground turkey, lean ground turkey, ground beef, lean ground beef, salmon fillet, fresh salmon, frozen salmon, shrimp, cooked shrimp, raw shrimp, canned tuna, tuna in water, tilapia, cod, pork tenderloin, pork chops, boneless pork chops, pork shoulder, bacon, turkey bacon, breakfast sausage, deli turkey, firm tofu, extra firm tofu, silken tofu.
+
+BEANS AND LEGUMES: black beans, canned black beans, pinto beans, kidney beans, chickpeas, cannellini beans, great northern beans, lentils, red lentils, canned lentils, refried beans, edamame, frozen edamame.
+
+DAIRY: milk, whole milk, 2% milk, skim milk, butter, salted butter, unsalted butter, heavy cream, heavy whipping cream, sour cream, cream cheese, cottage cheese, greek yogurt, plain greek yogurt, yogurt, shredded cheddar, cheddar cheese, shredded mozzarella, mozzarella cheese, parmesan cheese, grated parmesan, colby jack cheese, feta cheese, ricotta cheese, almond milk, unsweetened almond milk, oat milk, lactose free milk.
+
+PRODUCE VEGETABLES: onion, yellow onion, red onion, sweet onion, green onions, scallions, bell pepper, green bell pepper, red bell pepper, tomato, roma tomato, cherry tomatoes, lettuce, iceberg lettuce, romaine, spinach, baby spinach, kale, avocado, broccoli, broccoli crown, frozen broccoli, cauliflower, cucumber, zucchini, celery, cilantro, mushrooms, asparagus, green beans, frozen green beans, carrots, baby carrots, shredded carrots, jalapeno, cabbage, green cabbage, shredded cabbage, bok choy, potato, russet potato, sweet potato, garlic, corn, frozen corn, frozen peas, frozen mixed vegetables, frozen peas and carrots, frozen peppers and onions, salad mix.
+
+PRODUCE FRUITS: banana, apple, gala apple, orange, lemon, lime, mango, pineapple, strawberries, blueberries, blackberries, raspberries, grapes, red grapes, green grapes.
+
+GRAINS: white rice, brown rice, jasmine rice, basmati rice, instant rice, pasta, spaghetti, penne, penne pasta, cavatappi, noodles, egg noodles, rice noodles, rice paper, rice paper wrappers, bread, white bread, wheat bread, whole wheat bread, tortillas, flour tortillas, oats, rolled oats, quick oats, quinoa, pita, pita bread.
+
+PANTRY OILS: olive oil, extra virgin olive oil, vegetable oil, canola oil, sesame oil, coconut oil.
+
+PANTRY SAUCES AND CONDIMENTS: soy sauce, low sodium soy sauce, fish sauce, oyster sauce, hoisin sauce, sriracha, hot sauce, worcestershire sauce, dijon mustard, mustard, ketchup, bbq sauce, salsa, marinara sauce, pasta sauce, mayonnaise, peanut butter, almond butter, tahini, miso paste, coconut milk, rice vinegar, red wine vinegar, apple cider vinegar, balsamic vinegar.
+
+PANTRY CANNED AND PACKAGED: chicken broth, beef broth, vegetable broth, diced tomatoes, canned diced tomatoes, crushed tomatoes, tomato sauce, tomato paste, sauerkraut, kimchi, coleslaw mix, breadcrumbs, panko breadcrumbs, peanuts, almonds, sliced almonds, cashews, walnuts, sesame seeds.
+
+PANTRY BAKING AND SWEETENERS: honey, maple syrup, sugar, brown sugar, vanilla extract, flour, all purpose flour, baking powder, baking soda, cornstarch.
+
+FRESH HERBS — maximum 1 per plan, use sparingly as garnish only, never as a primary ingredient: cilantro, parsley, basil, dill, mint, rosemary, thyme.
+
+SPICES — use freely, all are zero cost pantry items: salt, black pepper, garlic powder, onion powder, paprika, smoked paprika, chili powder, cumin, oregano, dried basil, dried thyme, dried rosemary, ground cinnamon, cinnamon, cayenne pepper, red pepper flakes, italian seasoning, bay leaves, dried parsley, ground ginger, turmeric, curry powder, garam masala, coriander, ground coriander, nutmeg, allspice, lemon juice, lime juice, cooking spray, jerk seasoning, cajun seasoning, five spice powder, berbere spice.
+
+PERMANENTLY PROHIBITED — never generate under any circumstances: sake, galangal, makrut lime, sumac, preserved lemon, lemongrass stalks, pomegranate molasses, doubanjiang, dashi, collagen powder, fermented black beans, dried shrimp, cassava flour, jackfruit, cassava, breadfruit, durian, rambutan, dragonfruit, starfruit, persimmon, quince, gooseberry, pita chips, psyllium husk, nutritional yeast, glutinous rice, sticky rice, sushi rice, matzo, lavash, bone broth, cacao powder, carob, white chocolate, lemongrass paste, lemongrass, lemongrass stalks, tamarind paste, shrimp paste, bonito flakes, oat flour, almond flour, coconut flour, arrowroot, protein powder, whey, matcha, taro, yuca, fig, date, pomegranate, papaya, lychee, guava, passion fruit, elderberry, mulberry, stone ground grits, freekeh, bulgur wheat, wheat berries, spelt, teff, amaranth, millet, sorghum, orzo, couscous, fregola, gnocchi, pierogi, gyoza wrappers, wonton wrappers, spring roll wrappers, rice flour, bagels, croissants, brioche, sourdough, baguette, naan, chapati, roti, injera, english muffins, whole grain crackers, crackers, granola, muesli, cereal, manchego cheese, gruyere, brie, camembert, gouda, havarti, provolone, swiss cheese, pepper jack, blue cheese, gorgonzola, stilton, halloumi, burrata, buffalo mozzarella, queso fresco, queso blanco, paneer, labneh, goat cheese, mascarpone, creme fraiche, kefir, buttermilk, evaporated milk, condensed milk, powdered milk, coconut cream, coconut water, coconut flakes, shredded coconut, coconut butter, chocolate chips, dark chocolate, vanilla bean, black bean sauce, harissa, za atar.`;
+      parts.push(ingredientConstraints);
+
       parts.push(`Generate an A/B day meal plan. Goal: ${goal}.`);
 
       // Dietary constraints — second highest priority
