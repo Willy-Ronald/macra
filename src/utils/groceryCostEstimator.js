@@ -306,8 +306,13 @@ const PACKAGE_SIZES = {
   "ketchup":                       { size: 20,  unit: "oz",    package: "bottle",  avgCost: 2.99 },
   "tahini":                        { size: 16,  unit: "oz",    package: "jar",     avgCost: 6.99 },
   "maple syrup":                   { size: 12,  unit: "oz",    package: "bottle",  avgCost: 9.99 },
+  "mayonnaise":                    { size: 30,  unit: "fl oz", package: "jar",     avgCost: 3.99 },
+  "mayo":                          { size: 30,  unit: "fl oz", package: "jar",     avgCost: 3.99 },
   "quick grits":                   { size: 24,  unit: "oz",    package: "container", avgCost: 2.49 },
   "instant grits":                 { size: 24,  unit: "oz",    package: "container", avgCost: 2.49 },
+  "coleslaw mix":                  { size: 14,  unit: "oz",    package: "bag",     avgCost: 2.49 },
+  "almonds":                       { size: 6,   unit: "oz",    package: "bag",     avgCost: 4.99 },
+  "sliced almonds":                { size: 6,   unit: "oz",    package: "bag",     avgCost: 4.99 },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -465,12 +470,29 @@ export function estimateItem(name, qty, unit) {
       console.log(`  Unit conversion: ${qty} cloves → ${workQty} heads`);
     }
 
-    // Unit conversion: scallion/green onion stalks → bunches (1 bunch ≈ 6 stalks)
-    if ((normalized === "scallion" || normalized === "scallions") &&
+    // Unit conversion: sweet potato oz → each (1 medium sweet potato ≈ 8 oz)
+    if ((normalized === "sweet potato" || normalized === "sweet potatoes") &&
+        (workUnit === "oz" || workUnit === "ounce" || workUnit === "ounces")) {
+      workQty  = Math.ceil(workQty / 8);
+      workUnit = "each";
+      console.log(`  Unit conversion: ${qty} oz sweet potato → ${workQty} each`);
+    }
+
+    // Unit conversion: broccoli cups → heads (1 head broccoli ≈ 2 cups florets)
+    if ((normalized === "broccoli" || normalized === "broccoli crown") &&
+        (workUnit === "cup" || workUnit === "cups")) {
+      workQty  = Math.ceil(workQty / 2);
+      workUnit = "head";
+      console.log(`  Unit conversion: ${qty} cups broccoli → ${workQty} heads`);
+    }
+
+    // Unit conversion: scallion/green onion stalks → bunches (1 bunch ≈ 8 stalks); max 2 bunches
+    if ((normalized === "scallion" || normalized === "scallions" ||
+         normalized === "green onion" || normalized === "green onions") &&
         (workUnit === "stalk" || workUnit === "stalks")) {
-      workQty  = Math.ceil(workQty / 6);
+      workQty  = Math.min(2, Math.ceil(workQty / 8));
       workUnit = "bunch";
-      console.log(`  Unit conversion: ${qty} stalks → ${workQty} bunches`);
+      console.log(`  Unit conversion: ${qty} stalks → ${workQty} bunches (max 2 cap applied)`);
     }
 
     // Unit conversion: cilantro tbsp → bunches (1 bunch yields ~24 tbsp)
