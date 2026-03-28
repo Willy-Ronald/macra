@@ -3108,15 +3108,25 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade,profile}) => {
     const absorb = (meals, mult) => {
       meals.forEach(meal => {
         (meal.ingredients||[]).forEach(ing => {
-          const key = ing.name.toLowerCase().trim()+"|"+ing.unit.toLowerCase().trim();
-          if(combined[key]){
-            combined[key].qty += (parseFloat(ing.qty)||0)*mult;
+          // Normalize volume units before keying so tsp/fl oz aggregate with tbsp
+          let normUnit = ing.unit.toLowerCase().trim();
+          let normQty  = parseFloat(ing.qty) || 0;
+          if (normUnit === 'tsp' || normUnit === 'teaspoon' || normUnit === 'teaspoons') {
+            normQty  = normQty / 3;   // 3 tsp = 1 tbsp
+            normUnit = 'tbsp';
+          } else if (normUnit === 'fl oz' || normUnit === 'fluid oz' || normUnit === 'fluid ounce' || normUnit === 'fluid ounces') {
+            normQty  = normQty * 2;   // 1 fl oz = 2 tbsp
+            normUnit = 'tbsp';
+          }
+          const key = ing.name.toLowerCase().trim() + "|" + normUnit;
+          if (combined[key]) {
+            combined[key].qty += normQty * mult;
           } else {
             combined[key] = {
               id: key,
               name: ing.name,
-              qty: (parseFloat(ing.qty)||0)*mult,
-              unit: ing.unit,
+              qty: normQty * mult,
+              unit: normUnit,
               category: categorize(ing.name),
             };
           }

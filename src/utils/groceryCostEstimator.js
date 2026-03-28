@@ -457,7 +457,11 @@ export function estimateItem(name, qty, unit) {
     if (COUNT_UNITS.has(pkgUnit) || pkgUnit === "each") {
       pkgCount = Math.ceil(qty / pkg.size);
     } else {
-      const neededOz = toOz(qty, itemUnit) ?? qty;
+      // Special conversion for frozen vegetables (denser than fresh):
+      // 1 cup frozen veg ≈ 5 oz, not 8 oz like fresh/liquid volumes.
+      const isFrozenCups = (itemUnit === "cup" || itemUnit === "cups") &&
+                           name.toLowerCase().includes("frozen");
+      const neededOz = isFrozenCups ? qty * 5 : (toOz(qty, itemUnit) ?? qty);
       const pkgOz    = toOz(pkg.size, pkgUnit) ?? pkg.size;
       pkgCount = Math.max(1, Math.ceil(neededOz / pkgOz));
     }
@@ -468,7 +472,7 @@ export function estimateItem(name, qty, unit) {
       : `${pkgCount} ${pkg.package}${pkg.package.endsWith("s") || pkg.package === "bunch" ? "" : "s"}`;
 
     console.log(`  Package size: ${pkg.size} ${pkg.unit} @ $${pkg.avgCost}`);
-    console.log(`  Packages needed: Math.ceil(${qty} ${unit || ""} → oz / ${pkg.size} ${pkg.unit}) = ${pkgCount}`);
+    console.log(`  Packages needed: Math.ceil(${qty} ${unit || ""} → oz / ${pkg.size} ${pkg.unit}) = ${pkgCount}${name.toLowerCase().includes("frozen") && (unit||"").toLowerCase().startsWith("cup") ? " [frozen density: 5 oz/cup]" : ""}`);
     console.log(`  Item cost: ${pkgCount} × $${pkg.avgCost} = $${cost.toFixed(2)}`);
 
     return { pkgCount, pkgLabel, cost, isPantry: false };
