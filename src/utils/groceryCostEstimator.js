@@ -403,6 +403,8 @@ const PANTRY_ITEMS = new Set([
   "lemon juice", "lime juice",
   // Packet condiments
   "soy sauce packet", "hot sauce packet",
+  // Toast aliases — bread is a purchasable item; these are just serving forms of bread
+  "toast", "bread toast", "avocado toast",
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────

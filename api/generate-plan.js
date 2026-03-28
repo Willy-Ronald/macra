@@ -18,6 +18,103 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { randomBytes } from "crypto";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const { calculateIngredientMacros, getNutrition } = require('../src/utils/nutritionDatabase');
+
+// ── Protein pools by budget tier ────────────────────────────────
+const PROTEIN_POOLS = {
+  strict: [
+    { name: 'chicken thighs', unit: 'oz', proteinPer28g: 4.9, costPerOz: 0.156 },
+    { name: 'ground turkey', unit: 'oz', proteinPer28g: 5.6, costPerOz: 0.312 },
+    { name: 'canned tuna', unit: 'oz', proteinPer28g: 7.2, costPerOz: 0.20 },
+    { name: 'eggs', unit: 'each', proteinEach: 6.5, costEach: 0.15 },
+    { name: 'firm tofu', unit: 'oz', proteinPer28g: 2.3, costPerOz: 0.14 },
+    { name: 'black beans', unit: 'cup', proteinPerCup: 10.1, costPerCup: 0.18 },
+    { name: 'lentils', unit: 'cup', proteinPerCup: 17.9, costPerCup: 0.22 },
+  ],
+  moderate: [
+    { name: 'chicken thighs', unit: 'oz', proteinPer28g: 4.9, costPerOz: 0.156 },
+    { name: 'chicken breast', unit: 'oz', proteinPer28g: 6.6, costPerOz: 0.343 },
+    { name: 'ground turkey', unit: 'oz', proteinPer28g: 5.6, costPerOz: 0.312 },
+    { name: 'tilapia', unit: 'oz', proteinPer28g: 5.7, costPerOz: 0.313 },
+    { name: 'canned tuna', unit: 'oz', proteinPer28g: 7.2, costPerOz: 0.20 },
+    { name: 'eggs', unit: 'each', proteinEach: 6.5, costEach: 0.15 },
+    { name: 'deli turkey', unit: 'oz', proteinPer28g: 5.0, costPerOz: 0.443 },
+    { name: 'firm tofu', unit: 'oz', proteinPer28g: 2.3, costPerOz: 0.14 },
+    { name: 'black beans', unit: 'cup', proteinPerCup: 10.1, costPerCup: 0.18 },
+    { name: 'lentils', unit: 'cup', proteinPerCup: 17.9, costPerCup: 0.22 },
+  ],
+  flexible: [
+    { name: 'chicken breast', unit: 'oz', proteinPer28g: 6.6, costPerOz: 0.343 },
+    { name: 'chicken thighs', unit: 'oz', proteinPer28g: 4.9, costPerOz: 0.156 },
+    { name: 'ground beef', unit: 'oz', proteinPer28g: 5.7, costPerOz: 0.562 },
+    { name: 'ground turkey', unit: 'oz', proteinPer28g: 5.6, costPerOz: 0.312 },
+    { name: 'salmon', unit: 'oz', proteinPer28g: 5.8, costPerOz: 0.687 },
+    { name: 'shrimp', unit: 'oz', proteinPer28g: 5.9, costPerOz: 0.583 },
+    { name: 'tilapia', unit: 'oz', proteinPer28g: 5.7, costPerOz: 0.313 },
+    { name: 'pork tenderloin', unit: 'oz', proteinPer28g: 5.9, costPerOz: 0.249 },
+    { name: 'pork chops', unit: 'oz', proteinPer28g: 5.5, costPerOz: 0.374 },
+    { name: 'eggs', unit: 'each', proteinEach: 6.5, costEach: 0.15 },
+    { name: 'canned tuna', unit: 'oz', proteinPer28g: 7.2, costPerOz: 0.20 },
+  ],
+  premium: [
+    { name: 'salmon', unit: 'oz', proteinPer28g: 5.8, costPerOz: 0.687 },
+    { name: 'chicken breast', unit: 'oz', proteinPer28g: 6.6, costPerOz: 0.343 },
+    { name: 'ground beef', unit: 'oz', proteinPer28g: 5.7, costPerOz: 0.562 },
+    { name: 'beef sirloin', unit: 'oz', proteinPer28g: 6.0, costPerOz: 0.562 },
+    { name: 'shrimp', unit: 'oz', proteinPer28g: 5.9, costPerOz: 0.583 },
+    { name: 'pork tenderloin', unit: 'oz', proteinPer28g: 5.9, costPerOz: 0.249 },
+    { name: 'ground turkey', unit: 'oz', proteinPer28g: 5.6, costPerOz: 0.312 },
+    { name: 'tilapia', unit: 'oz', proteinPer28g: 5.7, costPerOz: 0.313 },
+    { name: 'turkey bacon', unit: 'slice', proteinPerSlice: 3.96, costPerSlice: 0.40 },
+    { name: 'eggs', unit: 'each', proteinEach: 6.5, costEach: 0.15 },
+    { name: 'deli turkey', unit: 'oz', proteinPer28g: 5.0, costPerOz: 0.443 },
+  ],
+};
+
+function selectProteinsForPlan(tier, macros, weeklyBudget) {
+  const pool = PROTEIN_POOLS[tier] || PROTEIN_POOLS.moderate;
+  const dailyProteinG = macros.proteinG;
+  const proteinPerMeal = {
+    breakfast: Math.round(dailyProteinG * 0.22),
+    lunch:     Math.round(dailyProteinG * 0.28),
+    snack:     Math.round(dailyProteinG * 0.14),
+    dinner:    Math.round(dailyProteinG * 0.36),
+  };
+  const shuffle = (arr) => {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+  const shuffled = shuffle(pool);
+  const assignments = {};
+  const mealTypes = ['dayA_breakfast','dayA_lunch','dayA_snack','dayA_dinner','dayB_breakfast','dayB_lunch','dayB_snack','dayB_dinner'];
+  let poolIdx = 0;
+  for (const meal of mealTypes) {
+    const type = meal.split('_')[1];
+    const targetProtein = proteinPerMeal[type];
+    const protein = shuffled[poolIdx % shuffled.length];
+    poolIdx++;
+    let quantity, unitLabel;
+    if (protein.unit === 'each') {
+      quantity = Math.max(1, Math.round(targetProtein / protein.proteinEach));
+      unitLabel = quantity === 1 ? 'egg' : 'eggs';
+    } else if (protein.unit === 'cup') {
+      quantity = Math.max(0.5, Math.round((targetProtein / protein.proteinPerCup) * 2) / 2);
+      unitLabel = 'cup';
+    } else {
+      const ozNeeded = Math.max(2, Math.round((targetProtein / protein.proteinPer28g) * 28.35 / 28.35 * 10) / 10);
+      quantity = Math.round(ozNeeded);
+      unitLabel = 'oz';
+    }
+    assignments[meal] = { protein: protein.name, quantity, unit: unitLabel, targetProteinG: targetProtein };
+  }
+  return assignments;
+}
 
 // ── Rate limit constants ────────────────────────────────────────
 const FREE_INTRO_LIMIT   = 3;
@@ -817,7 +914,7 @@ STRICT: no fish/seafood, no beans/legumes, no leafy greens, no ethnic names, no 
     const complexityLine = complexityLines[pickinessLevel] || complexityLines[3];
 
     // Dynamic content only — static format/rules are in the cached system prompt
-    const buildDynamicContent = (retryPrefix = "") => {
+    const buildDynamicContent = (retryPrefix = "", proteinAssignments = null) => {
       const parts = [];
 
       if (retryPrefix) parts.push(retryPrefix);
@@ -854,6 +951,15 @@ SPICES — use freely, all are zero cost pantry items: salt, black pepper, garli
 PERMANENTLY PROHIBITED — never generate under any circumstances: sake, galangal, makrut lime, sumac, preserved lemon, lemongrass stalks, pomegranate molasses, doubanjiang, dashi, collagen powder, fermented black beans, dried shrimp, cassava flour, jackfruit, cassava, breadfruit, durian, rambutan, dragonfruit, starfruit, persimmon, quince, gooseberry, pita chips, psyllium husk, nutritional yeast, glutinous rice, sticky rice, sushi rice, matzo, lavash, bone broth, cacao powder, carob, white chocolate, lemongrass paste, lemongrass, lemongrass stalks, tamarind paste, shrimp paste, bonito flakes, oat flour, almond flour, coconut flour, arrowroot, protein powder, whey, matcha, taro, yuca, fig, date, pomegranate, papaya, lychee, guava, passion fruit, elderberry, mulberry, stone ground grits, freekeh, bulgur wheat, wheat berries, spelt, teff, amaranth, millet, sorghum, orzo, couscous, fregola, gnocchi, pierogi, gyoza wrappers, wonton wrappers, spring roll wrappers, rice flour, bagels, croissants, brioche, sourdough, baguette, naan, chapati, roti, injera, english muffins, whole grain crackers, crackers, granola, muesli, cereal, manchego cheese, gruyere, brie, camembert, gouda, havarti, provolone, swiss cheese, pepper jack, blue cheese, gorgonzola, stilton, halloumi, burrata, buffalo mozzarella, queso fresco, queso blanco, paneer, labneh, goat cheese, mascarpone, creme fraiche, kefir, buttermilk, evaporated milk, condensed milk, powdered milk, coconut cream, coconut water, coconut flakes, shredded coconut, coconut butter, chocolate chips, dark chocolate, vanilla bean, black bean sauce, harissa, za atar.`;
       parts.push(ingredientConstraints);
 
+      if (proteinAssignments) {
+        const proteinSpec = 'PROTEIN ASSIGNMENTS — MANDATORY: You must use exactly these proteins in exactly these quantities for each meal. Do not substitute, remove, or change any protein assignment. Build the entire meal around the assigned protein using approved ingredients only. Adjust side dishes, sauces, and preparation methods to create variety and ensure the meal hits macro targets.\n\n' +
+          Object.entries(proteinAssignments).map(([meal, info]) => {
+            const [day, type] = meal.split('_');
+            return day.toUpperCase() + ' ' + type.charAt(0).toUpperCase() + type.slice(1) + ': ' + info.quantity + ' ' + info.unit + ' ' + info.protein + ' (target: ' + info.targetProteinG + 'g protein)';
+          }).join('\n');
+        parts.push(proteinSpec);
+      }
+
       parts.push(`Generate an A/B day meal plan. Goal: ${goal}.`);
 
       // Dietary constraints — second highest priority
@@ -883,8 +989,11 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
     // ── First Claude call ────────────────────────────────────────
     let totalUsage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
 
+    const budgetTier = weeklyBudget < 60 ? 'strict' : weeklyBudget < 90 ? 'moderate' : weeklyBudget < 150 ? 'flexible' : 'premium';
+    const proteinAssignments = selectProteinsForPlan(budgetTier, macros, weeklyBudget);
+
     console.log(`CALLING CLAUDE API — model:${model} userId:${userId} ts:${new Date().toISOString()}`);
-    const firstResult = await callClaude(apiKey, model, buildDynamicContent(), { useCache: true });
+    const firstResult = await callClaude(apiKey, model, buildDynamicContent('', proteinAssignments), { useCache: true });
 
     if (firstResult.error) {
       console.error("CLAUDE API ERROR:", firstResult.error);
@@ -901,7 +1010,7 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
       const truncRetryContent =
         "Your previous response was cut off. Provide the complete plan with all 8 meals. " +
         "Keep instructions to exactly 5 steps per meal, each under 12 words.\n\n" +
-        buildDynamicContent();
+        buildDynamicContent('', proteinAssignments);
 
       const truncRetry = await callClaude(apiKey, model, truncRetryContent, { useCache: true });
       totalUsage = mergeUsage(totalUsage, truncRetry.usage || {});
@@ -957,7 +1066,7 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
         `CRITICAL: Protein target of ${macros.proteinG}g per day MUST be met. Use larger protein portions.\n\n`;
 
       console.log("[macro-fix] Macro validation failed — full Sonnet retry:", missDetails.join(" | "));
-      const retryResult = await callClaude(apiKey, MODEL_SONNET, buildDynamicContent(retryPrefix), { useCache: true });
+      const retryResult = await callClaude(apiKey, MODEL_SONNET, buildDynamicContent(retryPrefix, proteinAssignments), { useCache: true });
       totalUsage = mergeUsage(totalUsage, retryResult.usage || {});
 
       if (!retryResult.error) {
@@ -1017,6 +1126,51 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
       console.warn("[rate-limit] Generation served WITHOUT being logged — limit may not enforce correctly");
     } else {
       console.log(`[rate-limit] generation_log insert OK for user ${userId}`);
+    }
+
+    // ── Layer 3: Nutrition verification against local database ───
+    function verifyMealMacrosWithDatabase(meal) {
+      if (!meal || !meal.ingredients) return { verified: false, reason: 'no ingredients' };
+      let totalProtein = 0;
+      let totalCarbs = 0;
+      let totalFat = 0;
+      let totalCalories = 0;
+      let matchedCount = 0;
+      for (const ingredient of meal.ingredients) {
+        if (!ingredient.name || !ingredient.quantity || !ingredient.unit) continue;
+        const result = calculateIngredientMacros(ingredient.name, parseFloat(ingredient.quantity), ingredient.unit);
+        if (result) {
+          totalProtein  += result.protein;
+          totalCarbs    += result.carbs;
+          totalFat      += result.fat;
+          totalCalories += result.calories;
+          matchedCount++;
+        }
+      }
+      if (matchedCount < 2) return { verified: false, reason: 'insufficient matches' };
+      return {
+        verified: true,
+        calculatedProtein:  Math.round(totalProtein),
+        calculatedCarbs:    Math.round(totalCarbs),
+        calculatedFat:      Math.round(totalFat),
+        calculatedCalories: Math.round(totalCalories),
+        matchedIngredients: matchedCount,
+      };
+    }
+
+    for (const day of ['A', 'B']) {
+      for (const mealType of ['breakfast', 'lunch', 'snack', 'dinner']) {
+        const meal = abPlan[day]?.[mealType];
+        if (!meal) continue;
+        const verification = verifyMealMacrosWithDatabase(meal);
+        meal.nutritionVerification = verification;
+        console.log(
+          `[nutritionVerification] meal: ${meal.name || mealType}` +
+          ` calculated protein: ${verification.calculatedProtein ?? 'n/a'}` +
+          ` stated protein: ${meal.protein ?? 'n/a'}` +
+          ` matched ingredients: ${verification.matchedIngredients ?? 0}`
+        );
+      }
     }
 
     // TODO V1.5: Validate estimated cost here and retry if >150% of budget
