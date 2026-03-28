@@ -116,7 +116,8 @@ const PACKAGE_SIZES = {
   "plain greek yogurt":            { size: 32,  unit: "oz",    package: "container", avgCost: 4.99 },
 
   // ── Produce — vegetables ─────────────────────────────────────────────────
-  "onion":                         { size: 1,   unit: "each",  package: "piece",   avgCost: 0.50 },
+  "onion":                         { size: 8,   unit: "oz",    package: "piece",   avgCost: 0.50 },  // 1 medium onion ≈ 8 oz ≈ 1 cup diced
+  "onions":                        { size: 8,   unit: "oz",    package: "piece",   avgCost: 0.50 },
   "yellow onion":                  { size: 1,   unit: "each",  package: "piece",   avgCost: 0.40 },
   "red onion":                     { size: 1,   unit: "each",  package: "piece",   avgCost: 0.65 },
   "sweet onion":                   { size: 1,   unit: "each",  package: "piece",   avgCost: 0.65 },
@@ -151,13 +152,16 @@ const PACKAGE_SIZES = {
   "carrot":                        { size: 16,  unit: "oz",    package: "bag",     avgCost: 1.29 },
   "carrots":                       { size: 16,  unit: "oz",    package: "bag",     avgCost: 1.29 },
   "baby carrots":                  { size: 16,  unit: "oz",    package: "bag",     avgCost: 1.29 },
+  "shredded carrots":              { size: 10,  unit: "oz",    package: "bag",     avgCost: 1.99 },
   "jalapeno":                      { size: 1,   unit: "each",  package: "piece",   avgCost: 0.15 },
-  "cabbage":                       { size: 1,   unit: "head",  package: "head",    avgCost: 2.18 },
-  "green cabbage":                 { size: 1,   unit: "head",  package: "head",    avgCost: 2.18 },
+  "cabbage":                       { size: 32,  unit: "oz",    package: "head",    avgCost: 2.18 },  // 1 head ≈ 2 lbs ≈ 8 cups shredded
+  "green cabbage":                 { size: 32,  unit: "oz",    package: "head",    avgCost: 2.18 },
+  "shredded cabbage":              { size: 16,  unit: "oz",    package: "bag",     avgCost: 2.19 },
   "bok choy":                      { size: 1,   unit: "each",  package: "head",    avgCost: 1.99 },
   "potato":                        { size: 1,   unit: "each",  package: "piece",   avgCost: 0.59 },
   "russet potato":                 { size: 1,   unit: "each",  package: "piece",   avgCost: 0.59 },
   "russet potatoes":               { size: 80,  unit: "oz",    package: "bag",     avgCost: 1.99 },
+  "potatoes":                      { size: 80,  unit: "oz",    package: "bag",     avgCost: 1.99 },  // 5 lb bag
   "sweet potato":                  { size: 1,   unit: "each",  package: "piece",   avgCost: 1.49 },
   "sweet potatoes":                { size: 1,   unit: "each",  package: "piece",   avgCost: 1.49 },
   "garlic":                        { size: 1,   unit: "head",  package: "head",    avgCost: 0.59 },
@@ -217,10 +221,14 @@ const PACKAGE_SIZES = {
   "egg noodles":                   { size: 16,  unit: "oz",    package: "bag",     avgCost: 1.59 },
   "rice noodle":                   { size: 8,   unit: "oz",    package: "bag",     avgCost: 2.50 },
   "rice noodles":                  { size: 8,   unit: "oz",    package: "bag",     avgCost: 2.50 },
+  "rice paper":                    { size: 50,  unit: "count", package: "pack",    avgCost: 3.49 },
+  "rice paper wrappers":           { size: 50,  unit: "count", package: "pack",    avgCost: 3.49 },
+  "spring roll wrappers":          { size: 50,  unit: "count", package: "pack",    avgCost: 3.49 },
   "quinoa":                        { size: 16,  unit: "oz",    package: "bag",     avgCost: 5.99 },
   "oats":                          { size: 42,  unit: "oz",    package: "container", avgCost: 4.49 },
   "oatmeal":                       { size: 42,  unit: "oz",    package: "container", avgCost: 4.49 },
   "rolled oats":                   { size: 42,  unit: "oz",    package: "container", avgCost: 4.49 },
+  "quick oats":                    { size: 42,  unit: "oz",    package: "container", avgCost: 4.49 },
   "pita":                          { size: 12,  unit: "oz",    package: "pack",    avgCost: 3.49 },
   "panko":                         { size: 8,   unit: "oz",    package: "canister", avgCost: 2.99 },
   "panko breadcrumbs":             { size: 8,   unit: "oz",    package: "canister", avgCost: 2.99 },
@@ -332,6 +340,8 @@ const PANTRY_ITEMS = new Set([
   "honey",
   // Cooking sprays
   "cooking spray", "olive oil spray", "nonstick spray",
+  // Water
+  "water",
   // Small citrus additions
   "lemon juice", "lime juice",
   // Packet condiments
@@ -439,6 +449,11 @@ export function estimateItem(name, qty, unit) {
 
     let pkgCount;
 
+    // Volume-to-count conversions for produce items sold individually:
+    // Prefer oz-based DB entries for volume-measured produce (onion=8oz, cabbage=32oz)
+    // so that "1 cup diced onion" → 8oz needed / 8oz per piece = 1 onion (not Math.ceil(1/1)=1 count).
+    // Items still using count (yellow/red onion, potato, garlic) are typically
+    // specified by the AI as "2 each" or "3 medium" — count math stays correct there.
     if (COUNT_UNITS.has(pkgUnit) || pkgUnit === "each") {
       pkgCount = Math.ceil(qty / pkg.size);
     } else {
