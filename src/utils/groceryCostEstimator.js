@@ -275,7 +275,10 @@ const PACKAGE_SIZES = {
   "broth":                         { size: 32,  unit: "oz",    package: "carton",  avgCost: 1.59 },
   "peanut butter":                 { size: 16,  unit: "oz",    package: "jar",     avgCost: 3.99 },
   "almond butter":                 { size: 12,  unit: "oz",    package: "jar",     avgCost: 8.99 },
+  "peanuts":                       { size: 16,  unit: "oz",    package: "bag",     avgCost: 3.99 },
+  "dry roasted peanuts":           { size: 16,  unit: "oz",    package: "bag",     avgCost: 3.99 },
   "salsa":                         { size: 16,  unit: "oz",    package: "jar",     avgCost: 3.49 },
+  "sauerkraut":                    { size: 16,  unit: "oz",    package: "jar",     avgCost: 2.99 },
 
   // ── Oils & condiments ────────────────────────────────────────────────────
   "olive oil":                     { size: 16,  unit: "oz",    package: "bottle",  avgCost: 6.49 },
@@ -303,6 +306,8 @@ const PACKAGE_SIZES = {
   "ketchup":                       { size: 20,  unit: "oz",    package: "bottle",  avgCost: 2.99 },
   "tahini":                        { size: 16,  unit: "oz",    package: "jar",     avgCost: 6.99 },
   "maple syrup":                   { size: 12,  unit: "oz",    package: "bottle",  avgCost: 9.99 },
+  "quick grits":                   { size: 24,  unit: "oz",    package: "container", avgCost: 2.49 },
+  "instant grits":                 { size: 24,  unit: "oz",    package: "container", avgCost: 2.49 },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -398,6 +403,11 @@ function normalizeName(name) {
 // Strategy: exact → depluralised → key-in-name (longest) → name-in-key (shortest)
 // ─────────────────────────────────────────────────────────────────────────────
 function findPackage(rawName) {
+  // Check raw lowercased name first — preserves explicit "frozen X" entries before
+  // normalization strips the "frozen" prefix and hits the wrong (fresh) entry.
+  const raw = rawName.toLowerCase().trim();
+  if (PACKAGE_SIZES[raw]) return PACKAGE_SIZES[raw];
+
   const n = normalizeName(rawName);
   if (!n) return null;
 
@@ -445,7 +455,23 @@ export function estimateItem(name, qty, unit) {
     console.log(`  Database match: YES`);
 
     const pkgUnit = pkg.unit.toLowerCase();
-    const itemUnit = (unit || "").toLowerCase().trim();
+    let workUnit = (unit || "").toLowerCase().trim();
+    let workQty  = qty;
+
+    // Unit conversion: garlic cloves → heads (1 head garlic ≈ 10 cloves)
+    if (normalized === "garlic" && (workUnit === "clove" || workUnit === "cloves")) {
+      workQty  = Math.ceil(workQty / 10);
+      workUnit = "head";
+      console.log(`  Unit conversion: ${qty} cloves → ${workQty} heads`);
+    }
+
+    // Unit conversion: scallion/green onion stalks → bunches (1 bunch ≈ 6 stalks)
+    if ((normalized === "scallion" || normalized === "scallions") &&
+        (workUnit === "stalk" || workUnit === "stalks")) {
+      workQty  = Math.ceil(workQty / 6);
+      workUnit = "bunch";
+      console.log(`  Unit conversion: ${qty} stalks → ${workQty} bunches`);
+    }
 
     let pkgCount;
 
@@ -455,13 +481,19 @@ export function estimateItem(name, qty, unit) {
     // Items still using count (yellow/red onion, potato, garlic) are typically
     // specified by the AI as "2 each" or "3 medium" — count math stays correct there.
     if (COUNT_UNITS.has(pkgUnit) || pkgUnit === "each") {
-      pkgCount = Math.ceil(qty / pkg.size);
+      pkgCount = Math.ceil(workQty / pkg.size);
     } else {
-      // Special conversion for frozen vegetables (denser than fresh):
-      // 1 cup frozen veg ≈ 5 oz, not 8 oz like fresh/liquid volumes.
-      const isFrozenCups = (itemUnit === "cup" || itemUnit === "cups") &&
-                           name.toLowerCase().includes("frozen");
-      const neededOz = isFrozenCups ? qty * 5 : (toOz(qty, itemUnit) ?? qty);
+      // Special density conversions for cup-measured items:
+      // 1 cup dry rice ≈ 6 oz (denser than water's 8 oz/cup)
+      // 1 cup frozen veg ≈ 5 oz (denser than fresh)
+      const isDryRiceCups = (workUnit === "cup" || workUnit === "cups") &&
+                            normalized.includes("rice") &&
+                            !normalized.includes("cooked") && !normalized.includes("instant");
+      const isFrozenCups  = (workUnit === "cup" || workUnit === "cups") &&
+                            name.toLowerCase().includes("frozen");
+      const neededOz = isDryRiceCups ? workQty * 6
+                     : isFrozenCups  ? workQty * 5
+                     : (toOz(workQty, workUnit) ?? workQty);
       const pkgOz    = toOz(pkg.size, pkgUnit) ?? pkg.size;
       pkgCount = Math.max(1, Math.ceil(neededOz / pkgOz));
     }
@@ -472,7 +504,10 @@ export function estimateItem(name, qty, unit) {
       : `${pkgCount} ${pkg.package}${pkg.package.endsWith("s") || pkg.package === "bunch" ? "" : "s"}`;
 
     console.log(`  Package size: ${pkg.size} ${pkg.unit} @ $${pkg.avgCost}`);
-    console.log(`  Packages needed: Math.ceil(${qty} ${unit || ""} → oz / ${pkg.size} ${pkg.unit}) = ${pkgCount}${name.toLowerCase().includes("frozen") && (unit||"").toLowerCase().startsWith("cup") ? " [frozen density: 5 oz/cup]" : ""}`);
+    const _densityNote = name.toLowerCase().includes("frozen") && workUnit.startsWith("cup") ? " [frozen density: 5 oz/cup]"
+                       : normalized.includes("rice") && workUnit.startsWith("cup")           ? " [dry rice: 6 oz/cup]"
+                       : "";
+    console.log(`  Packages needed: Math.ceil(${workQty} ${workUnit} → oz / ${pkg.size} ${pkg.unit}) = ${pkgCount}${_densityNote}`);
     console.log(`  Item cost: ${pkgCount} × $${pkg.avgCost} = $${cost.toFixed(2)}`);
 
     return { pkgCount, pkgLabel, cost, isPantry: false };
