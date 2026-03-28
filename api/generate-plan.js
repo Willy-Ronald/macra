@@ -474,123 +474,152 @@ export default async function handler(req, res) {
 
 🚨 ABSOLUTE PRIORITY: BUDGET COMPLIANCE 🚨
 
-You MUST generate a plan that costs $50-60 at Kroger prices. Plans that exceed $65 are REJECTED.
+You MUST generate a plan that costs $50-65 at Kroger prices. Plans that exceed $70 are REJECTED.
 
-STEP 1: CALCULATE YOUR WEEKLY PROTEIN BUDGET
-Before selecting ANY ingredients, calculate your maximum affordable protein:
-- Weekly budget: $${weeklyBudget}
-- Non-protein essentials: $15 (rice, beans, oil, vegetables, pantry)
-- Protein budget remaining: $${weeklyBudget - 15}
+CORE PRINCIPLE:
+Your job is to hit the user's macro targets (${macros.proteinG}g protein, ${macros.carbG}g carbs, ${macros.fatG}g fat per day) while staying within the weekly budget of $${weeklyBudget}.
 
-STEP 2: MANDATORY PROTEIN CAPS (ABSOLUTE MAXIMUM)
-These are HARD LIMITS. Exceeding these by even 1 oz means FAILURE:
+You have COMPLETE FREEDOM to use as much chicken, eggs, tofu, beans, rice, or any other affordable ingredient as needed to hit macros — AS LONG AS the total estimated grocery cost stays under $65.
 
-MEAT (total across ALL meats combined):
-- Maximum 40 oz total meat per week (chicken + turkey + beef + pork COMBINED)
-- NO MORE than TWO types of meat (e.g., chicken + ground turkey)
-- Per-meal limits:
-  * Breakfast: 2 eggs OR 0 oz meat
-  * Lunch: 4 oz meat maximum
-  * Dinner: 6 oz meat maximum
-  * Snacks: ZERO meat protein
+There are NO portion limits. Use 100 eggs if that's what fits the budget and hits macros. Use 10 lbs of chicken if it works. The ONLY constraint is total cost.
 
-EGGS:
-- Maximum 12 eggs (1 dozen) per week total
+---
 
-SEAFOOD (if used instead of meat):
-- Canned tuna: Maximum 3 cans (15 oz) per week
-- Fresh fish: FORBIDDEN in strict budget
+STEP 1: KNOW YOUR PRICES (Kroger 2026)
 
-PLANT PROTEINS (unlimited, encouraged):
-- Tofu: Unlimited (cheap: $1.99/14oz)
-- Canned beans: Unlimited (cheap: $0.89/15oz)
-- Lentils: Unlimited (cheap)
+PROTEINS (use as much as needed):
+- Eggs: $1.79/dozen (12 count) — CHEAPEST protein at $0.025/g
+- Chicken thighs: $2.49/lb (16 oz) — $0.027/g protein
+- Ground turkey: $4.99/lb (16 oz) — $0.054/g protein
+- Firm tofu: $1.99/14 oz — $0.034/g protein
+- Canned tuna: $1.00/5oz can — $0.038/g protein
+- Canned beans (black/white/kidney/chickpeas): $0.89/15oz can — $0.014/g protein
+
+GRAINS & CARBS:
+- White rice: $1.79/32 oz (2 lb bag)
+- Pasta: $1.00-1.59/16 oz box
+- White bread: $2.99/24 oz loaf
+- Wheat bread: $2.99/20 oz loaf
+- Potatoes: $1.99/80 oz (5 lb bag)
 
 OILS & FATS:
-- Olive oil: Maximum 6 tbsp per week total
-- Vegetable oil: Maximum 15 tbsp per week total
-- Butter: Maximum 4 tbsp per week total
+- Vegetable oil: $3.99/48 oz
+- Olive oil: $6.49/16 oz (expensive — use sparingly)
+- Butter: $3.79/16 oz
 
-STEP 3: FORBIDDEN ITEMS (NEVER USE IN STRICT BUDGET)
-These items are TOO EXPENSIVE for $50-60 budgets:
-❌ Jasmine rice (use white rice only)
-❌ Basmati rice (use white rice only)
-❌ Tahini
-❌ Specialty sauces (BBQ sauce, hoisin, teriyaki — use soy sauce only)
-❌ Dijon mustard
-❌ Greek yogurt (use regular plain yogurt if needed)
+VEGETABLES (frozen preferred):
+- Frozen mixed vegetables: $1.99/12 oz bag
+- Frozen broccoli: $1.49/12 oz bag
+- Frozen green beans: $0.88/12 oz bag
+- Fresh onions: $0.50/8 oz (1 medium)
+- Potatoes: $1.99/5 lb bag
+
+PANTRY (free or cheap):
+- Soy sauce: $2.49/15 oz
+- Garlic powder, onion powder, cumin, paprika, salt, pepper: pantry items (free)
+
+---
+
+STEP 2: FORBIDDEN ITEMS (TOO EXPENSIVE — NEVER USE)
+
+❌ Jasmine rice ($7.49/5lb) — use white rice instead
+❌ Basmati rice ($7.49/5lb) — use white rice instead
+❌ Quinoa, farro, bulgur — use white rice instead
+❌ Tahini ($6.99/16oz)
+❌ Greek yogurt ($4.99/32oz) — regular yogurt ok if needed
+❌ BBQ sauce ($3.79) — use soy sauce instead
+❌ Specialty sauces (hoisin, teriyaki, fish sauce) — use soy sauce
+❌ Dijon mustard ($3.49)
 ❌ Fresh salmon, fresh shrimp, fresh fish
-❌ Specialty cheeses (use cheddar only if cheese needed)
-❌ Nuts as ingredients (peanuts, almonds, cashews)
-❌ Fresh herbs (use dried only)
-❌ Specialty grains (quinoa, farro, bulgur)
-❌ Wide rice noodles (use regular pasta or rice)
+❌ Specialty cheeses — basic cheddar only if needed ($2.33/8oz)
+❌ Nuts as ingredients (peanuts, almonds, cashews, walnuts)
+❌ Fresh herbs (basil, cilantro, parsley) — use dried only
+❌ Wide rice noodles ($2.50/8oz) — use pasta or rice
 
-STEP 4: REQUIRED STAPLES (KEEP IT SIMPLE)
-Use ONLY these affordable staples:
-✓ White rice ($1.79/32oz)
-✓ Pasta ($1.00–1.59/16oz)
-✓ White bread or wheat bread ($2.99/loaf)
-✓ Canned beans (black, white, kidney: $0.89/15oz)
-✓ Eggs ($1.79/dozen)
-✓ Chicken thighs ($2.49/lb — cheapest meat)
-✓ Ground turkey ($4.99/lb)
-✓ Firm tofu ($1.99/14oz)
-✓ Canned tuna ($1.00/5oz can)
-✓ Frozen vegetables ($1.99/12oz bag)
-✓ Potatoes ($1.99/5lb bag)
-✓ Onions, garlic (fresh ok, cheap)
-✓ Vegetable oil ($3.99/48oz)
-✓ Soy sauce ($2.49/15oz)
+---
 
-STEP 5: VERIFICATION (MANDATORY BEFORE RETURNING PLAN)
-Before returning your meal plan, YOU MUST calculate and verify:
+STEP 3: STRATEGY FOR $50-65 BUDGETS
 
-A) Total weekly meat:
-   [List each meat with oz amount]
-   TOTAL MEAT: ___ oz (MUST be ≤40 oz)
+PROTEIN HIERARCHY (cheapest first):
+1. Canned beans ($0.014/g) — use HEAVILY
+2. Eggs ($0.025/g) — use 3-5 dozen if needed
+3. Chicken thighs ($0.027/g) — primary meat
+4. Firm tofu ($0.034/g) — cheap bulk protein
+5. Canned tuna ($0.038/g) — occasionally
+6. Ground turkey ($0.054/g) — use sparingly, expensive
 
-B) Total weekly eggs:
-   TOTAL EGGS: ___ count (MUST be ≤12)
+MACRO STRATEGY:
+- Load up on beans for cheap protein + fiber + carbs
+- Use eggs liberally (dozens are cheap)
+- Chicken thighs as primary meat (cheapest per gram)
+- White rice for cheap carbs (not jasmine/basmati)
+- Vegetable oil for fats (cheapest option)
+- Frozen vegetables for volume + nutrients
 
-C) Total weekly oils:
-   Olive oil: ___ tbsp (MUST be ≤6)
-   Vegetable oil: ___ tbsp (MUST be ≤15)
-   Butter: ___ tbsp (MUST be ≤4)
+CUISINE RESTRICTIONS:
+- Maximum 2-3 cuisine styles per week (reduces specialty ingredients)
+- Keep meals SIMPLE (complexity = more ingredients = higher cost)
+- Repeat core ingredients across multiple meals
 
-D) Forbidden items check:
-   FORBIDDEN ITEMS USED: NONE (if any listed, RESTART PLAN)
+---
 
-E) Estimated grocery cost:
-   Meat: $___
-   Eggs: $___
-   Grains/beans: $___
-   Vegetables: $___
-   Oils/pantry: $___
-   ESTIMATED TOTAL: $___ (MUST be $50-65)
+STEP 4: VERIFICATION (MANDATORY BEFORE RETURNING PLAN)
 
-If ANY verification step fails, simplify the plan further:
-- Reduce meat portions
-- Replace expensive items with cheaper alternatives
-- Increase beans/tofu to compensate
-- Eliminate specialty items
+Before returning your meal plan, estimate the total grocery cost:
 
-STEP 6: CUISINE & VARIETY RESTRICTIONS
-- Maximum 3 different cuisine styles per week (reduce variety = reduce specialty ingredients)
-- Meals should be SIMPLE (complexity level 1–2 regardless of user's pickiness setting)
-- Reuse core ingredients across multiple meals
-- Example: If you use chicken thighs on Day A, use chicken thighs on Day B too
+A) Protein costs:
+   Eggs: ___ count × $1.79/dozen = $___
+   Chicken thighs: ___ oz × $2.49/16oz = $___
+   Ground turkey: ___ oz × $4.99/16oz = $___
+   Tofu: ___ oz × $1.99/14oz = $___
+   Tuna: ___ cans × $1.00/can = $___
+   Beans: ___ cans × $0.89/can = $___
+   PROTEIN SUBTOTAL: $___
 
-STEP 7: FINAL REMINDER
-A $50-60 weekly budget for high-protein targets is TIGHT but ACHIEVABLE if you:
-- Prioritize beans, tofu, and eggs over meat
-- Use chicken thighs (cheapest meat) as primary meat
-- Avoid ALL specialty items
-- Keep meals simple and ingredient-efficient
-- Verify math before submitting
+B) Grains/carbs costs:
+   White rice: ___ cups ÷ 16 cups/bag × $1.79 = $___
+   Pasta: ___ boxes × $1.00 = $___
+   Bread: ___ loaves × $2.99 = $___
+   GRAINS SUBTOTAL: $___
 
-If you cannot generate a plan under $65 estimated cost after verification, respond with:
-"Unable to generate strict budget plan. Recommend increasing budget to $75-85 for this protein target."`;
+C) Oils/fats:
+   Vegetable oil: ___ tbsp (1 bottle = $3.99)
+   Olive oil: ___ tbsp (1 bottle = $6.49)
+   Butter: ___ tbsp (1 stick = $3.79)
+   OILS SUBTOTAL: $___
+
+D) Vegetables:
+   Frozen bags: ___ bags × $1.99 = $___
+   Fresh items: $___
+   VEGETABLES SUBTOTAL: $___
+
+E) Other:
+   Soy sauce, pantry: ~$2.50
+
+ESTIMATED TOTAL COST: $___
+
+IF TOTAL > $65:
+- Replace ground turkey with chicken thighs
+- Replace olive oil with vegetable oil
+- Replace fresh vegetables with frozen
+- Reduce meat, increase beans/tofu
+- Simplify meals further
+
+IF TOTAL < $45:
+- You have room to add variety
+- Consider adding more vegetables
+- Consider adding fruit (bananas $0.19 each)
+
+TARGET RANGE: $50-65
+
+---
+
+STEP 5: FINAL OUTPUT
+
+Return the meal plan JSON with simple, budget-optimized meals.
+
+If you genuinely cannot hit the macro targets within $65 budget, respond with:
+"Unable to generate strict budget plan. The protein target of ${macros.proteinG}g/day requires approximately $${Math.ceil((macros.proteinG * 7 * 0.025) + 20)}/week minimum. Recommend increasing budget to $75-85."`;
       } else if (weeklyBudget < 90) {
         budgetLine = `MODERATE BUDGET — $${weeklyBudget}/week.
 Total grocery cost for the week (4A + 3B) should stay at or under $${weeklyBudget}.
