@@ -621,20 +621,51 @@ Return the meal plan JSON with simple, budget-optimized meals.
 If you genuinely cannot hit the macro targets within $65 budget, respond with:
 "Unable to generate strict budget plan. The protein target of ${macros.proteinG}g/day requires approximately $${Math.ceil((macros.proteinG * 7 * 0.025) + 20)}/week minimum. Recommend increasing budget to $75-85."`;
       } else if (weeklyBudget < 90) {
-        budgetLine = `MODERATE BUDGET — $${weeklyBudget}/week.
-Total grocery cost for the week (4A + 3B) should stay at or under $${weeklyBudget}.
+        budgetLine = `=== MODERATE BUDGET MODE ($60-$90) ===
+Your job is to hit the user's macro targets (${macros.proteinG}g protein, ${macros.carbG}g carbs, ${macros.fatG}g fat per day) while keeping total weekly grocery cost at or under $${weeklyBudget}.
 
-PREFERRED proteins: chicken breast, ground turkey, eggs, ground beef, canned beans.
-OCCASIONAL (max 1 meal/week): salmon or pork chops.
-AVOID: steak, shrimp, lamb, any cut over $8/lb.
+STEP 1 — PROTEIN SOURCES (choose from this list):
+  Budget proteins (use most meals): eggs ($2.50/doz), canned tuna ($1.50/can), canned beans ($1.00/can), chicken thighs ($1.50/lb), ground turkey ($3.50/lb)
+  Mid-range proteins (1-2 meals/week max): chicken breast ($2.50/lb), ground beef 80/20 ($4.00/lb), pork chops ($3.00/lb)
+  Occasional proteins (1 meal/week max): salmon ($6.00/lb), shrimp ($7.00/lb)
+  AVOID: steak, lamb, anything over $8/lb
 
-PRODUCE: mix fresh and frozen; seasonal fruit (apple, banana, orange).
-Limit avocado to 1 meal max. Prefer frozen berries over fresh.
+STEP 2 — PRODUCE & CARBS:
+  Produce: mix fresh staples (onion, garlic, cabbage, carrot) with frozen veg (broccoli $1.49/bag, green beans $0.88/bag, mixed veg $1.29/bag). Seasonal fruit only (apple, banana, orange). Limit avocado to 1 meal max. Frozen berries preferred over fresh.
+  Carbs: rice, pasta, potatoes, oats as primary starches. Bread/tortillas allowed.
 
-CARBS: rice, pasta, potatoes as primary starches.`;
+STEP 3 — COST VERIFICATION:
+Before returning the plan, estimate total grocery cost:
+  • List each unique ingredient with estimated package cost
+  • Sum all costs
+  • Confirm total ≤ $${weeklyBudget}
+  • If over budget, swap expensive proteins or produce for cheaper alternatives
+
+STEP 4 — OUTPUT
+Return the meal plan JSON only after confirming budget compliance.`;
       } else {
-        budgetLine = `BUDGET — $${weeklyBudget}/week. Total grocery cost for the week should stay near $${weeklyBudget}.
-All proteins allowed. Vary protein sources. Fresh produce encouraged. Still avoid unnecessary waste — don't use exotic specialty items that spike cost without nutrition benefit.`;
+        budgetLine = `=== FLEXIBLE BUDGET MODE ($90+) ===
+Your job is to hit the user's macro targets (${macros.proteinG}g protein, ${macros.carbG}g carbs, ${macros.fatG}g fat per day) while keeping total weekly grocery cost near $${weeklyBudget}.
+
+STEP 1 — PROTEIN SOURCES:
+  All proteins allowed. Vary sources across the week for nutritional diversity.
+  Suggested: chicken breast, salmon, ground beef, shrimp, eggs, Greek yogurt, cottage cheese.
+  Premium options OK (steak, lamb, sushi-grade fish) but use sparingly — 1 meal max per week.
+
+STEP 2 — PRODUCE & CARBS:
+  Fresh produce encouraged. Variety of vegetables and fruits.
+  Still avoid unnecessary waste — no exotic specialty items that spike cost without nutritional benefit.
+  Carbs: rice, pasta, potatoes, quinoa, whole grains all allowed.
+
+STEP 3 — COST VERIFICATION:
+Before returning the plan, estimate total grocery cost:
+  • List each unique ingredient with estimated package cost
+  • Sum all costs
+  • Confirm total is near $${weeklyBudget} (within 15%)
+  • If significantly over, swap the priciest items for comparable alternatives
+
+STEP 4 — OUTPUT
+Return the meal plan JSON only after confirming budget compliance.`;
       }
     }
 

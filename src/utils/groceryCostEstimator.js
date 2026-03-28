@@ -148,7 +148,7 @@ const PACKAGE_SIZES = {
   "cilantro":                      { size: 1,   unit: "bunch", package: "bunch",   avgCost: 0.99 },
   "mushroom":                      { size: 8,   unit: "oz",    package: "package", avgCost: 3.99 },
   "asparagus":                     { size: 1,   unit: "bunch", package: "bunch",   avgCost: 3.99 },
-  "green beans":                   { size: 12,  unit: "oz",    package: "bag",     avgCost: 2.99 },
+  "green beans":                   { size: 12,  unit: "oz",    package: "bag",     avgCost: 0.88 },  // default to frozen price
   "carrot":                        { size: 16,  unit: "oz",    package: "bag",     avgCost: 1.29 },
   "carrots":                       { size: 16,  unit: "oz",    package: "bag",     avgCost: 1.29 },
   "baby carrots":                  { size: 16,  unit: "oz",    package: "bag",     avgCost: 1.29 },
@@ -471,6 +471,13 @@ export function estimateItem(name, qty, unit) {
       workQty  = Math.ceil(workQty / 6);
       workUnit = "bunch";
       console.log(`  Unit conversion: ${qty} stalks → ${workQty} bunches`);
+    }
+
+    // Unit conversion: cilantro tbsp → bunches (1 bunch yields ~24 tbsp)
+    if (normalized === "cilantro" && (workUnit === "tbsp" || workUnit === "tablespoon" || workUnit === "tablespoons")) {
+      workQty  = Math.ceil(workQty / 24);
+      workUnit = "bunch";
+      console.log(`  Unit conversion: ${qty} tbsp cilantro → ${workQty} bunches`);
     }
 
     let pkgCount;
