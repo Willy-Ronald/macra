@@ -155,6 +155,7 @@ RULES:
 - equipment: comma-separated string, max 3 items
 - desc: max 8 words
 - Return ONLY raw JSON starting with { and ending with } — no markdown, no explanation
+- STRICT BUDGET ONLY (<$60/week): Before returning the plan, verify: (1) (Day A meat oz × 4) + (Day B meat oz × 3) ≤ 48 oz — if over, reduce portions; (2) (Day A olive oil tbsp × 4) + (Day B olive oil tbsp × 3) ≤ 8 tbsp — if over, switch to cooking spray; (3) estimated grocery cost ≤ 130% of stated budget.
 
 OUTPUT FORMAT (follow exactly — all fields required):
 {
@@ -472,7 +473,54 @@ export default async function handler(req, res) {
         budgetLine = `🚨 STRICT BUDGET — $${weeklyBudget}/WEEK 🚨
 This is a hard constraint. The combined grocery list for BOTH days MUST cost under $${weeklyBudget} for the full week (4 Day A + 3 Day B servings).
 
-REQUIRED cheap proteins (use these, no exceptions):
+━━━ CRITICAL BUDGET CONSTRAINTS — READ BEFORE GENERATING ━━━
+
+PROTEIN WEEKLY MAXIMUMS (Day A×4 + Day B×3 combined):
+▸ Ground turkey + chicken thighs + ground beef TOTAL: 48 oz maximum across the entire week
+  Example: If Day A has 6 oz chicken thighs at dinner, that's 6×4 = 24 oz/week — leaving only 24 oz for Day B meat.
+▸ Eggs: 18–21 maximum for the week (Day A + Day B combined)
+▸ Canned tuna: 2 cans maximum for the week
+▸ Tofu/beans: unlimited — prioritize these for cost efficiency
+
+PER-MEAL PROTEIN HARD CAPS:
+▸ Breakfast: 2 eggs OR 3 oz other protein — MAXIMUM, no exceptions
+▸ Lunch: 4 oz protein — MAXIMUM
+▸ Dinner: 6 oz protein — MAXIMUM
+▸ Snack: ZERO meat/protein — use fruit, rice cakes, oats, or yogurt ONLY
+
+OILS & FATS WEEKLY MAXIMUM:
+▸ Olive oil: 8 tbsp maximum for the entire week (Day A×4 + Day B×3)
+▸ Vegetable oil: 12 tbsp maximum for the week
+▸ Butter: 4 tbsp maximum for the week
+▸ Use cooking spray when possible
+
+OTHER WEEKLY CAPS:
+▸ Cheese (all types combined): 8 oz maximum for the week
+▸ Specialty grains: choose ONE type only (basmati OR jasmine OR brown rice — not multiple)
+▸ Bread: ONE type only (white OR wheat — not both)
+
+REQUIRED MATH CHECK — DO THIS BEFORE WRITING INGREDIENTS:
+  Step 1: (Day A meat oz × 4) + (Day B meat oz × 3) ≤ 48 oz? If not, reduce portions.
+  Step 2: (Day A olive oil tbsp × 4) + (Day B olive oil tbsp × 3) ≤ 8 tbsp? If not, switch to cooking spray.
+
+━━━ STRICT BUDGET MEAL STRUCTURE EXAMPLE ━━━
+Day A (eaten 4×):
+  Breakfast: 2 scrambled eggs (0 oz meat)
+  Lunch: 4 oz ground turkey taco bowl with black beans
+  Dinner: 6 oz chicken thighs with rice and frozen vegetables
+  Snack: banana + 1 tbsp peanut butter
+  Day A meat total: 10 oz × 4 = 40 oz
+
+Day B (eaten 3×):
+  Breakfast: oatmeal with banana (0 oz meat)
+  Lunch: 1 can tuna (5 oz) with toast
+  Dinner: tofu stir-fry with vegetables and rice
+  Snack: apple slices
+  Day B meat total: 5 oz × 3 = 15 oz
+
+Weekly meat total: 40 + 15 = 55 oz — slightly over, so reduce Day A dinner to 4 oz chicken → 16 oz × 4 = 16 oz, total = 16+15 = 31 oz ✓
+
+━━━ REQUIRED PROTEINS (no exceptions): ━━━
   ✓ Eggs ($0.36 ea)  ✓ Chicken thighs ($3.99/lb)  ✓ Ground turkey ($4.49/lb)
   ✓ Canned beans ($1.29/can)  ✓ Canned tuna ($1.49/can)  ✓ Tofu ($2.99/block)
 
@@ -485,17 +533,7 @@ ABSOLUTELY FORBIDDEN at this budget:
   ✗ Salmon / steak / shrimp / any expensive seafood
   ✗ Fresh berries  ✗ Avocado  ✗ Specialty cheeses  ✗ Organic items
 
-If macro targets cannot be hit with these ingredients, get as close as possible — budget is the top priority.
-
-STRICT BUDGET PORTION CAPS — MANDATORY at <$60/week:
-- Breakfast protein: maximum 2–3 eggs OR 3–4 oz of any other protein source
-- Lunch protein: maximum 4–6 oz protein
-- Dinner protein: maximum 6–8 oz protein
-- Snacks: prioritize carb/fat sources (fruit, rice cakes, nuts, oats, yogurt). Do NOT use protein-heavy snacks.
-- Weekly protein cap: ground turkey + chicken thighs + ground beef combined must not exceed 56 oz (3.5 lbs) across Day A (×4 servings) + Day B (×3 servings)
-- Prioritize eggs (18–24 per week maximum) and canned beans as the most cost-efficient protein sources
-- Canned tuna: use sparingly — 2–3 cans maximum across the full week
-- Day A + Day B combined expensive protein (turkey, chicken, beef) must not exceed 56 oz total for the week`;
+Budget is the top priority. If macro targets cannot be hit with these ingredients, get as close as possible.`;
       } else if (weeklyBudget < 90) {
         budgetLine = `MODERATE BUDGET — $${weeklyBudget}/week.
 Total grocery cost for the week (4A + 3B) should stay at or under $${weeklyBudget}.
