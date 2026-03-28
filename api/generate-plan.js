@@ -18,9 +18,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { randomBytes } from "crypto";
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const { calculateIngredientMacros, getNutrition } = require('../src/utils/nutritionDatabase');
+import { calculateIngredientMacros, getNutrition } from '../src/utils/nutritionDatabase.js';
 
 // ── Protein pools by budget tier ────────────────────────────────
 const PROTEIN_POOLS = {
