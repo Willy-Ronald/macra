@@ -1078,41 +1078,46 @@ PERMANENTLY PROHIBITED — never generate under any circumstances: sake, galanga
       parts.push(ingredientConstraints);
 
       if (mealTemplates) {
-        const dayLabels = { dayA: 'A', dayB: 'B' };
-        const mealOrder = ['breakfast', 'lunch', 'snack', 'dinner'];
-        const templateLines = ['MEAL TEMPLATES — MANDATORY: Use exactly these ingredients at the specified quantities for each meal slot. Write creative dish names, descriptions, and instructions around these fixed ingredients.'];
-        for (const [dayKey, dayLabel] of Object.entries(dayLabels)) {
-          const day = mealTemplates[dayKey];
-          if (!day) continue;
-          for (const mealType of mealOrder) {
-            const meal = day.meals ? day.meals.find(m => m.mealType === mealType) : null;
-            if (!meal) continue;
-            templateLines.push(`\nDAY ${dayLabel} ${mealType.toUpperCase()}:`);
-            if (meal.protein) {
-              templateLines.push(`Protein: ${meal.protein.quantity} ${meal.protein.unit} ${meal.protein.name}`);
-            }
-            if (meal.carb) {
-              templateLines.push(`Carbs: ${meal.carb.quantity} ${meal.carb.unit} ${meal.carb.name}`);
-            }
-            if (meal.fat) {
-              templateLines.push(`Fat: ${meal.fat.quantity} ${meal.fat.unit} ${meal.fat.name}`);
-            }
-            if (meal.vegetables && meal.vegetables.length > 0) {
-              for (const veg of meal.vegetables) {
-                templateLines.push(`Vegetable: ${veg.quantity} ${veg.unit} ${veg.name}`);
+        console.error('[templateSpec DEBUG] mealTemplates keys:', Object.keys(mealTemplates), 'dayA keys:', Object.keys(mealTemplates.dayA || {}));
+        try {
+          const dayLabels = { dayA: 'A', dayB: 'B' };
+          const mealOrder = ['breakfast', 'lunch', 'snack', 'dinner'];
+          const templateLines = ['MEAL TEMPLATES — MANDATORY: Use exactly these ingredients at the specified quantities for each meal slot. Write creative dish names, descriptions, and instructions around these fixed ingredients.'];
+          for (const [dayKey, dayLabel] of Object.entries(dayLabels)) {
+            const day = mealTemplates[dayKey];
+            if (!day) continue;
+            for (const mealType of mealOrder) {
+              const meal = day.meals ? day.meals.find(m => m.mealType === mealType) : null;
+              if (!meal) continue;
+              templateLines.push(`\nDAY ${dayLabel} ${mealType.toUpperCase()}:`);
+              if (meal.protein) {
+                templateLines.push(`Protein: ${meal.protein.quantity} ${meal.protein.unit} ${meal.protein.name}`);
               }
+              if (meal.carb) {
+                templateLines.push(`Carbs: ${meal.carb.quantity} ${meal.carb.unit} ${meal.carb.name}`);
+              }
+              if (meal.fat) {
+                templateLines.push(`Fat: ${meal.fat.quantity} ${meal.fat.unit} ${meal.fat.name}`);
+              }
+              if (meal.vegetables && meal.vegetables.length > 0) {
+                for (const veg of meal.vegetables) {
+                  templateLines.push(`Vegetable: ${veg.quantity} ${veg.unit} ${veg.name}`);
+                }
+              }
+              if (meal.macros) {
+                templateLines.push(`Target macros: ${Math.round(meal.macros.calories)} cal, ${meal.macros.protein.toFixed(1)}g protein, ${meal.macros.carbs.toFixed(1)}g carbs, ${meal.macros.fat.toFixed(1)}g fat`);
+              }
+              templateLines.push(`Cuisine style: [Claude picks based on user preferences and variety]`);
             }
-            if (meal.macros) {
-              templateLines.push(`Target macros: ${Math.round(meal.macros.calories)} cal, ${meal.macros.protein.toFixed(1)}g protein, ${meal.macros.carbs.toFixed(1)}g carbs, ${meal.macros.fat.toFixed(1)}g fat`);
-            }
-            templateLines.push(`Cuisine style: [Claude picks based on user preferences and variety]`);
           }
+          if (budgetForPrompt != null && estimatedProteinCostForPrompt != null) {
+            templateLines.push(`\nWEEKLY GROCERY BUDGET: $${budgetForPrompt}\nEstimated protein cost: $${estimatedProteinCostForPrompt.toFixed(2)}. Remaining budget for all other ingredients: $${(budgetForPrompt - estimatedProteinCostForPrompt).toFixed(2)}. Keep all non-protein ingredients affordable and within this remaining budget. Use simple staple ingredients only — no premium items.`);
+          }
+          const templateSpec = templateLines.join('\n');
+          parts.push(templateSpec);
+        } catch (e) {
+          console.error('[templateSpec ERROR]', e.message, e.stack);
         }
-        if (budgetForPrompt != null && estimatedProteinCostForPrompt != null) {
-          templateLines.push(`\nWEEKLY GROCERY BUDGET: $${budgetForPrompt}\nEstimated protein cost: $${estimatedProteinCostForPrompt.toFixed(2)}. Remaining budget for all other ingredients: $${(budgetForPrompt - estimatedProteinCostForPrompt).toFixed(2)}. Keep all non-protein ingredients affordable and within this remaining budget. Use simple staple ingredients only — no premium items.`);
-        }
-        const templateSpec = templateLines.join('\n');
-        parts.push(templateSpec);
       } else if (proteinAssignments && proteinAssignments.length > 0) {
         const lines = proteinAssignments.map(item => {
           if (item.unit === 'each') {
@@ -1351,7 +1356,7 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
     }
 
     // TODO V1.5: Validate estimated cost here and retry if >150% of budget
-    return res.json({ abPlan, remaining, debug: { templateInjected: mealTemplates !== null, templateProjectedCost: mealTemplates?.weeklyProjectedCost, templateDayAProteins: mealTemplates?.dayA?.meals?.map(m => m.mealType + ':' + m.protein?.name) ?? null } });
+    return res.json({ abPlan, remaining, debug: { templateInjected: mealTemplates !== null, templateProjectedCost: mealTemplates?.weeklyProjectedCost, templateDayAProteins: mealTemplates?.dayA?.breakfast?.protein?.name || 'STRUCTURE_MISMATCH', dayAKeys: mealTemplates?.dayA ? Object.keys(mealTemplates.dayA) : null } });
   } catch (err) {
     console.error("Generate plan error:", err);
     return res.status(500).json({ error: err.message || "Failed to generate meal plan" });
