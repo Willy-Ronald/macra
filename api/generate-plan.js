@@ -1162,7 +1162,7 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
 
     const budgetTier = weeklyBudget < 60 ? 'strict' : weeklyBudget < 90 ? 'moderate' : weeklyBudget < 150 ? 'flexible' : 'premium';
     const { assignments: proteinAssignments, estimatedProteinCost } = selectProteinsForPlan(budgetTier, macros, weeklyBudget);
-    const mealTemplates = generateMealTemplate({ weeklyBudget, macros, budgetTier, dietaryRestrictions: diet, pickinessLevel: profile.pickiness || 3, days: 2, mealsPerDay: 4 });
+    const mealTemplates = generateMealTemplate({ weeklyBudget, macros, budgetTier, dietaryRestrictions: dietList, pickinessLevel: pickinessLevel, days: 2, mealsPerDay: 4 });
     console.log('[templateGenerator] weeklyProjectedCost:', mealTemplates.weeklyProjectedCost, 'budget:', weeklyBudget, 'ratio:', (mealTemplates.weeklyProjectedCost / weeklyBudget * 100).toFixed(1) + '%');
     console.log('[templateGenerator] dayA totals:', mealTemplates.verifiedTotals.dayA);
     console.log('[templateGenerator] dayB totals:', mealTemplates.verifiedTotals.dayB);
