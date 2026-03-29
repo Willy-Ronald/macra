@@ -1111,7 +1111,11 @@ PERMANENTLY PROHIBITED — never generate under any circumstances: sake, galanga
         if (budgetForPrompt != null && estimatedProteinCostForPrompt != null) {
           templateLines.push(`\nWEEKLY GROCERY BUDGET: $${budgetForPrompt}\nEstimated protein cost: $${estimatedProteinCostForPrompt.toFixed(2)}. Remaining budget for all other ingredients: $${(budgetForPrompt - estimatedProteinCostForPrompt).toFixed(2)}. Keep all non-protein ingredients affordable and within this remaining budget. Use simple staple ingredients only — no premium items.`);
         }
-        parts.push(templateLines.join('\n'));
+        const templateSpec = templateLines.join('\n');
+        parts.push(templateSpec);
+        console.log('[buildDynamicContent] templateSpec injected, length:', templateSpec.length);
+      } else if (mealTemplates === null || mealTemplates === undefined) {
+        console.log('[buildDynamicContent] templateSpec injected, length:', null);
       } else if (proteinAssignments && proteinAssignments.length > 0) {
         const lines = proteinAssignments.map(item => {
           if (item.unit === 'each') {
@@ -1154,7 +1158,9 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
       parts.push(complexityLine);
       parts.push(`Cuisine per slot:\n${cuisineAssignmentLines}`);
 
-      return parts.join("\n\n");
+      const content = parts.join("\n\n");
+      console.log('[buildDynamicContent] prompt preview (first 500 chars):', content.substring(0, 500));
+      return content;
     };
 
     // ── First Claude call ────────────────────────────────────────
