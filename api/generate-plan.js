@@ -1157,7 +1157,7 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
 
       const content = parts.join("\n\n");
       const templateSpec = parts.find(p => p.startsWith('MEAL TEMPLATES'));
-      console.log(JSON.stringify({ tag: '[buildDynamicContent]', templateSpecLength: templateSpec ? templateSpec.length : null, templateSpecInjected: !!templateSpec, promptPreview: content.substring(0, 500) }));
+      console.error(JSON.stringify({ tag: '[buildDynamicContent]', templateSpecLength: templateSpec ? templateSpec.length : null, templateSpecInjected: !!templateSpec, promptPreview: content.substring(0, 500) }));
       return content;
     };
 
@@ -1167,9 +1167,7 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
     const budgetTier = weeklyBudget < 60 ? 'strict' : weeklyBudget < 90 ? 'moderate' : weeklyBudget < 150 ? 'flexible' : 'premium';
     const { assignments: proteinAssignments, estimatedProteinCost } = selectProteinsForPlan(budgetTier, macros, weeklyBudget);
     const mealTemplates = generateMealTemplate({ weeklyBudget, macros, budgetTier, dietaryRestrictions: dietList, pickinessLevel: pickinessLevel, days: 2, mealsPerDay: 4 });
-    console.log('[templateGenerator] weeklyProjectedCost:', mealTemplates.weeklyProjectedCost, 'budget:', weeklyBudget, 'ratio:', (mealTemplates.weeklyProjectedCost / weeklyBudget * 100).toFixed(1) + '%');
-    console.log('[templateGenerator] dayA totals:', mealTemplates.verifiedTotals.dayA);
-    console.log('[templateGenerator] dayB totals:', mealTemplates.verifiedTotals.dayB);
+    console.error(JSON.stringify({ tag: '[templateGenerator]', weeklyProjectedCost: mealTemplates.weeklyProjectedCost, budget: weeklyBudget, ratio: (mealTemplates.weeklyProjectedCost / weeklyBudget * 100).toFixed(1) + '%', dayAMeals: mealTemplates.dayA?.meals?.map(m => m.mealType), dayBMeals: mealTemplates.dayB?.meals?.map(m => m.mealType), dayATotals: mealTemplates.verifiedTotals?.dayA, dayBTotals: mealTemplates.verifiedTotals?.dayB }));
 
     console.log(`CALLING CLAUDE API — model:${model} userId:${userId} ts:${new Date().toISOString()}`);
     const firstResult = await callClaude(apiKey, model, buildDynamicContent('', null, weeklyBudget, estimatedProteinCost, mealTemplates), { useCache: true });
