@@ -133,15 +133,19 @@ function selectProteinsForPlan(tier, macros, weeklyBudget) {
       for (let i = 0; i < ranges[pi]; i++) {
         const { target } = mealSlots[slotIdx++];
         let quantity;
+        let slotGap = 0;
         if (protein.unit === 'each') {
-          quantity = Math.max(1, Math.round(target / protein.proteinEach));
+          const raw = Math.max(1, Math.round(target / protein.proteinEach));
+          quantity = Math.min(raw, 4);
+          slotGap = Math.max(0, target - quantity * protein.proteinEach);
         } else if (protein.unit === 'cup') {
           quantity = Math.max(0.5, Math.round((target / protein.proteinPerCup) * 2) / 2);
         } else {
           quantity = Math.max(2, Math.round(target / protein.proteinPer28g));
         }
-        if (!totalsMap[protein.name]) totalsMap[protein.name] = { protein, total: 0 };
+        if (!totalsMap[protein.name]) totalsMap[protein.name] = { protein, total: 0, totalProteinGap: 0 };
         totalsMap[protein.name].total += quantity;
+        totalsMap[protein.name].totalProteinGap += slotGap;
       }
     }
     return totalsMap;
@@ -179,16 +183,20 @@ function selectProteinsForPlan(tier, macros, weeklyBudget) {
     }
   }
 
-  // Return flat inventory array
-  return Object.values(totalsMap).map(({ protein, total }) => {
+  // Return flat inventory array + estimated protein cost
+  const estimatedProteinCost = estimateCost(totalsMap);
+  const assignments = Object.values(totalsMap).map(({ protein, total, totalProteinGap }) => {
     if (protein.unit === 'each') {
-      return { name: protein.name, totalCount: Math.round(total), unit: 'each' };
+      const obj = { name: protein.name, totalCount: Math.round(total), unit: 'each' };
+      if (totalProteinGap > 0) obj.proteinGap = Math.round(totalProteinGap);
+      return obj;
     } else if (protein.unit === 'cup') {
       return { name: protein.name, totalQuantity: Math.round(total * 2) / 2, unit: 'cup' };
     } else {
       return { name: protein.name, totalQuantity: Math.round(total), unit: protein.unit };
     }
   });
+  return { assignments, estimatedProteinCost };
 }
 
 // ── Rate limit constants ────────────────────────────────────────
@@ -989,7 +997,7 @@ STRICT: no fish/seafood, no beans/legumes, no leafy greens, no ethnic names, no 
     const complexityLine = complexityLines[pickinessLevel] || complexityLines[3];
 
     // Dynamic content only — static format/rules are in the cached system prompt
-    const buildDynamicContent = (retryPrefix = "", proteinAssignments = null) => {
+    const buildDynamicContent = (retryPrefix = "", proteinAssignments = null, budgetForPrompt = null, estimatedProteinCostForPrompt = null) => {
       const parts = [];
 
       if (retryPrefix) parts.push(retryPrefix);
@@ -1029,12 +1037,19 @@ PERMANENTLY PROHIBITED — never generate under any circumstances: sake, galanga
       if (proteinAssignments && proteinAssignments.length > 0) {
         const lines = proteinAssignments.map(item => {
           if (item.unit === 'each') {
-            return `${item.totalCount} eggs`;
+            let line = `${item.totalCount} eggs`;
+            if (item.proteinGap && item.proteinGap > 0) {
+              line += ` (egg cap hit — source an additional ~${item.proteinGap}g protein per affected meal from cottage cheese, Greek yogurt, or another approved protein)`;
+            }
+            return line;
           } else {
             return `${item.totalQuantity} ${item.unit} ${item.name}`;
           }
         }).join('\n');
-        const proteinSpec = 'PROTEIN SHOPPING LIST — MANDATORY: The following proteins have been pre-purchased for this plan. You must use ALL of them across the 8 meals (4 meals Day A, 4 meals Day B). Do not add any additional proteins beyond this list. Do not use less than what is listed — all quantities must be used. Distribute them across meals in a way that makes nutritional and culinary sense. Each meal must contain at least one protein from this list.\n\n' + lines;
+        let proteinSpec = 'PROTEIN SHOPPING LIST — MANDATORY: The following proteins have been pre-purchased for this plan. You must use ALL of them across the 8 meals (4 meals Day A, 4 meals Day B). Do not add any additional proteins beyond this list. Do not use less than what is listed — all quantities must be used. Distribute them across meals in a way that makes nutritional and culinary sense. Each meal must contain at least one protein from this list.\n\n' + lines;
+        if (budgetForPrompt != null && estimatedProteinCostForPrompt != null) {
+          proteinSpec += `\n\nWEEKLY GROCERY BUDGET: $${budgetForPrompt}\nEstimated protein cost: $${estimatedProteinCostForPrompt.toFixed(2)}. Remaining budget for all other ingredients: $${(budgetForPrompt - estimatedProteinCostForPrompt).toFixed(2)}. Keep all non-protein ingredients affordable and within this remaining budget. Use simple staple ingredients only — no premium items.`;
+        }
         parts.push(proteinSpec);
       }
 
@@ -1068,10 +1083,10 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
     let totalUsage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
 
     const budgetTier = weeklyBudget < 60 ? 'strict' : weeklyBudget < 90 ? 'moderate' : weeklyBudget < 150 ? 'flexible' : 'premium';
-    const proteinAssignments = selectProteinsForPlan(budgetTier, macros, weeklyBudget);
+    const { assignments: proteinAssignments, estimatedProteinCost } = selectProteinsForPlan(budgetTier, macros, weeklyBudget);
 
     console.log(`CALLING CLAUDE API — model:${model} userId:${userId} ts:${new Date().toISOString()}`);
-    const firstResult = await callClaude(apiKey, model, buildDynamicContent('', proteinAssignments), { useCache: true });
+    const firstResult = await callClaude(apiKey, model, buildDynamicContent('', proteinAssignments, weeklyBudget, estimatedProteinCost), { useCache: true });
 
     if (firstResult.error) {
       console.error("CLAUDE API ERROR:", firstResult.error);
@@ -1088,7 +1103,7 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
       const truncRetryContent =
         "Your previous response was cut off. Provide the complete plan with all 8 meals. " +
         "Keep instructions to exactly 5 steps per meal, each under 12 words.\n\n" +
-        buildDynamicContent('', proteinAssignments);
+        buildDynamicContent('', proteinAssignments, weeklyBudget, estimatedProteinCost);
 
       const truncRetry = await callClaude(apiKey, model, truncRetryContent, { useCache: true });
       totalUsage = mergeUsage(totalUsage, truncRetry.usage || {});
@@ -1144,7 +1159,7 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
         `CRITICAL: Protein target of ${macros.proteinG}g per day MUST be met. Use larger protein portions.\n\n`;
 
       console.log("[macro-fix] Macro validation failed — full Sonnet retry:", missDetails.join(" | "));
-      const retryResult = await callClaude(apiKey, MODEL_SONNET, buildDynamicContent(retryPrefix, proteinAssignments), { useCache: true });
+      const retryResult = await callClaude(apiKey, MODEL_SONNET, buildDynamicContent(retryPrefix, proteinAssignments, weeklyBudget, estimatedProteinCost), { useCache: true });
       totalUsage = mergeUsage(totalUsage, retryResult.usage || {});
 
       if (!retryResult.error) {
