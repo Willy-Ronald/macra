@@ -75,13 +75,17 @@ const PROTEIN_POOLS = {
 function selectProteinsForPlan(tier, macros, weeklyBudget) {
   const mainPool = PROTEIN_POOLS[tier] || PROTEIN_POOLS.moderate;
 
-  // Number of distinct proteins for the whole plan
+  // Number of distinct proteins for the whole plan (before diversity overflow)
   const numProteins = tier === 'flexible' ? 3 : tier === 'premium' ? 4 : 2;
 
-  // Slot distribution: cheapest protein (index 0) → highest-protein meal slots
+  // Base slot distribution: cheapest protein (index 0) → highest-protein meal slots
   // N=2: [3,5], N=3: [3,3,2], N=4: [2,2,2,2]
   const slotRanges = { 2: [3,5], 3: [3,3,2], 4: [2,2,2,2] };
-  const ranges = slotRanges[numProteins] || [3,5];
+  const baseRanges = slotRanges[numProteins] || [3,5];
+
+  // Per-protein slot caps — limits how many of the 8 slots a protein can cover
+  // Overflow slots are absorbed by an additional protein pulled from the pool
+  const SLOT_CAPS = { 'eggs': 2, 'canned tuna': 2 };
 
   const dailyProteinG = macros.proteinG;
   const proteinPerMeal = {
@@ -112,25 +116,59 @@ function selectProteinsForPlan(tier, macros, weeklyBudget) {
     return a;
   };
 
-  // Cost per gram of protein — used for sorting and cost check
+  // Actual cost per gram — used for budget calculations only
   const costPerGram = (p) => {
     if (p.unit === 'each')  return p.costEach  / p.proteinEach;
     if (p.unit === 'cup')   return p.costPerCup / p.proteinPerCup;
     if (p.unit === 'slice') return p.costPerSlice / p.proteinPerSlice;
-    return p.costPerOz / p.proteinPer28g; // $/oz ÷ g/oz = $/g
+    return p.costPerOz / p.proteinPer28g;
   };
 
-  // Pick N unique proteins at random, then sort cheapest→most expensive
-  const pickAndSort = (pool) =>
-    shuffle(pool).slice(0, numProteins).sort((a, b) => costPerGram(a) - costPerGram(b));
+  // Sort cost per gram — applies diversity penalties so eggs/tuna are de-prioritised in sort
+  // This makes real meal proteins (chicken, turkey) preferred over eggs/tuna when costs are close
+  const costPerGramForSort = (p) => {
+    const raw = costPerGram(p);
+    if (p.name === 'eggs') return raw * 1.5;
+    if (p.name === 'canned tuna') return raw * 1.2;
+    return raw;
+  };
 
-  // Build inventory totals for a given selected protein list
-  const buildTotals = (selected) => {
+  // Pick N unique proteins at random, then sort cheapest→most expensive using sort cost
+  const pickAndSort = (pool) =>
+    shuffle(pool).slice(0, numProteins).sort((a, b) => costPerGramForSort(a) - costPerGramForSort(b));
+
+  // Apply per-protein slot caps; if overflow slots remain, pull in a cheapest extra protein
+  const applyCaps = (sel, baseSlots) => {
+    let slots = [...baseSlots];
+    let overflow = 0;
+    for (let i = 0; i < sel.length; i++) {
+      const cap = SLOT_CAPS[sel[i].name];
+      if (cap !== undefined && slots[i] > cap) {
+        overflow += slots[i] - cap;
+        slots[i] = cap;
+      }
+    }
+    let adjusted = [...sel];
+    if (overflow > 0) {
+      const names = new Set(sel.map(p => p.name));
+      const extra = mainPool
+        .filter(p => !names.has(p.name))
+        .sort((a, b) => costPerGramForSort(a) - costPerGramForSort(b))[0];
+      if (extra) {
+        adjusted = [...sel, extra];
+        slots = [...slots, overflow];
+      }
+    }
+    return { adjustedSelected: adjusted, slotsPerProtein: slots };
+  };
+
+  // Build inventory totals — tracks total quantity, protein gap, and slot count per protein
+  const buildTotals = (sel, slotsPerProtein) => {
     const totalsMap = {};
     let slotIdx = 0;
-    for (let pi = 0; pi < selected.length; pi++) {
-      const protein = selected[pi];
-      for (let i = 0; i < ranges[pi]; i++) {
+    for (let pi = 0; pi < sel.length; pi++) {
+      const protein = sel[pi];
+      for (let i = 0; i < slotsPerProtein[pi]; i++) {
         const { target } = mealSlots[slotIdx++];
         let quantity;
         let slotGap = 0;
@@ -143,15 +181,16 @@ function selectProteinsForPlan(tier, macros, weeklyBudget) {
         } else {
           quantity = Math.max(2, Math.round(target / protein.proteinPer28g));
         }
-        if (!totalsMap[protein.name]) totalsMap[protein.name] = { protein, total: 0, totalProteinGap: 0 };
+        if (!totalsMap[protein.name]) totalsMap[protein.name] = { protein, total: 0, totalProteinGap: 0, slotCount: 0 };
         totalsMap[protein.name].total += quantity;
         totalsMap[protein.name].totalProteinGap += slotGap;
+        totalsMap[protein.name].slotCount += 1;
       }
     }
     return totalsMap;
   };
 
-  // Estimated total protein cost from a totalsMap
+  // Estimated total protein cost from a totalsMap (uses real costPerGram, not sort cost)
   const estimateCost = (totalsMap) =>
     Object.values(totalsMap).reduce((sum, { protein, total }) => {
       const unitCost = protein.unit === 'each'  ? protein.costEach  :
@@ -161,33 +200,35 @@ function selectProteinsForPlan(tier, macros, weeklyBudget) {
     }, 0);
 
   let selected = pickAndSort(mainPool);
-  let totalsMap = buildTotals(selected);
+  let { adjustedSelected, slotsPerProtein } = applyCaps(selected, baseRanges);
+  let totalsMap = buildTotals(adjustedSelected, slotsPerProtein);
 
   // Budget cost-check for strict (60%) and moderate (55%) tiers
   const budgetCap = tier === 'strict' ? 0.60 : tier === 'moderate' ? 0.55 : null;
   if (budgetCap && weeklyBudget) {
     const proteinCost = estimateCost(totalsMap);
     if (proteinCost > weeklyBudget * budgetCap) {
-      // Swap most expensive selected protein for cheapest unselected protein in pool
-      const mostExpensive = [...selected].sort((a, b) => costPerGram(b) - costPerGram(a))[0];
-      const selectedNames = new Set(selected.map(p => p.name));
+      // Swap most expensive protein in adjusted selection for cheapest unselected in pool
+      const mostExpensive = [...adjustedSelected].sort((a, b) => costPerGram(b) - costPerGram(a))[0];
+      const selectedNames = new Set(adjustedSelected.map(p => p.name));
       const cheapestReplacement = mainPool
         .filter(p => !selectedNames.has(p.name))
         .sort((a, b) => costPerGram(a) - costPerGram(b))[0];
       if (cheapestReplacement) {
-        selected = selected
+        const swapped = selected
           .map(p => p.name === mostExpensive.name ? cheapestReplacement : p)
-          .sort((a, b) => costPerGram(a) - costPerGram(b));
-        totalsMap = buildTotals(selected);
+          .sort((a, b) => costPerGramForSort(a) - costPerGramForSort(b));
+        ({ adjustedSelected, slotsPerProtein } = applyCaps(swapped, baseRanges));
+        totalsMap = buildTotals(adjustedSelected, slotsPerProtein);
       }
     }
   }
 
   // Return flat inventory array + estimated protein cost
   const estimatedProteinCost = estimateCost(totalsMap);
-  const assignments = Object.values(totalsMap).map(({ protein, total, totalProteinGap }) => {
+  const assignments = Object.values(totalsMap).map(({ protein, total, totalProteinGap, slotCount }) => {
     if (protein.unit === 'each') {
-      const obj = { name: protein.name, totalCount: Math.round(total), unit: 'each' };
+      const obj = { name: protein.name, totalCount: Math.round(total), unit: 'each', slotCount };
       if (totalProteinGap > 0) obj.proteinGap = Math.round(totalProteinGap);
       return obj;
     } else if (protein.unit === 'cup') {
@@ -1039,7 +1080,7 @@ PERMANENTLY PROHIBITED — never generate under any circumstances: sake, galanga
           if (item.unit === 'each') {
             let line = `${item.totalCount} eggs`;
             if (item.proteinGap && item.proteinGap > 0) {
-              line += ` (egg cap hit — supplement with ~${item.proteinGap}g total additional protein across egg meals from cottage cheese, Greek yogurt, or another approved protein)`;
+              line += ` (Note: egg cap applied across ${item.slotCount} meal slots totaling ${item.proteinGap}g protein gap — supplement egg meals with cottage cheese or Greek yogurt as needed to reach macro targets.)`;
             }
             return line;
           } else {
