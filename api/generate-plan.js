@@ -19,6 +19,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { randomBytes } from "crypto";
 import { calculateIngredientMacros, getNutrition } from '../src/utils/nutritionDatabase.js';
+import { generateMealTemplate, allocateBudget } from '../src/utils/mealTemplateGenerator.js';
 
 // ── Protein pools by budget tier ────────────────────────────────
 // Plant proteins — breakfast and snack slots only, never lunch or dinner
@@ -371,11 +372,12 @@ RULES:
 - "name" = dish name only, never include the cuisine label in the name
 - Share base ingredients across A and B where practical to keep shopping simple
 - Never repeat the exact same meal as previous generations
-- instructions: exactly 5 steps per meal, each under 20 words, starting with an action verb
+- instructions: 5 to 8 steps total per meal, aim for 5 but use up to 8 if needed for clear instructions, each under 20 words, starting with an action verb
 - instructions must include: specific heat level AND temperature in °F (e.g. "medium-high heat (375°F)"), pan/pot size (e.g. "large 12-inch skillet"), exact cook time in minutes, and a visual doneness cue (e.g. "until golden brown", "until internal temp reaches 165°F"). No vague steps like "cook until done".
 - equipment: comma-separated string, max 3 items
 - desc: max 8 words
 - Return ONLY raw JSON starting with { and ending with } — no markdown, no explanation
+- CRITICAL: The ingredients array in your response must contain EXACTLY the ingredients specified in the MEAL TEMPLATES section. Copy the ingredient names, quantities, and units exactly as given. Do not add, remove, or modify any ingredient. Only add spices and seasonings from the approved spices list — these are free items that do not affect cost or macros.
 - STRICT BUDGET ONLY (<$60/week): Before returning the plan, verify: (1) (Day A meat oz × 4) + (Day B meat oz × 3) ≤ 48 oz — if over, reduce portions; (2) (Day A olive oil tbsp × 4) + (Day B olive oil tbsp × 3) ≤ 8 tbsp — if over, switch to cooking spray; (3) estimated grocery cost ≤ 130% of stated budget.
 
 OUTPUT FORMAT (follow exactly — all fields required):
@@ -1038,7 +1040,7 @@ STRICT: no fish/seafood, no beans/legumes, no leafy greens, no ethnic names, no 
     const complexityLine = complexityLines[pickinessLevel] || complexityLines[3];
 
     // Dynamic content only — static format/rules are in the cached system prompt
-    const buildDynamicContent = (retryPrefix = "", proteinAssignments = null, budgetForPrompt = null, estimatedProteinCostForPrompt = null) => {
+    const buildDynamicContent = (retryPrefix = "", proteinAssignments = null, budgetForPrompt = null, estimatedProteinCostForPrompt = null, mealTemplates = null) => {
       const parts = [];
 
       if (retryPrefix) parts.push(retryPrefix);
@@ -1075,7 +1077,42 @@ SPICES — use freely, all are zero cost pantry items: salt, black pepper, garli
 PERMANENTLY PROHIBITED — never generate under any circumstances: sake, galangal, makrut lime, sumac, preserved lemon, lemongrass stalks, pomegranate molasses, doubanjiang, dashi, collagen powder, fermented black beans, dried shrimp, cassava flour, jackfruit, cassava, breadfruit, durian, rambutan, dragonfruit, starfruit, persimmon, quince, gooseberry, pita chips, psyllium husk, nutritional yeast, glutinous rice, sticky rice, sushi rice, matzo, lavash, bone broth, cacao powder, carob, white chocolate, lemongrass paste, lemongrass, lemongrass stalks, tamarind paste, shrimp paste, bonito flakes, oat flour, almond flour, coconut flour, arrowroot, protein powder, whey, matcha, taro, yuca, fig, date, pomegranate, papaya, lychee, guava, passion fruit, elderberry, mulberry, stone ground grits, freekeh, bulgur wheat, wheat berries, spelt, teff, amaranth, millet, sorghum, orzo, couscous, fregola, gnocchi, pierogi, gyoza wrappers, wonton wrappers, spring roll wrappers, rice flour, bagels, croissants, brioche, sourdough, baguette, naan, chapati, roti, injera, english muffins, whole grain crackers, crackers, granola, muesli, cereal, manchego cheese, gruyere, brie, camembert, gouda, havarti, provolone, swiss cheese, pepper jack, blue cheese, gorgonzola, stilton, halloumi, burrata, buffalo mozzarella, queso fresco, queso blanco, paneer, labneh, goat cheese, mascarpone, creme fraiche, kefir, buttermilk, evaporated milk, condensed milk, powdered milk, coconut cream, coconut water, coconut flakes, shredded coconut, coconut butter, chocolate chips, dark chocolate, vanilla bean, black bean sauce, harissa, za atar.`;
       parts.push(ingredientConstraints);
 
-      if (proteinAssignments && proteinAssignments.length > 0) {
+      if (mealTemplates) {
+        const dayLabels = { dayA: 'A', dayB: 'B' };
+        const mealOrder = ['breakfast', 'lunch', 'snack', 'dinner'];
+        const templateLines = ['MEAL TEMPLATES — MANDATORY: Use exactly these ingredients at the specified quantities for each meal slot. Write creative dish names, descriptions, and instructions around these fixed ingredients.'];
+        for (const [dayKey, dayLabel] of Object.entries(dayLabels)) {
+          const day = mealTemplates[dayKey];
+          if (!day) continue;
+          for (const mealType of mealOrder) {
+            const meal = day.meals ? day.meals.find(m => m.mealType === mealType) : null;
+            if (!meal) continue;
+            templateLines.push(`\nDAY ${dayLabel} ${mealType.toUpperCase()}:`);
+            if (meal.protein) {
+              templateLines.push(`Protein: ${meal.protein.quantity} ${meal.protein.unit} ${meal.protein.name}`);
+            }
+            if (meal.carb) {
+              templateLines.push(`Carbs: ${meal.carb.quantity} ${meal.carb.unit} ${meal.carb.name}`);
+            }
+            if (meal.fat) {
+              templateLines.push(`Fat: ${meal.fat.quantity} ${meal.fat.unit} ${meal.fat.name}`);
+            }
+            if (meal.vegetables && meal.vegetables.length > 0) {
+              for (const veg of meal.vegetables) {
+                templateLines.push(`Vegetable: ${veg.quantity} ${veg.unit} ${veg.name}`);
+              }
+            }
+            if (meal.macros) {
+              templateLines.push(`Target macros: ${Math.round(meal.macros.calories)} cal, ${meal.macros.protein.toFixed(1)}g protein, ${meal.macros.carbs.toFixed(1)}g carbs, ${meal.macros.fat.toFixed(1)}g fat`);
+            }
+            templateLines.push(`Cuisine style: [Claude picks based on user preferences and variety]`);
+          }
+        }
+        if (budgetForPrompt != null && estimatedProteinCostForPrompt != null) {
+          templateLines.push(`\nWEEKLY GROCERY BUDGET: $${budgetForPrompt}\nEstimated protein cost: $${estimatedProteinCostForPrompt.toFixed(2)}. Remaining budget for all other ingredients: $${(budgetForPrompt - estimatedProteinCostForPrompt).toFixed(2)}. Keep all non-protein ingredients affordable and within this remaining budget. Use simple staple ingredients only — no premium items.`);
+        }
+        parts.push(templateLines.join('\n'));
+      } else if (proteinAssignments && proteinAssignments.length > 0) {
         const lines = proteinAssignments.map(item => {
           if (item.unit === 'each') {
             let line = `${item.totalCount} eggs`;
@@ -1125,9 +1162,13 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
 
     const budgetTier = weeklyBudget < 60 ? 'strict' : weeklyBudget < 90 ? 'moderate' : weeklyBudget < 150 ? 'flexible' : 'premium';
     const { assignments: proteinAssignments, estimatedProteinCost } = selectProteinsForPlan(budgetTier, macros, weeklyBudget);
+    const mealTemplates = generateMealTemplate({ weeklyBudget, macros, budgetTier, dietaryRestrictions: diet, pickinessLevel: profile.pickiness || 3, days: 2, mealsPerDay: 4 });
+    console.log('[templateGenerator] weeklyProjectedCost:', mealTemplates.weeklyProjectedCost, 'budget:', weeklyBudget, 'ratio:', (mealTemplates.weeklyProjectedCost / weeklyBudget * 100).toFixed(1) + '%');
+    console.log('[templateGenerator] dayA totals:', mealTemplates.verifiedTotals.dayA);
+    console.log('[templateGenerator] dayB totals:', mealTemplates.verifiedTotals.dayB);
 
     console.log(`CALLING CLAUDE API — model:${model} userId:${userId} ts:${new Date().toISOString()}`);
-    const firstResult = await callClaude(apiKey, model, buildDynamicContent('', proteinAssignments, weeklyBudget, estimatedProteinCost), { useCache: true });
+    const firstResult = await callClaude(apiKey, model, buildDynamicContent('', null, weeklyBudget, estimatedProteinCost, mealTemplates), { useCache: true });
 
     if (firstResult.error) {
       console.error("CLAUDE API ERROR:", firstResult.error);
@@ -1144,7 +1185,7 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
       const truncRetryContent =
         "Your previous response was cut off. Provide the complete plan with all 8 meals. " +
         "Keep instructions to exactly 5 steps per meal, each under 12 words.\n\n" +
-        buildDynamicContent('', proteinAssignments, weeklyBudget, estimatedProteinCost);
+        buildDynamicContent('', null, weeklyBudget, estimatedProteinCost, mealTemplates);
 
       const truncRetry = await callClaude(apiKey, model, truncRetryContent, { useCache: true });
       totalUsage = mergeUsage(totalUsage, truncRetry.usage || {});
@@ -1200,7 +1241,7 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
         `CRITICAL: Protein target of ${macros.proteinG}g per day MUST be met. Use larger protein portions.\n\n`;
 
       console.log("[macro-fix] Macro validation failed — full Sonnet retry:", missDetails.join(" | "));
-      const retryResult = await callClaude(apiKey, MODEL_SONNET, buildDynamicContent(retryPrefix, proteinAssignments, weeklyBudget, estimatedProteinCost), { useCache: true });
+      const retryResult = await callClaude(apiKey, MODEL_SONNET, buildDynamicContent(retryPrefix, null, weeklyBudget, estimatedProteinCost, mealTemplates), { useCache: true });
       totalUsage = mergeUsage(totalUsage, retryResult.usage || {});
 
       if (!retryResult.error) {
