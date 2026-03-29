@@ -1113,9 +1113,6 @@ PERMANENTLY PROHIBITED — never generate under any circumstances: sake, galanga
         }
         const templateSpec = templateLines.join('\n');
         parts.push(templateSpec);
-        console.log('[buildDynamicContent] templateSpec injected, length:', templateSpec.length);
-      } else if (mealTemplates === null || mealTemplates === undefined) {
-        console.log('[buildDynamicContent] templateSpec injected, length:', null);
       } else if (proteinAssignments && proteinAssignments.length > 0) {
         const lines = proteinAssignments.map(item => {
           if (item.unit === 'each') {
@@ -1159,7 +1156,8 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
       parts.push(`Cuisine per slot:\n${cuisineAssignmentLines}`);
 
       const content = parts.join("\n\n");
-      console.log('[buildDynamicContent] prompt preview (first 500 chars):', content.substring(0, 500));
+      const templateSpec = parts.find(p => p.startsWith('MEAL TEMPLATES'));
+      console.log(JSON.stringify({ tag: '[buildDynamicContent]', templateSpecLength: templateSpec ? templateSpec.length : null, templateSpecInjected: !!templateSpec, promptPreview: content.substring(0, 500) }));
       return content;
     };
 
