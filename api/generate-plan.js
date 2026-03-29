@@ -1351,7 +1351,7 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
     }
 
     // TODO V1.5: Validate estimated cost here and retry if >150% of budget
-    return res.json({ abPlan, remaining });
+    return res.json({ abPlan, remaining, debug: { templateInjected: mealTemplates !== null, templateProjectedCost: mealTemplates?.weeklyProjectedCost, templateDayAProteins: mealTemplates?.dayA?.meals?.map(m => m.mealType + ':' + m.protein?.name) ?? null } });
   } catch (err) {
     console.error("Generate plan error:", err);
     return res.status(500).json({ error: err.message || "Failed to generate meal plan" });
