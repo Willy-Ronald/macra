@@ -1039,7 +1039,7 @@ PERMANENTLY PROHIBITED — never generate under any circumstances: sake, galanga
           if (item.unit === 'each') {
             let line = `${item.totalCount} eggs`;
             if (item.proteinGap && item.proteinGap > 0) {
-              line += ` (egg cap hit — source an additional ~${item.proteinGap}g protein per affected meal from cottage cheese, Greek yogurt, or another approved protein)`;
+              line += ` (egg cap hit — supplement with ~${item.proteinGap}g total additional protein across egg meals from cottage cheese, Greek yogurt, or another approved protein)`;
             }
             return line;
           } else {
