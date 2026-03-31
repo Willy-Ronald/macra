@@ -412,16 +412,16 @@ function generateMealTemplate(profile) {
   // Per-meal macro targets (protein split matches generate-plan.js)
   const mealMacroTargets = {
     breakfast: {
-      calories: Math.round(macros.target   * 0.20),
-      protein:  Math.round(macros.proteinG * 0.22),
-      carbs:    Math.round(macros.carbG    * 0.20),
-      fat:      Math.round(macros.fatG     * 0.20),
+      calories: Math.round(macros.target   * 0.18),
+      protein:  Math.round(macros.proteinG * 0.18),
+      carbs:    Math.round(macros.carbG    * 0.18),
+      fat:      Math.round(macros.fatG     * 0.18),
     },
     snack: {
-      calories: Math.round(macros.target   * 0.14),
-      protein:  Math.round(macros.proteinG * 0.14),
-      carbs:    Math.round(macros.carbG    * 0.14),
-      fat:      Math.round(macros.fatG     * 0.14),
+      calories: Math.round(macros.target   * 0.12),
+      protein:  Math.round(macros.proteinG * 0.12),
+      carbs:    Math.round(macros.carbG    * 0.12),
+      fat:      Math.round(macros.fatG     * 0.12),
     },
     lunch: {
       calories: Math.round(macros.target   * 0.28),
@@ -430,10 +430,10 @@ function generateMealTemplate(profile) {
       fat:      Math.round(macros.fatG     * 0.28),
     },
     dinner: {
-      calories: Math.round(macros.target   * 0.36),
-      protein:  Math.round(macros.proteinG * 0.36),
-      carbs:    Math.round(macros.carbG    * 0.36),
-      fat:      Math.round(macros.fatG     * 0.36),
+      calories: Math.round(macros.target   * 0.42),
+      protein:  Math.round(macros.proteinG * 0.42),
+      carbs:    Math.round(macros.carbG    * 0.42),
+      fat:      Math.round(macros.fatG     * 0.42),
     },
   };
 

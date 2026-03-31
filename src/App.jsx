@@ -1965,7 +1965,7 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,o
     </p>
 
     <div style={{display:"flex",justifyContent:"space-between",padding:"0 4px",marginBottom:18}}>
-      {[{l:"Calories",v:dayTotals.cal.toLocaleString(),c:T.acc},{l:"Protein",v:dayTotals.p+"g",c:T.pro},{l:"Carbs",v:dayTotals.c+"g",c:T.carb},{l:"Fat",v:dayTotals.f+"g",c:T.fat}].map(s=>
+      {[{l:"Calories",v:Math.round(dayTotals.cal).toLocaleString(),c:T.acc},{l:"Protein",v:Math.round(dayTotals.p)+"g",c:T.pro},{l:"Carbs",v:Math.round(dayTotals.c)+"g",c:T.carb},{l:"Fat",v:Math.round(dayTotals.f)+"g",c:T.fat}].map(s=>
         <div key={s.l} style={{textAlign:"center"}}><p style={{fontSize:17,fontWeight:700,color:s.c,margin:0,fontFamily:T.mono}}>{s.v}</p><Lbl>{s.l}</Lbl></div>
       )}
     </div>
