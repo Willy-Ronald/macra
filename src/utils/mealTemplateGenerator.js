@@ -2,6 +2,90 @@ import { NUTRITION_DB, NUTRITION_ALIASES, getNutrition, calculateIngredientMacro
 
 // ── SECTION 1 — INGREDIENT POOLS ─────────────────────────────────────────────
 
+// Change 1: max meat proteins per day by tier
+const BUDGET_TIER_PROTEIN_RULES = {
+  strict:   { maxMeatPerDay: 1 },
+  moderate: { maxMeatPerDay: 1 },
+  flexible: { maxMeatPerDay: 2 },
+  premium:  { maxMeatPerDay: 3 },
+};
+
+// Change 2: proteins that count as "meat" for the per-day limit
+const MEAT_PROTEINS = new Set([
+  'chicken thighs', 'chicken breast', 'ground turkey', 'ground beef',
+  'tilapia', 'salmon', 'shrimp', 'pork tenderloin', 'pork chops',
+  'deli turkey', 'bacon', 'turkey bacon', 'canned tuna',
+]);
+
+// Change 5: package sizes for weekly cost calculation (subset of groceryCostEstimator.js)
+const PKG = {
+  'eggs':            { size: 12, unit: 'count', cost: 1.79 },
+  'chicken thighs':  { size: 16, unit: 'oz',    cost: 2.49 },
+  'chicken breast':  { size: 16, unit: 'oz',    cost: 5.49 },
+  'ground turkey':   { size: 16, unit: 'oz',    cost: 4.99 },
+  'ground beef':     { size: 16, unit: 'oz',    cost: 8.99 },
+  'canned tuna':     { size: 5,  unit: 'oz',    cost: 1.00 },
+  'tilapia':         { size: 16, unit: 'oz',    cost: 5.00 },
+  'salmon':          { size: 16, unit: 'oz',    cost: 10.99 },
+  'shrimp':          { size: 12, unit: 'oz',    cost: 6.99 },
+  'pork tenderloin': { size: 16, unit: 'oz',    cost: 3.99 },
+  'pork chops':      { size: 16, unit: 'oz',    cost: 5.99 },
+  'firm tofu':       { size: 14, unit: 'oz',    cost: 1.99 },
+  'deli turkey':     { size: 9,  unit: 'oz',    cost: 3.99 },
+  'bacon':           { size: 12, unit: 'oz',    cost: 4.99 },
+  'turkey bacon':    { size: 12, unit: 'oz',    cost: 4.79 },
+  'white rice':      { size: 32, unit: 'oz',    cost: 1.79 },  // 1 cup dry ≈ 6.3 oz
+  'brown rice':      { size: 32, unit: 'oz',    cost: 1.79 },
+  'jasmine rice':    { size: 80, unit: 'oz',    cost: 7.49 },
+  'oats':            { size: 42, unit: 'oz',    cost: 3.99 },  // 1 cup ≈ 3.2 oz
+  'pasta':           { size: 16, unit: 'oz',    cost: 1.00 },  // 1 oz dry ≈ 1 oz
+  'black beans':     { size: 15, unit: 'oz',    cost: 0.79 },  // 1 cup ≈ 8.8 oz
+  'lentils':         { size: 16, unit: 'oz',    cost: 1.99 },
+  'bread':           { size: 20, unit: 'slice',  cost: 2.49 },
+  'tortillas':       { size: 10, unit: 'each',  cost: 2.99 },
+  'sweet potato':    { size: 1,  unit: 'each',  cost: 1.49 },
+  'potato':          { size: 1,  unit: 'each',  cost: 0.59 },
+  'pita':            { size: 6,  unit: 'each',  cost: 2.49 },
+  'cheddar cheese':  { size: 8,  unit: 'oz',    cost: 2.33 },
+  'olive oil':       { size: 33, unit: 'tbsp',  cost: 6.99 },
+  'coconut oil':     { size: 45, unit: 'tbsp',  cost: 7.99 },
+  'peanut butter':   { size: 32, unit: 'tbsp',  cost: 3.49 },
+  'avocado':         { size: 1,  unit: 'each',  cost: 1.50 },
+  'almonds':         { size: 16, unit: 'oz',    cost: 7.99 },
+  'spinach':         { size: 10, unit: 'oz',    cost: 2.19 },  // 1 cup ≈ 1 oz
+  'kale':            { size: 16, unit: 'oz',    cost: 2.49 },  // 1 cup ≈ 1.4 oz
+  'broccoli':        { size: 1,  unit: 'head',  cost: 1.71 },  // 1 cup ≈ 0.2 heads
+  'frozen broccoli': { size: 12, unit: 'oz',    cost: 1.49 },  // 1 cup ≈ 3 oz
+  'frozen mixed veg':{ size: 12, unit: 'oz',    cost: 0.88 },  // 1 cup ≈ 5 oz
+  'tomato':          { size: 1,  unit: 'each',  cost: 0.45 },
+  'onion':           { size: 1,  unit: 'each',  cost: 0.50 },
+  'carrots':         { size: 16, unit: 'oz',    cost: 1.29 },  // "2 each" ≈ 3 oz
+  'bell pepper':     { size: 1,  unit: 'each',  cost: 0.79 },
+  'zucchini':        { size: 1,  unit: 'each',  cost: 0.85 },
+  'cucumber':        { size: 1,  unit: 'each',  cost: 0.79 },
+  'mushrooms':       { size: 8,  unit: 'oz',    cost: 2.39 },
+};
+
+// Cup → oz conversion for grains (dry weight)
+const CUP_TO_OZ = {
+  'white rice': 6.3, 'brown rice': 6.3, 'jasmine rice': 6.3,
+  'oats': 3.2, 'black beans': 8.8, 'lentils': 7.0,
+};
+
+// Package-rounding cost: total quantity needed across the week → packages → cost
+function pkgCost(name, totalQty, unit) {
+  const p = PKG[name];
+  if (!p) return 0;
+  let qty = totalQty;
+  // Convert cup units to oz for grains
+  if (unit === 'cup' && CUP_TO_OZ[name]) {
+    qty = totalQty * CUP_TO_OZ[name];
+    // now in oz, compare to pkg.unit which should be oz
+  }
+  const packages = Math.ceil(qty / p.size);
+  return Math.round(packages * p.cost * 100) / 100;
+}
+
 const PROTEIN_POOL = [
   { name: 'chicken thighs',  proteinPer28g: 4.9,   costPerOz: 0.156,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium'] },
   { name: 'chicken breast',  proteinPer28g: 6.6,   costPerOz: 0.343,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['moderate','flexible','premium'] },
@@ -132,12 +216,6 @@ function allocateBudget(weeklyBudget, mealsPerDay, days) {
 
 // ── SECTION 3 — PROTEIN SELECTOR ─────────────────────────────────────────────
 
-const MEAT_PROTEINS = new Set([
-  'chicken thighs','chicken breast','ground turkey','ground beef',
-  'tilapia','salmon','shrimp','pork tenderloin','pork chops',
-  'canned tuna','deli turkey','bacon','turkey bacon',
-]);
-
 function selectProtein(mealType, proteinTargetG, mealBudget, budgetTier, excludeProteins = [], dietaryRestrictions = [], mealCalorieTarget = null) {
   let pool = PROTEIN_POOL.filter(p => p.tiers.includes(budgetTier));
   pool = pool.filter(p => !excludeProteins.includes(p.name));
@@ -250,21 +328,14 @@ function balanceMacros(proteinIngredient, mealType, macroTargets, mealBudget, di
   let carbIngredient = null;
 
   for (const c of orderedCarbs) {
-    const carbsPerUnit = c.carbs;
-    let quantity;
-
-    if (remainingCarbs <= 0) {
-      // Meal doesn't need more carbs — use a token serving
-      quantity = c.unit === 'cup' ? 0.5 : 1;
-    } else if (c.unit === 'each' || c.unit === 'slice') {
-      quantity = Math.max(1, Math.round(remainingCarbs / carbsPerUnit));
-      quantity = Math.min(quantity, c.maxQty);
+    const remainingCalAfterProtein = macroTargets.calories - proteinMacros.calories - 60;
+    let quantity = Math.round((remainingCalAfterProtein * 0.70 / c.calories) * 4) / 4;
+    if (c.unit === 'each' || c.unit === 'slice') {
+      quantity = Math.max(1, Math.round(quantity));
     } else {
-      // cup or oz — round to nearest quarter
-      quantity = Math.round((remainingCarbs / carbsPerUnit) * 4) / 4;
-      quantity = Math.max(c.unit === 'cup' ? 0.25 : 0.5, quantity);
-      quantity = Math.min(quantity, c.maxQty);
+      quantity = Math.max(0.25, quantity);
     }
+    quantity = Math.min(quantity, c.maxQty);
 
     const cost = Math.round(quantity * c.cost * 100) / 100;
     if (cost <= remainingBudget * 0.50) {
@@ -329,8 +400,10 @@ function balanceMacros(proteinIngredient, mealType, macroTargets, mealBudget, di
     });
 
     for (const f of fatSorted) {
-      let quantity = Math.round((remainingFatAfterCarbs / f.fat) * 2) / 2;
-      quantity     = Math.max(0.5, Math.min(quantity, 3));
+      const remainingCalAfterCarbs = macroTargets.calories - proteinMacros.calories - carbIngredient.macros.calories - 60;
+      let quantity = remainingCalAfterCarbs > 40 ? Math.round((remainingCalAfterCarbs / f.calories) * 4) / 4 : 0;
+      if (quantity === 0) continue;
+      quantity = Math.max(0.25, Math.min(quantity, 3));
       const cost   = Math.round(quantity * f.cost * 100) / 100;
 
       if (cost <= remainingBudget * 0.60) {
@@ -441,6 +514,93 @@ function balanceMacros(proteinIngredient, mealType, macroTargets, mealBudget, di
   return { carbIngredient, fatIngredient, vegetables, totalMacros, totalCost };
 }
 
+// ── SECTION 4b — SHARED HELPERS ──────────────────────────────────────────────
+
+// Build a protein ingredient object for a named protein, sized to macroTarget
+function makeProteinIngredient(proteinName, mealType, macroTarget, mealBudget) {
+  const p = PROTEIN_POOL.find(entry => entry.name === proteinName);
+  if (!p) return null;
+  const proteinPerUnit = getProteinPerUnit(p);
+  const costPerUnit    = getCostPerUnit(p);
+  const budgetLimit    = mealBudget * 0.65;
+
+  let quantity;
+  if (p.unit === 'each' || p.unit === 'slice') {
+    quantity = Math.ceil(macroTarget.protein / proteinPerUnit);
+  } else {
+    quantity = Math.round((macroTarget.protein / proteinPerUnit) * 2) / 2;
+    quantity = Math.max(1, quantity);
+  }
+
+  let effectiveMax = (mealType === 'dinner' && p.maxPerMealDinner) ? p.maxPerMealDinner : p.maxPerMeal;
+  if (mealType === 'snack' && p.name === 'eggs') effectiveMax = Math.min(effectiveMax, 3);
+  quantity = Math.min(quantity, effectiveMax);
+
+  // Budget cap
+  let actualCost = Math.round(quantity * costPerUnit * 100) / 100;
+  if (actualCost > budgetLimit) {
+    if (p.unit === 'each' || p.unit === 'slice') {
+      quantity = Math.max(1, Math.floor(budgetLimit / costPerUnit));
+    } else {
+      quantity = Math.max(0.5, Math.round((budgetLimit / costPerUnit) * 2) / 2);
+    }
+    actualCost = Math.round(quantity * costPerUnit * 100) / 100;
+  }
+
+  // Calorie pre-check
+  if (macroTarget.calories != null) {
+    const calPerUnit = dbMacros(p.name, 1, p.unit, null).calories || 0;
+    if (calPerUnit > 0 && quantity * calPerUnit > macroTarget.calories * 1.20) {
+      if (p.unit === 'each' || p.unit === 'slice') {
+        quantity = Math.max(1, Math.floor((macroTarget.calories * 1.20) / calPerUnit));
+      } else {
+        quantity = Math.max(0.5, Math.round(((macroTarget.calories * 1.20) / calPerUnit) * 2) / 2);
+      }
+      actualCost = Math.round(quantity * costPerUnit * 100) / 100;
+    }
+  }
+
+  return {
+    name: p.name,
+    quantity,
+    unit: p.unit,
+    actualProteinG: Math.round(quantity * proteinPerUnit * 10) / 10,
+    actualCost,
+    nutritionDbKey: p.name,
+  };
+}
+
+// Accumulate weekly ingredient quantities and compute package-rounded total cost
+function computeWeeklyPkgCost(dayAMeals, dayBMeals, order) {
+  const totals = {}; // name → { qty, unit }
+
+  function add(name, qty, unit) {
+    if (!name || !qty) return;
+    if (!totals[name]) totals[name] = { qty: 0, unit };
+    totals[name].qty += qty;
+  }
+
+  function accumulate(meals, multiplier) {
+    for (const mt of order) {
+      const meal = meals[mt];
+      if (!meal) continue;
+      if (meal.protein) add(meal.protein.name, meal.protein.quantity * multiplier, meal.protein.unit);
+      if (meal.carbs)   add(meal.carbs.name,   meal.carbs.quantity   * multiplier, meal.carbs.unit);
+      if (meal.fat)     add(meal.fat.name,      meal.fat.quantity     * multiplier, meal.fat.unit);
+      for (const v of (meal.vegetables || [])) add(v.name, v.quantity * multiplier, v.unit);
+    }
+  }
+
+  accumulate(dayAMeals, 4);
+  accumulate(dayBMeals, 3);
+
+  let total = 0;
+  for (const [name, { qty, unit }] of Object.entries(totals)) {
+    total += pkgCost(name, qty, unit);
+  }
+  return Math.round(total * 100) / 100;
+}
+
 // ── SECTION 5 — PLAN ASSEMBLER ───────────────────────────────────────────────
 
 function generateMealTemplate(profile) {
@@ -489,31 +649,93 @@ function generateMealTemplate(profile) {
   // Shared vegetable usage counter across both days (all 8 meal slots)
   const vegUsageCount = {};
 
-  // dayAProteins: proteins used in Day A to exclude from Day B
-  // dayACarbPerMeal: { breakfast: carbName, lunch: carbName, ... } from Day A, skipped in Day B
-  function generateDay(dayLabel, dayAProteins = [], dayACarbPerMeal = {}) {
-    const meals        = {};
-    const usedProteins = [];
-    const carbPerMeal  = {};
+  // dayAMeats: meat protein name(s) used on Day A — Day B must pick different meat(s)
+  // dayACarbPerMeal: { breakfast: carbName, ... } from Day A, deprioritised in Day B
+  function generateDay(dayLabel, dayAMeats = [], dayACarbPerMeal = {}) {
+    const meals       = {};
+    const carbPerMeal = {};
+    const tierRules   = BUDGET_TIER_PROTEIN_RULES[budgetTier] || { maxMeatPerDay: 1 };
+    const maxMeat     = tierRules.maxMeatPerDay;
 
+    const eggsExcluded = dietaryRestrictions.some(r =>
+      ['vegan', 'egg-free', 'no eggs'].includes(r.toLowerCase())
+    );
+
+    // ── Pre-select the day meat(s) ──────────────────────────────────────────
+    // Day B excludes Day A meats so a different protein is chosen
+    const dayMeats = [];
+
+    // Force meat-only selection by excluding all non-meat protein names from the pool
+    const nonMeatNames = PROTEIN_POOL
+      .filter(p => !MEAT_PROTEINS.has(p.name))
+      .map(p => p.name);
+
+    // First meat (used for lunch; also for dinner if strict/moderate)
+    // Exclude Day A meats AND all non-meat proteins so selectProtein must pick a meat
+    let firstMeatResult = selectProtein(
+      'lunch', mealMacroTargets.lunch.protein, budget.perMeal.lunch,
+      budgetTier, [...dayAMeats, ...nonMeatNames], dietaryRestrictions, mealMacroTargets.lunch.calories
+    );
+    // If exclusion of Day A meats left the pool empty, allow any meat (relax Day A exclusion)
+    if (!firstMeatResult) {
+      firstMeatResult = selectProtein(
+        'lunch', mealMacroTargets.lunch.protein, budget.perMeal.lunch,
+        budgetTier, [...nonMeatNames], dietaryRestrictions, mealMacroTargets.lunch.calories
+      );
+    }
+    if (firstMeatResult && MEAT_PROTEINS.has(firstMeatResult.name)) {
+      dayMeats.push(firstMeatResult.name);
+    }
+
+    // Second meat for dinner (flexible+) — must differ from first and from Day A meats
+    if (maxMeat >= 2) {
+      const secondMeatResult = selectProtein(
+        'dinner', mealMacroTargets.dinner.protein, budget.perMeal.dinner,
+        budgetTier, [...dayAMeats, ...dayMeats, ...nonMeatNames], dietaryRestrictions, mealMacroTargets.dinner.calories
+      );
+      if (secondMeatResult && MEAT_PROTEINS.has(secondMeatResult.name)) {
+        dayMeats.push(secondMeatResult.name);
+      }
+    }
+
+    const lunchMeatName  = dayMeats[0] || null;
+    const dinnerMeatName = dayMeats[1] || dayMeats[0] || null; // same meat for strict/moderate
+
+    const usedProteins = [...dayMeats];
+
+    // ── Assign proteins to slots ────────────────────────────────────────────
     for (const mealType of ORDER) {
       const mealBudget  = budget.perMeal[mealType];
       const macroTarget = mealMacroTargets[mealType];
 
-      // Within-day exclusions + Day A protein exclusions for Day B
-      const withinDay = mealType === 'dinner' ? [...usedProteins]
-                      : mealType === 'lunch'  ? [usedProteins[0]].filter(Boolean)
-                      : [];
-      const excludeList = [...new Set([...withinDay, ...dayAProteins])];
+      let proteinIngredient;
+      let coldFormatOnly = false;
 
-      // Try selection with full exclusions; if pool empties, fall back to within-day only
-      let proteinIngredient = selectProtein(
-        mealType, macroTarget.protein, mealBudget, budgetTier, excludeList, dietaryRestrictions, macroTarget.calories
-      );
-      if (!proteinIngredient && dayAProteins.length > 0) {
-        proteinIngredient = selectProtein(
-          mealType, macroTarget.protein, mealBudget, budgetTier, withinDay, dietaryRestrictions, macroTarget.calories
-        );
+      if (mealType === 'breakfast') {
+        if (!eggsExcluded) {
+          proteinIngredient = makeProteinIngredient('eggs', 'breakfast', macroTarget, mealBudget);
+        } else {
+          proteinIngredient = lunchMeatName
+            ? makeProteinIngredient(lunchMeatName, 'breakfast', macroTarget, mealBudget)
+            : selectProtein('breakfast', macroTarget.protein, mealBudget, budgetTier, [], dietaryRestrictions, macroTarget.calories);
+        }
+      } else if (mealType === 'snack') {
+        if (!eggsExcluded) {
+          proteinIngredient = makeProteinIngredient('eggs', 'snack', macroTarget, mealBudget);
+          coldFormatOnly = true;
+        } else {
+          proteinIngredient = lunchMeatName
+            ? makeProteinIngredient(lunchMeatName, 'snack', macroTarget, mealBudget)
+            : selectProtein('snack', macroTarget.protein, mealBudget, budgetTier, [], dietaryRestrictions, macroTarget.calories);
+        }
+      } else if (mealType === 'lunch') {
+        proteinIngredient = lunchMeatName
+          ? makeProteinIngredient(lunchMeatName, 'lunch', macroTarget, mealBudget)
+          : selectProtein('lunch', macroTarget.protein, mealBudget, budgetTier, [], dietaryRestrictions, macroTarget.calories);
+      } else { // dinner
+        proteinIngredient = dinnerMeatName
+          ? makeProteinIngredient(dinnerMeatName, 'dinner', macroTarget, mealBudget)
+          : selectProtein('dinner', macroTarget.protein, mealBudget, budgetTier, [], dietaryRestrictions, macroTarget.calories);
       }
 
       if (!proteinIngredient) {
@@ -544,6 +766,7 @@ function generateMealTemplate(profile) {
         vegetables,
         totalMacros,
         totalCost,
+        ...(coldFormatOnly ? { coldFormatOnly: true } : {}),
       };
 
       console.log(
@@ -552,7 +775,8 @@ function generateMealTemplate(profile) {
         `${carbIngredient?.name} ${carbIngredient?.quantity}${carbIngredient?.unit}` +
         (fatIngredient ? ` + ${fatIngredient.name} ${fatIngredient.quantity}${fatIngredient.unit}` : '') +
         ` | cal:${totalMacros.calories} P:${totalMacros.protein}g C:${totalMacros.carbs}g F:${totalMacros.fat}g` +
-        ` | $${totalCost.toFixed(2)}`
+        ` | $${totalCost.toFixed(2)}` +
+        (coldFormatOnly ? ' [cold]' : '')
       );
     }
 
@@ -569,16 +793,14 @@ function generateMealTemplate(profile) {
       `C:${dayTotals.carbs}g F:${dayTotals.fat}g | $${dayTotals.cost.toFixed(2)}`
     );
 
-    return { meals, dayTotals, usedProteins, carbPerMeal };
+    return { meals, dayTotals, dayMeats, carbPerMeal };
   }
 
   const dayAResult = generateDay('DayA');
-  const dayBResult = generateDay('DayB', dayAResult.usedProteins, dayAResult.carbPerMeal);
+  const dayBResult = generateDay('DayB', dayAResult.dayMeats, dayAResult.carbPerMeal);
 
-  // Weekly projected cost: Day A × 4 + Day B × 3
-  let weeklyProjectedCost = Math.round(
-    (dayAResult.dayTotals.cost * 4 + dayBResult.dayTotals.cost * 3) * 100
-  ) / 100;
+  // Weekly projected cost: package-rounding math (Change 5)
+  let weeklyProjectedCost = computeWeeklyPkgCost(dayAResult.meals, dayBResult.meals, ORDER);
 
   // If over 110% of weeklyBudget, reduce non-protein ingredients by 20%
   if (weeklyProjectedCost > weeklyBudget * 1.10) {
@@ -628,9 +850,7 @@ function generateMealTemplate(profile) {
       ) / 100;
     }
 
-    weeklyProjectedCost = Math.round(
-      (dayAResult.dayTotals.cost * 4 + dayBResult.dayTotals.cost * 3) * 100
-    ) / 100;
+    weeklyProjectedCost = computeWeeklyPkgCost(dayAResult.meals, dayBResult.meals, ORDER);
   }
 
   const weeklyProjectedMacros = {
