@@ -1087,14 +1087,14 @@ PERMANENTLY PROHIBITED — never generate under any circumstances: sake, galanga
             const day = mealTemplates[dayKey];
             if (!day) continue;
             for (const mealType of mealOrder) {
-              const meal = day.meals ? day.meals.find(m => m.mealType === mealType) : null;
+              const meal = day[mealType];
               if (!meal) continue;
               templateLines.push(`\nDAY ${dayLabel} ${mealType.toUpperCase()}:`);
               if (meal.protein) {
                 templateLines.push(`Protein: ${meal.protein.quantity} ${meal.protein.unit} ${meal.protein.name}`);
               }
-              if (meal.carb) {
-                templateLines.push(`Carbs: ${meal.carb.quantity} ${meal.carb.unit} ${meal.carb.name}`);
+              if (meal.carbs) {
+                templateLines.push(`Carbs: ${meal.carbs.quantity} ${meal.carbs.unit} ${meal.carbs.name}`);
               }
               if (meal.fat) {
                 templateLines.push(`Fat: ${meal.fat.quantity} ${meal.fat.unit} ${meal.fat.name}`);
@@ -1104,8 +1104,8 @@ PERMANENTLY PROHIBITED — never generate under any circumstances: sake, galanga
                   templateLines.push(`Vegetable: ${veg.quantity} ${veg.unit} ${veg.name}`);
                 }
               }
-              if (meal.macros) {
-                templateLines.push(`Target macros: ${Math.round(meal.macros.calories)} cal, ${meal.macros.protein.toFixed(1)}g protein, ${meal.macros.carbs.toFixed(1)}g carbs, ${meal.macros.fat.toFixed(1)}g fat`);
+              if (meal.totalMacros) {
+                templateLines.push(`Target macros: ${Math.round(meal.totalMacros.calories)} cal, ${meal.totalMacros.protein.toFixed(1)}g protein, ${meal.totalMacros.carbs.toFixed(1)}g carbs, ${meal.totalMacros.fat.toFixed(1)}g fat`);
               }
               templateLines.push(`Cuisine style: [Claude picks based on user preferences and variety]`);
             }
@@ -1356,7 +1356,7 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
     }
 
     // TODO V1.5: Validate estimated cost here and retry if >150% of budget
-    return res.json({ abPlan, remaining, debug: { templateInjected: mealTemplates !== null, templateProjectedCost: mealTemplates?.weeklyProjectedCost, templateDayAProteins: mealTemplates?.dayA?.breakfast?.protein?.name || 'STRUCTURE_MISMATCH', dayAKeys: mealTemplates?.dayA ? Object.keys(mealTemplates.dayA) : null } });
+    return res.json({ abPlan, remaining, debug: { templateInjected: mealTemplates !== null, templateProjectedCost: mealTemplates?.weeklyProjectedCost, templateDayAProteins: ['breakfast','lunch','snack','dinner'].map(mt => mt + ':' + (mealTemplates?.dayA?.[mt]?.protein?.name ?? 'null')), dayAKeys: mealTemplates?.dayA ? Object.keys(mealTemplates.dayA) : null } });
   } catch (err) {
     console.error("Generate plan error:", err);
     return res.status(500).json({ error: err.message || "Failed to generate meal plan" });
