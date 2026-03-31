@@ -138,7 +138,7 @@ const MEAT_PROTEINS = new Set([
   'canned tuna','deli turkey','bacon','turkey bacon',
 ]);
 
-function selectProtein(mealType, proteinTargetG, mealBudget, budgetTier, excludeProteins = [], dietaryRestrictions = []) {
+function selectProtein(mealType, proteinTargetG, mealBudget, budgetTier, excludeProteins = [], dietaryRestrictions = [], mealCalorieTarget = null) {
   let pool = PROTEIN_POOL.filter(p => p.tiers.includes(budgetTier));
   pool = pool.filter(p => !excludeProteins.includes(p.name));
 
@@ -167,15 +167,24 @@ function selectProtein(mealType, proteinTargetG, mealBudget, budgetTier, exclude
       quantity = Math.round((proteinTargetG / proteinPerUnit) * 2) / 2;
       quantity = Math.max(1, quantity);
     }
-    const effectiveMax = (mealType === 'dinner' && p.maxPerMealDinner) ? p.maxPerMealDinner : p.maxPerMeal;
+
+    // Change 1: cap eggs at 3 for snack slots
+    let effectiveMax = (mealType === 'dinner' && p.maxPerMealDinner) ? p.maxPerMealDinner : p.maxPerMeal;
+    if (mealType === 'snack' && p.name === 'eggs') effectiveMax = Math.min(effectiveMax, 3);
     quantity = Math.min(quantity, effectiveMax);
 
     const actualProteinG = Math.round(quantity * proteinPerUnit * 10) / 10;
     const actualCost     = Math.round(quantity * costPerUnit * 100) / 100;
 
-    if (actualCost <= budgetLimit) {
-      return { name: p.name, quantity, unit: p.unit, actualProteinG, actualCost, nutritionDbKey: p.name };
+    if (actualCost > budgetLimit) continue;
+
+    // Change 2: calorie pre-check — skip if protein alone exceeds 120% of meal calorie target
+    if (mealCalorieTarget != null) {
+      const proteinCal = dbMacros(p.name, quantity, p.unit, null).calories;
+      if (proteinCal > mealCalorieTarget * 1.20) continue;
     }
+
+    return { name: p.name, quantity, unit: p.unit, actualProteinG, actualCost, nutritionDbKey: p.name };
   }
 
   // Fallback: cheapest protein at max affordable quantity within budget
@@ -276,6 +285,34 @@ function balanceMacros(proteinIngredient, mealType, macroTargets, mealBudget, di
 
   remainingBudget -= carbIngredient.cost;
 
+  // ── Calorie ceiling check after carb selection ────────────────────────────
+  // If protein + carb already exceeds meal calorie target by >10%, reduce carbs
+  {
+    const projectedCal = proteinMacros.calories + carbIngredient.macros.calories;
+    const calCeiling   = macroTargets.calories * 1.10;
+    if (projectedCal > calCeiling && carbIngredient.quantity > 0) {
+      const allowedCarbCal = Math.max(0, macroTargets.calories * 1.10 - proteinMacros.calories);
+      const carbCalPerUnit = carbIngredient.macros.calories / carbIngredient.quantity;
+      if (carbCalPerUnit > 0) {
+        let newQty = allowedCarbCal / carbCalPerUnit;
+        const src  = CARB_SOURCES.find(c => c.name === carbIngredient.name);
+        if (carbIngredient.unit === 'cup') {
+          newQty = Math.max(0.25, Math.round(newQty * 4) / 4);
+        } else if (carbIngredient.unit === 'each' || carbIngredient.unit === 'slice') {
+          newQty = Math.max(1, Math.floor(newQty));
+        } else {
+          newQty = Math.max(0.5, Math.round(newQty * 2) / 2);
+        }
+        if (newQty < carbIngredient.quantity) {
+          const newMacros = roundMacros(dbMacros(carbIngredient.name, newQty, carbIngredient.unit, src || carbIngredient));
+          const newCost   = Math.round(newQty * (src?.cost || 0) * 100) / 100;
+          remainingBudget += carbIngredient.cost - newCost;
+          carbIngredient  = { ...carbIngredient, quantity: newQty, macros: newMacros, cost: newCost };
+        }
+      }
+    }
+  }
+
   // ── Fat source selection ───────────────────────────────────────────────────
   const remainingFatAfterCarbs = Math.max(0, remainingFat - (carbIngredient.macros.fat || 0));
   let fatIngredient = null;
@@ -305,6 +342,16 @@ function balanceMacros(proteinIngredient, mealType, macroTargets, mealBudget, di
   }
 
   if (fatIngredient) remainingBudget -= fatIngredient.cost;
+
+  // ── Calorie ceiling check after fat selection ─────────────────────────────
+  // If protein + carb + fat already exceeds meal calorie target by >10%, drop fat
+  if (fatIngredient) {
+    const projectedCal = proteinMacros.calories + carbIngredient.macros.calories + fatIngredient.macros.calories;
+    if (projectedCal > macroTargets.calories * 1.10) {
+      remainingBudget += fatIngredient.cost;
+      fatIngredient = null;
+    }
+  }
 
   // ── Vegetable selection ────────────────────────────────────────────────────
   const vegPool = pickinessLevel <= 2
@@ -418,10 +465,10 @@ function generateMealTemplate(profile) {
       fat:      Math.round(macros.fatG     * 0.18),
     },
     snack: {
-      calories: Math.round(macros.target   * 0.12),
-      protein:  Math.round(macros.proteinG * 0.12),
-      carbs:    Math.round(macros.carbG    * 0.12),
-      fat:      Math.round(macros.fatG     * 0.12),
+      calories: Math.round(macros.target   * 0.18),
+      protein:  Math.round(macros.proteinG * 0.18),
+      carbs:    Math.round(macros.carbG    * 0.18),
+      fat:      Math.round(macros.fatG     * 0.18),
     },
     lunch: {
       calories: Math.round(macros.target   * 0.28),
@@ -430,10 +477,10 @@ function generateMealTemplate(profile) {
       fat:      Math.round(macros.fatG     * 0.28),
     },
     dinner: {
-      calories: Math.round(macros.target   * 0.42),
-      protein:  Math.round(macros.proteinG * 0.42),
-      carbs:    Math.round(macros.carbG    * 0.42),
-      fat:      Math.round(macros.fatG     * 0.42),
+      calories: Math.round(macros.target   * 0.36),
+      protein:  Math.round(macros.proteinG * 0.36),
+      carbs:    Math.round(macros.carbG    * 0.36),
+      fat:      Math.round(macros.fatG     * 0.36),
     },
   };
 
@@ -461,11 +508,11 @@ function generateMealTemplate(profile) {
 
       // Try selection with full exclusions; if pool empties, fall back to within-day only
       let proteinIngredient = selectProtein(
-        mealType, macroTarget.protein, mealBudget, budgetTier, excludeList, dietaryRestrictions
+        mealType, macroTarget.protein, mealBudget, budgetTier, excludeList, dietaryRestrictions, macroTarget.calories
       );
       if (!proteinIngredient && dayAProteins.length > 0) {
         proteinIngredient = selectProtein(
-          mealType, macroTarget.protein, mealBudget, budgetTier, withinDay, dietaryRestrictions
+          mealType, macroTarget.protein, mealBudget, budgetTier, withinDay, dietaryRestrictions, macroTarget.calories
         );
       }
 
