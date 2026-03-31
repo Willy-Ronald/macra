@@ -527,6 +527,22 @@ export function estimateItem(name, qty, unit) {
       console.log(`  Unit conversion: ${qty} oz sweet potato → ${workQty} each`);
     }
 
+    // Unit conversion: russet potato oz → each (1 medium russet potato ≈ 8 oz)
+    if ((normalized === "russet potato" || normalized === "russet potatoes") &&
+        (workUnit === "oz" || workUnit === "ounce" || workUnit === "ounces")) {
+      workQty  = Math.ceil(workQty / 8);
+      workUnit = "each";
+      console.log(`  Unit conversion: ${qty} oz russet potato → ${workQty} each`);
+    }
+
+    // Unit conversion: bok choy cups → each (1 head bok choy ≈ 6 cups)
+    if (normalized === "bok choy" &&
+        (workUnit === "cup" || workUnit === "cups")) {
+      workQty  = Math.ceil(workQty / 6);
+      workUnit = "each";
+      console.log(`  Unit conversion: ${qty} cups bok choy → ${workQty} each`);
+    }
+
     // Unit conversion: lettuce/romaine cups → heads (1 head ≈ 8 cups shredded); max 2 heads
     if ((normalized.includes("lettuce") || normalized === "romaine") &&
         (workUnit === "cup" || workUnit === "cups")) {
