@@ -1538,7 +1538,7 @@ const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMe
               <div>
                 <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{pm.name}</p>
                 <div style={{display:"flex",gap:8,marginTop:3}}>
-                  {[{v:pm.cal,l:"cal",c:T.acc},{v:(pm.p||0)+"g",l:"P",c:T.pro},{v:(pm.c||0)+"g",l:"C",c:T.carb},{v:(pm.f||0)+"g",l:"F",c:T.fat}].map(x=>
+                  {[{v:Math.round(pm.cal),l:"cal",c:T.acc},{v:Math.round(pm.p||0)+"g",l:"P",c:T.pro},{v:Math.round(pm.c||0)+"g",l:"C",c:T.carb},{v:Math.round(pm.f||0)+"g",l:"F",c:T.fat}].map(x=>
                     <span key={x.l} style={{fontSize:10,fontFamily:T.mono,color:x.c}}>{x.v}<span style={{color:T.txM,fontSize:8}}> {x.l}</span></span>
                   )}
                 </div>
@@ -2006,7 +2006,7 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,o
       {m.cuisine && <p style={{fontSize:11,color:T.txM,margin:"0 0 4px",letterSpacing:"0.03em"}}>{m.cuisine}</p>}
       <p style={{fontSize:12,color:T.txM,margin:"0 0 12px"}}>{m.desc}</p>
       <div style={{display:"flex",gap:16,marginBottom:m.ingredients?.length>0?12:0}}>
-        {[{l:"cal",v:m.cal,c:T.acc},{l:"P",v:m.p+"g",c:T.pro},{l:"C",v:m.c+"g",c:T.carb},{l:"F",v:m.f+"g",c:T.fat}].map(x=>
+        {[{l:"cal",v:Math.round(m.cal),c:T.acc},{l:"P",v:Math.round(m.p)+"g",c:T.pro},{l:"C",v:Math.round(m.c)+"g",c:T.carb},{l:"F",v:Math.round(m.f)+"g",c:T.fat}].map(x=>
           <span key={x.l} style={{fontSize:12,fontFamily:T.mono,color:T.tx}}><span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:x.c,marginRight:4,verticalAlign:"middle"}}/>{x.v} <span style={{color:T.txM,fontSize:10}}>{x.l}</span></span>
         )}
       </div>
@@ -3012,7 +3012,7 @@ const LogMeal = ({savedMeals=[],onSaveMeal,todayLog=[],onLogMeal,userId,onDelete
           <Card style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:0}}>
             <div><p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>{m.name}</p>
               <div style={{display:"flex",gap:8,marginTop:3}}>
-                {[{v:m.cal,l:"cal",c:T.acc},{v:(m.p||0)+"g",l:"P",c:T.pro},{v:(m.c||0)+"g",l:"C",c:T.carb},{v:(m.f||0)+"g",l:"F",c:T.fat}].map(x=>
+                {[{v:Math.round(m.cal),l:"cal",c:T.acc},{v:Math.round(m.p||0)+"g",l:"P",c:T.pro},{v:Math.round(m.c||0)+"g",l:"C",c:T.carb},{v:Math.round(m.f||0)+"g",l:"F",c:T.fat}].map(x=>
                   <span key={x.l} style={{fontSize:10,fontFamily:T.mono,color:x.c}}>{x.v}<span style={{color:T.txM,fontSize:8}}> {x.l}</span></span>
                 )}
               </div>
