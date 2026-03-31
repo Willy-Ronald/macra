@@ -827,15 +827,6 @@ function generateMealTemplate(profile) {
         ...(coldFormatOnly ? { coldFormatOnly: true } : {}),
       };
 
-      console.log(
-        `[template] ${dayLabel} ${mealType.padEnd(9)}: ` +
-        `${proteinIngredient.name} ${proteinIngredient.quantity}${proteinIngredient.unit} + ` +
-        `${carbIngredient?.name} ${carbIngredient?.quantity}${carbIngredient?.unit}` +
-        (fatIngredient ? ` + ${fatIngredient.name} ${fatIngredient.quantity}${fatIngredient.unit}` : '') +
-        ` | cal:${totalMacros.calories} P:${totalMacros.protein}g C:${totalMacros.carbs}g F:${totalMacros.fat}g` +
-        ` | $${totalCost.toFixed(2)}` +
-        (coldFormatOnly ? ' [cold]' : '')
-      );
     }
 
     const dayTotals = {
@@ -845,11 +836,6 @@ function generateMealTemplate(profile) {
       fat:      Math.round(ORDER.reduce((s, mt) => s + (meals[mt]?.totalMacros?.fat      || 0), 0) * 10) / 10,
       cost:     Math.round(ORDER.reduce((s, mt) => s + (meals[mt]?.totalCost             || 0), 0) * 100) / 100,
     };
-
-    console.log(
-      `[template] ${dayLabel} TOTAL: cal:${dayTotals.calories} P:${dayTotals.protein}g ` +
-      `C:${dayTotals.carbs}g F:${dayTotals.fat}g | $${dayTotals.cost.toFixed(2)}`
-    );
 
     return { meals, dayTotals, dayMeats, carbPerMeal };
   }
@@ -862,9 +848,6 @@ function generateMealTemplate(profile) {
 
   // If over 110% of weeklyBudget, reduce non-protein ingredients by 20%
   if (weeklyProjectedCost > weeklyBudget * 1.10) {
-    console.log(
-      `[template] Weekly cost $${weeklyProjectedCost} exceeds 110% of $${weeklyBudget} — trimming non-protein by 20%`
-    );
     for (const dayResult of [dayAResult, dayBResult]) {
       for (const mealType of ORDER) {
         const meal = dayResult.meals[mealType];
@@ -930,84 +913,6 @@ function generateMealTemplate(profile) {
   };
 }
 
-// ── SECTION 6 — EXPORT AND SELF-TEST ─────────────────────────────────────────
+// ── SECTION 6 — EXPORT ───────────────────────────────────────────────────────
 
 export { allocateBudget, selectProtein, balanceMacros, generateMealTemplate };
-
-if (process.env.NODE_ENV !== 'production') {
-  // ── Test 1: moderate $75 ──────────────────────────────────────────────────
-  console.log('\n' + '═'.repeat(60));
-  console.log('SELF-TEST 1: moderate tier / $75 / 185g protein / 2018 cal');
-  console.log('═'.repeat(60));
-
-  const result1 = generateMealTemplate({
-    weeklyBudget: 75,
-    macros: { target: 2018, proteinG: 185, carbG: 160, fatG: 71 },
-    budgetTier: 'moderate',
-    dietaryRestrictions: [],
-    pickinessLevel: 3,
-    days: 2,
-    mealsPerDay: 4,
-  });
-
-  console.log('\n── Detailed ingredient breakdown ─────────────────────────');
-  for (const [dayKey, dayMeals] of [['dayA', result1.dayA], ['dayB', result1.dayB]]) {
-    console.log(`\n${dayKey.toUpperCase()}:`);
-    for (const [mealType, meal] of Object.entries(dayMeals)) {
-      console.log(`  ${mealType}:`);
-      if (meal.protein)    console.log(`    protein:  ${meal.protein.quantity}${meal.protein.unit} ${meal.protein.name} → ${meal.protein.actualProteinG}g protein, $${meal.protein.actualCost.toFixed(2)}`);
-      if (meal.carbs)      console.log(`    carbs:    ${meal.carbs.quantity}${meal.carbs.unit} ${meal.carbs.name} → P:${meal.carbs.macros.protein}g C:${meal.carbs.macros.carbs}g F:${meal.carbs.macros.fat}g cal:${meal.carbs.macros.calories}, $${meal.carbs.cost.toFixed(2)}`);
-      if (meal.fat)        console.log(`    fat:      ${meal.fat.quantity}${meal.fat.unit} ${meal.fat.name} → P:${meal.fat.macros.protein}g C:${meal.fat.macros.carbs}g F:${meal.fat.macros.fat}g cal:${meal.fat.macros.calories}, $${meal.fat.cost.toFixed(2)}`);
-      if (meal.vegetables?.length) {
-        meal.vegetables.forEach(v => {
-          console.log(`    veg:      ${v.quantity}${v.unit} ${v.name} → P:${v.macros.protein}g C:${v.macros.carbs}g F:${v.macros.fat}g cal:${v.macros.calories}, $${v.cost.toFixed(2)}`);
-        });
-      }
-      console.log(`    TOTAL:    cal:${meal.totalMacros.calories} P:${meal.totalMacros.protein}g C:${meal.totalMacros.carbs}g F:${meal.totalMacros.fat}g | $${meal.totalCost.toFixed(2)}`);
-    }
-  }
-
-  console.log('\n── Verified totals ───────────────────────────────────────');
-  console.log('Day A:', result1.verifiedTotals.dayA);
-  console.log('Day B:', result1.verifiedTotals.dayB);
-  console.log(`Weekly projected cost: $${result1.weeklyProjectedCost.toFixed(2)}`);
-  console.log('Weekly projected macros:', result1.weeklyProjectedMacros);
-
-  // ── Test 2: flexible $165 ─────────────────────────────────────────────────
-  console.log('\n' + '═'.repeat(60));
-  console.log('SELF-TEST 2: flexible tier / $165 / 180g protein / 2400 cal');
-  console.log('═'.repeat(60));
-
-  const result2 = generateMealTemplate({
-    weeklyBudget: 165,
-    macros: { target: 2400, proteinG: 180, carbG: 220, fatG: 85 },
-    budgetTier: 'flexible',
-    dietaryRestrictions: [],
-    pickinessLevel: 3,
-    days: 2,
-    mealsPerDay: 4,
-  });
-
-  console.log('\n── Detailed ingredient breakdown ─────────────────────────');
-  for (const [dayKey, dayMeals] of [['dayA', result2.dayA], ['dayB', result2.dayB]]) {
-    console.log(`\n${dayKey.toUpperCase()}:`);
-    for (const [mealType, meal] of Object.entries(dayMeals)) {
-      console.log(`  ${mealType}:`);
-      if (meal.protein)    console.log(`    protein:  ${meal.protein.quantity}${meal.protein.unit} ${meal.protein.name} → ${meal.protein.actualProteinG}g protein, $${meal.protein.actualCost.toFixed(2)}`);
-      if (meal.carbs)      console.log(`    carbs:    ${meal.carbs.quantity}${meal.carbs.unit} ${meal.carbs.name} → P:${meal.carbs.macros.protein}g C:${meal.carbs.macros.carbs}g F:${meal.carbs.macros.fat}g cal:${meal.carbs.macros.calories}, $${meal.carbs.cost.toFixed(2)}`);
-      if (meal.fat)        console.log(`    fat:      ${meal.fat.quantity}${meal.fat.unit} ${meal.fat.name} → P:${meal.fat.macros.protein}g C:${meal.fat.macros.carbs}g F:${meal.fat.macros.fat}g cal:${meal.fat.macros.calories}, $${meal.fat.cost.toFixed(2)}`);
-      if (meal.vegetables?.length) {
-        meal.vegetables.forEach(v => {
-          console.log(`    veg:      ${v.quantity}${v.unit} ${v.name} → P:${v.macros.protein}g C:${v.macros.carbs}g F:${v.macros.fat}g cal:${v.macros.calories}, $${v.cost.toFixed(2)}`);
-        });
-      }
-      console.log(`    TOTAL:    cal:${meal.totalMacros.calories} P:${meal.totalMacros.protein}g C:${meal.totalMacros.carbs}g F:${meal.totalMacros.fat}g | $${meal.totalCost.toFixed(2)}`);
-    }
-  }
-
-  console.log('\n── Verified totals ───────────────────────────────────────');
-  console.log('Day A:', result2.verifiedTotals.dayA);
-  console.log('Day B:', result2.verifiedTotals.dayB);
-  console.log(`Weekly projected cost: $${result2.weeklyProjectedCost.toFixed(2)}`);
-  console.log('Weekly projected macros:', result2.weeklyProjectedMacros);
-}

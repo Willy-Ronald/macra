@@ -322,7 +322,6 @@ async function countLogs(sb, userId, since, label) {
   }
 
   const n = count ?? 0;
-  console.log(`[rate-limit] ${label} count for user ${userId}: ${n}`);
   return n;
 }
 
@@ -346,14 +345,6 @@ function validateMacros(day, targets, label) {
     Math.abs(diffs.pOff)   > 5 ||
     Math.abs(diffs.cOff)   > 5 ||
     Math.abs(diffs.fOff)   > 5;
-
-  console.log(
-    `[macro-check] ${label}: ` +
-    `cal ${totals.cal}kcal (${diffs.calOff}%) ` +
-    `P:${totals.p}g (${diffs.pOff}%) ` +
-    `C:${totals.c}g (${diffs.cOff}%) ` +
-    `F:${totals.f}g (${diffs.fOff}%) → ${failed ? "FAIL" : "PASS"}`
-  );
 
   return { totals, failed, diffs };
 }
@@ -432,14 +423,12 @@ async function callClaude(apiKey, model, userContent, { useCache = true } = {}) 
 
   const data = await res.json();
   const usage = data.usage || {};
-  console.log(`CLAUDE OK — model:${model} stop:${data.stop_reason} usage:${JSON.stringify(usage)}`);
   const continuation = data.content.map(b => b.text || "").join("");
   return { rawText: "{" + continuation, usage };
 }
 
 // ── Parse and validate a Claude response ───────────────────────
 function parsePlan(rawText) {
-  console.log("Claude raw response (first 500 chars):", rawText.slice(0, 500));
   const jsonMatch = rawText.match(/\{[\s\S]*\}/);
   if (!jsonMatch) return { error: "AI returned no JSON — please try again." };
 
@@ -496,7 +485,6 @@ async function adjustPortions(apiKey, plan, targets, checkA, checkB) {
     `Plan to fix:\n${JSON.stringify(plan)}\n\n` +
     `Return the corrected plan as raw JSON in the exact same structure.`;
 
-  console.log("[macro-fix] Portion-only correction via Haiku — misses:", missLines.join(" | "));
   const result = await callClaude(apiKey, MODEL_HAIKU, correctionContent, { useCache: false });
   if (result.error) {
     console.warn("[macro-fix] Haiku correction call failed:", result.error);
@@ -546,28 +534,22 @@ export default async function handler(req, res) {
     const { data: profileData } = await sb.from("profiles").select("is_pro, is_dev_account").eq("id", userId).single();
     const isPro = profileData?.is_pro === true;
     const isDevAccount = profileData?.is_dev_account === true;
-    console.log(`[rate-limit] Request from userId: ${userId} isPro: ${isPro} isDevAccount: ${isDevAccount} (server-verified)`);
-
     // ── Rate limiting ───────────────────────────────────────────
     let lifetimeCount = 0, weeklyCount = 0, dayCount = 0, monthCount = 0;
     let remaining = null;
 
     if (isDevAccount) {
       // Dev accounts bypass all rate limits entirely
-      console.log(`[rate-limit] DEV ACCOUNT — bypassing all limits for ${userId}`);
       remaining = { phase: "dev", daily: 999, monthly: 999 };
     } else if (!isPro) {
       // Phase 1 — Intro: first FREE_INTRO_LIMIT lifetime gens, no time restriction
       lifetimeCount = await countLogs(sb, userId, "1970-01-01T00:00:00Z", "lifetime");
-      console.log(`[rate-limit] FREE lifetime: ${lifetimeCount}`);
 
       if (lifetimeCount < FREE_INTRO_LIMIT) {
-        console.log(`[rate-limit] FREE INTRO phase (${lifetimeCount}/${FREE_INTRO_LIMIT}) — PASSED`);
         remaining = { phase: "intro", introRemaining: Math.max(0, FREE_INTRO_LIMIT - lifetimeCount - 1) };
       } else {
         // Phase 2 — Ongoing: 1 per rolling 7-day window
         weeklyCount = await countLogs(sb, userId, sevenDaysAgo(), "7-day");
-        console.log(`[rate-limit] FREE WEEKLY check — ${weeklyCount}/${FREE_WEEKLY_LIMIT}`);
 
         if (weeklyCount >= FREE_WEEKLY_LIMIT) {
           const { data: lastRow } = await sb
@@ -590,7 +572,6 @@ export default async function handler(req, res) {
           return res.status(429).json({ error: errMsg, limitReached: true, isPro: false, remaining: { phase: "weekly", resetDays } });
         }
 
-        console.log("[rate-limit] FREE WEEKLY — PASSED");
         remaining = { phase: "weekly", resetDays: 7 };
       }
     } else {
@@ -600,8 +581,6 @@ export default async function handler(req, res) {
         countLogs(sb, userId, startOfMonth(),    "pro-monthly"),
       ]);
 
-      console.log(`[rate-limit] PRO check — day:${dayCount}/${PRO_DAILY_LIMIT} month:${monthCount}/${PRO_MONTHLY_LIMIT}`);
-
       if (dayCount >= PRO_DAILY_LIMIT) {
         return res.status(429).json({ error: "Daily limit reached. Resets tomorrow at midnight.", limitReached: true, isPro: true, remaining: { phase: "pro", daily: 0, monthly: Math.max(0, PRO_MONTHLY_LIMIT - monthCount) } });
       }
@@ -609,7 +588,6 @@ export default async function handler(req, res) {
         return res.status(429).json({ error: "Monthly limit reached. Resets on the 1st of next month.", limitReached: true, isPro: true, remaining: { phase: "pro", daily: Math.max(0, PRO_DAILY_LIMIT - dayCount), monthly: 0 } });
       }
 
-      console.log("[rate-limit] PRO — PASSED");
       remaining = { phase: "pro", daily: Math.max(0, PRO_DAILY_LIMIT - dayCount - 1), monthly: Math.max(0, PRO_MONTHLY_LIMIT - monthCount - 1) };
     }
 
@@ -619,7 +597,6 @@ export default async function handler(req, res) {
     // Force Sonnet for all generations until Haiku accuracy is verified.
     const complexityScore = getComplexityScore(profile);
     const model = MODEL_SONNET;
-    console.log(`[model] complexity:${complexityScore} → Sonnet (forced — Haiku macro accuracy under review)`);
 
     // ── Build dynamic user content (no JSON examples — those live in cached system) ──
     const macros = profile.macros || { target: 2200, proteinG: 180, carbG: 240, fatG: 70 };
@@ -654,8 +631,6 @@ export default async function handler(req, res) {
       `Day A — ${MEAL_TYPES.map((t, i) => `${t}: ${dayCuisinesA[i]}`).join(" | ")}\n` +
       `Day B — ${MEAL_TYPES.map((t, i) => `${t}: ${dayCuisinesB[i]}`).join(" | ")}`;
 
-    console.log(`[prompt] Cuisine assignments: ${cuisineAssignmentLines.replace(/\n/g, " | ")}`);
-
     const dietList = profile.diet || [];
     const dislikedFoods = profile.dislikedFoods || [];
 
@@ -676,8 +651,6 @@ export default async function handler(req, res) {
     const dietConstraintLines = dietList.length > 0
       ? dietList.filter(d => DIET_RULES[d]).map(d => `✗ ${d}: ${DIET_RULES[d]}`).join("\n")
       : null;
-
-    console.log(`[dietary] constraints sent: diet=[${dietList.join(",")}] dislikedFoods=[${dislikedFoods.join(",")}]`);
 
     const hardConstraints = [
       dietConstraintLines
@@ -1080,7 +1053,6 @@ PERMANENTLY PROHIBITED — never generate under any circumstances: sake, galanga
       parts.push(ingredientConstraints);
 
       if (mealTemplates) {
-        console.error('[templateSpec DEBUG] mealTemplates keys:', Object.keys(mealTemplates), 'dayA keys:', Object.keys(mealTemplates.dayA || {}));
         try {
           const dayLabels = { dayA: 'A', dayB: 'B' };
           const mealOrder = ['breakfast', 'lunch', 'snack', 'dinner'];
@@ -1118,7 +1090,7 @@ PERMANENTLY PROHIBITED — never generate under any circumstances: sake, galanga
           const templateSpec = templateLines.join('\n');
           parts.push(templateSpec);
         } catch (e) {
-          console.error('[templateSpec ERROR]', e.message, e.stack);
+          // template spec build failed — continue without template injection
         }
       } else if (proteinAssignments && proteinAssignments.length > 0) {
         const lines = proteinAssignments.map(item => {
@@ -1168,8 +1140,6 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
       parts.push(complexityLine);
 
       const content = parts.join("\n\n");
-      const templateSpec = parts.find(p => p.startsWith('MEAL TEMPLATES'));
-      console.error(JSON.stringify({ tag: '[buildDynamicContent]', templateSpecLength: templateSpec ? templateSpec.length : null, templateSpecInjected: !!templateSpec, promptPreview: content.substring(0, 500) }));
       return content;
     };
 
@@ -1179,9 +1149,7 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
     const budgetTier = weeklyBudget < 60 ? 'strict' : weeklyBudget < 90 ? 'moderate' : weeklyBudget < 150 ? 'flexible' : 'premium';
     const { assignments: proteinAssignments, estimatedProteinCost } = selectProteinsForPlan(budgetTier, macros, weeklyBudget);
     const mealTemplates = generateMealTemplate({ weeklyBudget, macros, budgetTier, dietaryRestrictions: dietList, pickinessLevel: pickinessLevel, days: 2, mealsPerDay: 4 });
-    console.error(JSON.stringify({ tag: '[templateGenerator]', weeklyProjectedCost: mealTemplates.weeklyProjectedCost, budget: weeklyBudget, ratio: (mealTemplates.weeklyProjectedCost / weeklyBudget * 100).toFixed(1) + '%', dayAMeals: mealTemplates.dayA?.meals?.map(m => m.mealType), dayBMeals: mealTemplates.dayB?.meals?.map(m => m.mealType), dayATotals: mealTemplates.verifiedTotals?.dayA, dayBTotals: mealTemplates.verifiedTotals?.dayB }));
 
-    console.log(`CALLING CLAUDE API — model:${model} userId:${userId} ts:${new Date().toISOString()}`);
     const firstResult = await callClaude(apiKey, model, buildDynamicContent('', null, weeklyBudget, estimatedProteinCost, mealTemplates), { useCache: true });
 
     if (firstResult.error) {
@@ -1254,7 +1222,6 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
         `Misses: ${missDetails.join("; ")}\n` +
         `CRITICAL: Protein target of ${macros.proteinG}g per day MUST be met. Use larger protein portions.\n\n`;
 
-      console.log("[macro-fix] Macro validation failed — full Sonnet retry:", missDetails.join(" | "));
       const retryResult = await callClaude(apiKey, MODEL_SONNET, buildDynamicContent(retryPrefix, null, weeklyBudget, estimatedProteinCost, mealTemplates), { useCache: true });
       totalUsage = mergeUsage(totalUsage, retryResult.usage || {});
 
@@ -1264,7 +1231,6 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
           const retryA = validateMacros(retryParsed.abPlan.A, macros, "Day A (retry)");
           const retryB = validateMacros(retryParsed.abPlan.B, macros, "Day B (retry)");
           if (!retryA.failed && !retryB.failed) {
-            console.log("[macro-fix] Retry PASSED — using corrected plan");
             abPlan = retryParsed.abPlan;
           } else {
             console.warn("[macro-fix] Retry still off — serving best available plan");
@@ -1280,15 +1246,8 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
 
     // ── Cost logging ─────────────────────────────────────────────
     const estimatedCost = estimateCost(totalUsage, model);
-    console.log(
-      `[cost] model:${model} complexity:${complexityScore} ` +
-      `in:${totalUsage.input_tokens} out:${totalUsage.output_tokens} ` +
-      `cache_read:${totalUsage.cache_read_input_tokens} cache_write:${totalUsage.cache_creation_input_tokens} ` +
-      `estimated:$${estimatedCost.toFixed(4)}`
-    );
 
     // ── Log this generation ──────────────────────────────────────
-    console.log(`[rate-limit] Inserting generation_log for user ${userId}`);
     const logPayload = {
       user_id:          userId,
       generated_at:     new Date().toISOString(),
@@ -1313,8 +1272,6 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
       console.error("[rate-limit] generation_log INSERT FAILED:", JSON.stringify(insertError));
       console.error("[rate-limit] code:", insertError.code, "message:", insertError.message, "hint:", insertError.hint);
       console.warn("[rate-limit] Generation served WITHOUT being logged — limit may not enforce correctly");
-    } else {
-      console.log(`[rate-limit] generation_log insert OK for user ${userId}`);
     }
 
     // ── Layer 3: Nutrition verification against local database ───
@@ -1353,12 +1310,6 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
         if (!meal) continue;
         const verification = verifyMealMacrosWithDatabase(meal);
         meal.nutritionVerification = verification;
-        console.log(
-          `[nutritionVerification] meal: ${meal.name || mealType}` +
-          ` calculated protein: ${verification.calculatedProtein ?? 'n/a'}` +
-          ` stated protein: ${meal.protein ?? 'n/a'}` +
-          ` matched ingredients: ${verification.matchedIngredients ?? 0}`
-        );
       }
     }
 
