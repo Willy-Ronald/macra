@@ -377,7 +377,7 @@ RULES:
 - equipment: comma-separated string, max 3 items
 - desc: max 8 words
 - Return ONLY raw JSON starting with { and ending with } — no markdown, no explanation
-- CRITICAL: The ingredients array in your response must contain EXACTLY the ingredients specified in the MEAL TEMPLATES section. Copy the ingredient names, quantities, and units exactly as given. Do not add, remove, or modify any ingredient. Only add spices and seasonings from the approved spices list — these are free items that do not affect cost or macros.
+- MEAL PREP MODE — FIXED INGREDIENT TEMPLATES: When the user message contains a MEAL TEMPLATES section, you are operating in Meal Prep Mode. In this mode your ONLY job is to write creative meal names, one-sentence descriptions, and cooking instructions for each meal slot. The ingredients, quantities, and units are ALREADY CALCULATED and FIXED by our nutrition engine. You MUST use the exact ingredients listed — do not add any ingredients except spices and seasonings. Do not change any quantities. Do not substitute any ingredients. The macro numbers shown in the template are already verified — do not try to hit different macro targets. Your creativity applies ONLY to the meal name, description, cuisine style, and cooking method. Treat this exactly like a recipe writing task where someone hands you a fixed ingredient list and asks you to make it sound delicious.
 - STRICT BUDGET ONLY (<$60/week): Before returning the plan, verify: (1) (Day A meat oz × 4) + (Day B meat oz × 3) ≤ 48 oz — if over, reduce portions; (2) (Day A olive oil tbsp × 4) + (Day B olive oil tbsp × 3) ≤ 8 tbsp — if over, switch to cooking spray; (3) estimated grocery cost ≤ 130% of stated budget.
 
 OUTPUT FORMAT (follow exactly — all fields required):
@@ -1048,6 +1048,8 @@ STRICT: no fish/seafood, no beans/legumes, no leafy greens, no ethnic names, no 
       // Budget goes FIRST — highest priority so Claude never forgets it
       if (budgetLine) parts.push(budgetLine);
 
+      parts.push(`Cuisine per slot:\n${cuisineAssignmentLines}`);
+
       const ingredientConstraints = `APPROVED INGREDIENTS — CRITICAL RULE: You may ONLY use ingredients from the approved list below. Do not generate any ingredient not on this list under any circumstances. Using unlisted ingredients breaks the grocery cost estimator and will cause the plan to fail. If a cuisine style calls for an ingredient not on this list, substitute with the closest approved alternative. Never use any ingredient from the PROHIBITED list regardless of cuisine style or budget tier.
 
 PROTEINS — subject to budget tier restrictions above: eggs, egg whites, chicken thighs, boneless chicken thighs, chicken breast, boneless skinless chicken breast, ground turkey, lean ground turkey, ground beef, lean ground beef, salmon fillet, fresh salmon, frozen salmon, shrimp, cooked shrimp, raw shrimp, canned tuna, tuna in water, tilapia, cod, pork tenderloin, pork chops, boneless pork chops, pork shoulder, bacon, turkey bacon, breakfast sausage, deli turkey, firm tofu, extra firm tofu, silken tofu.
@@ -1137,16 +1139,19 @@ PERMANENTLY PROHIBITED — never generate under any circumstances: sake, galanga
         parts.push(proteinSpec);
       }
 
-      parts.push(`Generate an A/B day meal plan. Goal: ${goal}.`);
+      parts.push(mealTemplates
+        ? `Generate an A/B day meal plan using the MEAL TEMPLATES above. Your job is recipe writing only — name each meal creatively, write an appetizing description under 10 words, and write 5 to 8 clear cooking steps. The ingredients are fixed.`
+        : `Generate an A/B day meal plan. Goal: ${goal}.`);
 
       // Dietary constraints — second highest priority
       if (hardConstraints) {
         parts.push(hardConstraints);
       }
 
-      // Macros — explicit and prominent
-      parts.push(
-        `MACROS — REQUIRED. Hit EVERY daily total within 3% or the plan fails:
+      // Macros — only inject daily targets when not in template mode
+      if (!mealTemplates) {
+        parts.push(
+          `MACROS — REQUIRED. Hit EVERY daily total within 3% or the plan fails:
 Daily targets: Cal:${macros.target} P:${macros.proteinG}g C:${macros.carbG}g F:${macros.fatG}g
 Protein target of ${macros.proteinG}g is critical — use sufficient protein sources at each meal.
 
@@ -1155,10 +1160,12 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
 - Lunch:     ~${Math.round(macros.target*0.27)}-${Math.round(macros.target*0.29)} cal, ~${Math.round(macros.proteinG*0.27)}-${Math.round(macros.proteinG*0.29)}g protein
 - Snack:     ~${Math.round(macros.target*0.13)}-${Math.round(macros.target*0.15)} cal, ~${Math.round(macros.proteinG*0.13)}-${Math.round(macros.proteinG*0.15)}g protein
 - Dinner:    ~${Math.round(macros.target*0.34)}-${Math.round(macros.target*0.36)} cal, ~${Math.round(macros.proteinG*0.34)}-${Math.round(macros.proteinG*0.36)}g protein`
-      );
+        );
+      } else {
+        parts.push('Daily macro targets are already embedded in each meal template above. Use those per-meal targets as your reference.');
+      }
 
       parts.push(complexityLine);
-      parts.push(`Cuisine per slot:\n${cuisineAssignmentLines}`);
 
       const content = parts.join("\n\n");
       const templateSpec = parts.find(p => p.startsWith('MEAL TEMPLATES'));
