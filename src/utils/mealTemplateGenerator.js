@@ -291,6 +291,45 @@ function selectProtein(mealType, proteinTargetG, mealBudget, budgetTier, exclude
 // ── SECTION 4 — MACRO BALANCER ───────────────────────────────────────────────
 
 function balanceMacros(proteinIngredient, mealType, macroTargets, mealBudget, dietaryRestrictions = [], pickinessLevel = 3, options = {}) {
+  // ── Exact protein quantity correction ────────────────────────────────────────
+  // Carbs + vegs typically contribute ~8g protein per meal; subtract that so the
+  // meal TOTAL lands on target rather than the protein ingredient alone.
+  const NON_PROTEIN_INGREDIENT_PROTEIN_OFFSET = 0;
+
+  const poolEntry = PROTEIN_POOL.find(p => p.name === proteinIngredient.name);
+  if (poolEntry) {
+    const proteinPerUnit = getProteinPerUnit(poolEntry);
+    const costPerUnit    = getCostPerUnit(poolEntry);
+    const calPerUnit     = dbMacros(poolEntry.name, 1, poolEntry.unit, null)?.calories || 0;
+
+    // Target for the protein ingredient = meal target minus what carbs/vegs will contribute
+    const ingredientProteinTarget = Math.max(0, macroTargets.protein - NON_PROTEIN_INGREDIENT_PROTEIN_OFFSET);
+
+    // Exact quantity needed
+    let exactQty = ingredientProteinTarget / proteinPerUnit;
+
+    // Round: nearest whole for eggs/slices, nearest 0.5 for oz
+    if (poolEntry.unit === 'each' || poolEntry.unit === 'slice') {
+      exactQty = Math.max(1, Math.round(exactQty));
+    } else {
+      exactQty = Math.max(0.5, Math.round(exactQty * 2) / 2);
+    }
+
+    // Calorie ceiling: if protein at exactQty leaves no room for carbs/fat/vegs, reduce
+    if (calPerUnit > 0 && exactQty * calPerUnit > macroTargets.calories - 60) {
+      if (poolEntry.unit === 'each' || poolEntry.unit === 'slice') {
+        exactQty = Math.max(1, Math.floor((macroTargets.calories - 60) / calPerUnit));
+      } else {
+        exactQty = Math.max(0.5, Math.floor(((macroTargets.calories - 60) / calPerUnit) * 2) / 2);
+      }
+    }
+
+    // Mutate in place — generateDay sees the updated values via object reference
+    proteinIngredient.quantity       = exactQty;
+    proteinIngredient.actualProteinG = Math.round(exactQty * proteinPerUnit * 10) / 10;
+    proteinIngredient.actualCost     = Math.round(exactQty * costPerUnit * 100) / 100;
+  }
+
   // Full protein macros from DB (includes fat, carbs, calories)
   const proteinMacros = dbMacros(
     proteinIngredient.name,
@@ -468,6 +507,25 @@ function balanceMacros(proteinIngredient, mealType, macroTargets, mealBudget, di
   if (fatIngredient) total = addMacros(total, fatIngredient.macros);
   for (const v of vegetables) total = addMacros(total, v.macros);
   let totalMacros = roundMacros(total);
+
+  const proteinGap = macroTargets.protein - totalMacros.protein;
+  if (Math.abs(proteinGap) > 2 && poolEntry) {
+    const proteinPerUnit = getProteinPerUnit(poolEntry);
+    const calPerUnit = dbMacros(poolEntry.name, 1, poolEntry.unit, null)?.calories || 0;
+    const adjustQty = proteinGap / proteinPerUnit;
+    const newQty = poolEntry.unit === 'each' || poolEntry.unit === 'slice'
+      ? Math.round(proteinIngredient.quantity + adjustQty)
+      : Math.round((proteinIngredient.quantity + adjustQty) * 2) / 2;
+    const calDelta = (newQty - proteinIngredient.quantity) * calPerUnit;
+    if (totalMacros.calories + calDelta <= macroTargets.calories * 1.05) {
+      proteinIngredient.quantity = Math.max(poolEntry.unit === 'each' ? 1 : 0.5, newQty);
+      const newProteinMacros = roundMacros(dbMacros(proteinIngredient.name, proteinIngredient.quantity, proteinIngredient.unit, null));
+      totalMacros = roundMacros(addMacros(
+        Object.fromEntries(['calories','protein','carbs','fat'].map(k => [k, totalMacros[k] - proteinMacros[k]])),
+        newProteinMacros
+      ));
+    }
+  }
 
   let totalCost = Math.round((
     proteinIngredient.actualCost +
