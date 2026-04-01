@@ -454,6 +454,20 @@ const Onboarding = ({onComplete}) => {
           style={{flex:1,padding:"14px 16px",borderRadius:`0 ${T.r} ${T.r} 0`,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,fontFamily:T.font,fontWeight:500,outline:"none",boxSizing:"border-box",height:50}}
         />
       </div>
+      {(() => {
+        const budgetNum = parseFloat(budgetInput);
+        const minBudget = profile?.proteinG
+          ? Math.round(profile.proteinG * 0.18 + 15)
+          : null;
+        if (minBudget && budgetNum && budgetNum < minBudget) {
+          return (
+            <p style={{ color: '#C9A84C', fontSize: '0.78rem', marginTop: '6px', lineHeight: 1.4 }}>
+              ⚠️ For your protein target, we recommend a minimum of ${minBudget}/week for accurate meal plans. Lower budgets may reduce macro accuracy.
+            </p>
+          );
+        }
+        return null;
+      })()}
       {(()=>{
         try {
           const budgetVal = parseInt(budgetInput, 10);
@@ -1954,6 +1968,29 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,o
     <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
     <h1 style={{fontSize:26,fontWeight:700,color:T.tx,margin:"4px 0 16px",letterSpacing:"-0.02em"}}>Meal Plan</h1>
 
+    {(() => {
+      const minBudget = profile?.proteinG
+        ? Math.round(profile.proteinG * 0.18 + 15)
+        : null;
+      const userBudget = profile?.weeklyBudget;
+      if (minBudget && userBudget && userBudget < minBudget) {
+        return (
+          <div style={{
+            background: 'rgba(201, 168, 76, 0.12)',
+            border: '1px solid rgba(201, 168, 76, 0.3)',
+            borderRadius: '8px',
+            padding: '10px 14px',
+            marginBottom: '12px',
+            fontSize: '0.78rem',
+            color: '#C9A84C',
+            lineHeight: 1.4
+          }}>
+            ⚠️ Your current budget of ${userBudget}/week is below the recommended minimum of ${minBudget}/week for your protein target. Macro accuracy may be reduced.
+          </div>
+        );
+      }
+      return null;
+    })()}
     {/* A/B tabs */}
     <Card data-tour="day-tabs" style={{display:"flex",padding:4,marginBottom:8}}>
       {[{k:"A"},{k:"B"}].map(d=>(
@@ -3914,6 +3951,20 @@ const ProfileScreen = ({profile, userId, userEmail, isPro, onProfileUpdate, onSi
         <span style={{padding:"14px 0 14px 16px",borderRadius:`${T.r} 0 0 ${T.r}`,border:`1px solid ${T.bd}`,borderRight:"none",background:T.sf,color:T.txM,fontSize:16,fontWeight:600,display:"flex",alignItems:"center"}}>$</span>
         <input type="number" inputMode="numeric" placeholder="e.g. 100" value={draftBudget} onChange={e=>setDraftBudget(e.target.value.replace(/[^0-9]/g,""))} style={{flex:1,padding:"14px 16px",borderRadius:`0 ${T.r} ${T.r} 0`,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,fontFamily:T.font,fontWeight:500,outline:"none",boxSizing:"border-box"}}/>
       </div>
+      {(() => {
+        const budgetNum = parseFloat(draftBudget);
+        const minBudget = profile?.proteinG
+          ? Math.round(profile.proteinG * 0.18 + 15)
+          : null;
+        if (minBudget && budgetNum && budgetNum < minBudget) {
+          return (
+            <p style={{ color: '#C9A84C', fontSize: '0.78rem', marginTop: '6px', lineHeight: 1.4 }}>
+              ⚠️ For your protein target, we recommend a minimum of ${minBudget}/week for accurate meal plans. Lower budgets may reduce macro accuracy.
+            </p>
+          );
+        }
+        return null;
+      })()}
       {(()=>{
         try {
           const budgetVal = parseInt(draftBudget, 10);
