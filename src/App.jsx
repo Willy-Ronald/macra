@@ -580,6 +580,9 @@ const Onboarding = ({onComplete}) => {
 
     {/* CTA */}
     <div style={{padding:"0 20px 32px"}}>
+      <p style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)', textAlign: 'center', lineHeight: 1.5, marginBottom: '16px', padding: '0 8px' }}>
+        Macra provides meal planning suggestions for informational purposes only. Macro and budget estimates are approximations based on raw ingredient weights and average national retail pricing. Actual results may vary. Consult a healthcare provider before making significant dietary changes.
+      </p>
       <button onClick={()=>{
         if(step === 5){
           // Budget step — save value if entered, then advance
@@ -1498,6 +1501,9 @@ const Dashboard = ({setTab,onLogCategory,profile,todayLog=[],onLogMeal,onUnlogMe
         <div style={{textAlign:"center"}}><p style={{fontSize:18,fontWeight:700,color:T.acc,margin:0,fontFamily:T.mono}}>{cal.tgt.toLocaleString()}</p><Lbl>target</Lbl></div>
       </div>
     </Card>
+    <p style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.35)', textAlign: 'center', marginTop: '6px' }}>
+      Macros based on raw ingredient weights · Results may vary
+    </p>
 
     {/* ── Empty state (today, nothing logged, no plan) ── */}
     {isEmpty ? <>
@@ -2108,6 +2114,10 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,o
           );
         } catch { return null; }
       })()}
+
+      <p style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.35)', textAlign: 'center', marginBottom: '8px' }}>
+        Estimates based on raw ingredient weights · Grocery costs based on average national retail pricing
+      </p>
 
       {/* Generate / Regenerate button */}
       <button
@@ -3328,6 +3338,9 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade,profile}) => {
                 <span style={{fontSize:11,fontWeight:600,color:T.acc,letterSpacing:"0.1em",textTransform:"uppercase"}}>Est. Weekly Cost</span>
                 <span style={{fontSize:26,fontWeight:800,color:T.tx,fontFamily:T.mono}}>${costEstimate.total.toFixed(2)}</span>
               </div>
+              <p style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.35)', marginTop: '4px' }}>
+                Prices estimated from average national retail pricing · Actual costs may vary
+              </p>
               {costEstimate.unknownCount>0 && (
                 <p style={{fontSize:11,color:T.txM,margin:"0 0 10px",lineHeight:1.4}}>
                   Includes ~${costEstimate.buffer.toFixed(0)} estimate for {costEstimate.unknownCount} unlisted item{costEstimate.unknownCount!==1?"s":""}.
