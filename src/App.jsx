@@ -37,6 +37,55 @@ const T = {
   r:14,font:"'Outfit',sans-serif",mono:"'DM Mono',monospace"
 };
 
+// ── Budget tier definitions ────────────────────────────────────────────────────
+const BUDGET_TIERS = [
+  { name: 'Budget',   value: 60,  desc: 'Best for lower protein targets under 150g daily. Simple meals, maximum savings.',                   accent: '#6B9F6B' },
+  { name: 'Moderate', value: 85,  desc: 'Supports most macro goals up to 185g protein daily. Good variety and accuracy.',                    accent: '#C8B88A' },
+  { name: 'Flexible', value: 125, desc: 'Full protein variety, more cuisine options, best for higher macro targets.',                        accent: '#6B8FBF' },
+  { name: 'Premium',  value: 175, desc: 'Maximum variety, 5 protein options per week, all cuisine styles available.',                        accent: '#9B7EBD' },
+];
+
+const BudgetTierCards = ({ selectedValue, onSelect, proteinG }) => {
+  const minBudget = proteinG ? Math.round(proteinG * 0.45 + 20) : null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {BUDGET_TIERS.map(tier => {
+        const selected = selectedValue === tier.value;
+        let compat = null;
+        if (minBudget) {
+          if (tier.value >= minBudget) {
+            compat = { icon: '✓', text: 'Compatible with your goals', color: '#6BCB77' };
+          } else if (tier.value >= minBudget * 0.85) {
+            compat = { icon: '⚠️', text: 'May have reduced accuracy', color: '#C9A84C' };
+          } else {
+            compat = { icon: '✗', text: `Not recommended for your protein target of ${proteinG}g`, color: '#EF4444' };
+          }
+        }
+        return (
+          <button key={tier.value} onClick={() => onSelect(tier.value)} style={{
+            width: '100%', textAlign: 'left', padding: '14px 16px', borderRadius: 12,
+            border: `1.5px solid ${selected ? tier.accent : 'rgba(255,255,255,0.08)'}`,
+            background: selected ? `rgba(${tier.accent === '#6B9F6B' ? '107,159,107' : tier.accent === '#C8B88A' ? '200,184,138' : tier.accent === '#6B8FBF' ? '107,143,191' : '155,126,189'},0.10)` : 'rgba(255,255,255,0.02)',
+            cursor: 'pointer', fontFamily: "'Outfit',sans-serif", transition: 'all 0.18s',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: selected ? tier.accent : '#FAFAF9' }}>{tier.name}</span>
+              <span style={{ fontSize: 15, fontWeight: 700, color: selected ? tier.accent : '#A1A1AA', fontFamily: "'DM Mono',monospace" }}>${tier.value}/wk</span>
+            </div>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', margin: '0 0 8px', lineHeight: 1.45 }}>{tier.desc}</p>
+            {compat && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ fontSize: 11 }}>{compat.icon}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: compat.color }}>{compat.text}</span>
+              </div>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
+
 // Returns YYYY-MM-DD in the user's LOCAL timezone.
 // Always use this instead of new Date().toISOString().split('T')[0]
 // (toISOString is UTC and can return the wrong day for non-UTC users).
@@ -552,49 +601,14 @@ const Onboarding = ({onComplete}) => {
     // 5: Weekly Grocery Budget
     <div key="5">
       <h2 style={{fontSize:28,fontWeight:700,color:T.tx,margin:"0 0 6px",letterSpacing:"-0.02em"}}>Weekly Grocery Budget</h2>
-      <p style={{fontSize:14,color:T.txM,margin:"0 0 28px",lineHeight:1.5}}>What's your weekly grocery budget?</p>
-      <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:8}}>
-        <span style={{padding:"14px 0 14px 16px",borderRadius:`${T.r} 0 0 ${T.r}`,border:`1px solid ${T.bd}`,borderRight:"none",background:T.sf,color:T.txM,fontSize:16,fontWeight:600,lineHeight:1,height:50,boxSizing:"border-box",display:"flex",alignItems:"center"}}>$</span>
-        <input
-          type="number" inputMode="numeric" placeholder="e.g. 100"
-          value={budgetInput}
-          onChange={e=>setBudgetInput(e.target.value.replace(/[^0-9]/g,""))}
-          style={{flex:1,padding:"14px 16px",borderRadius:`0 ${T.r} ${T.r} 0`,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,fontFamily:T.font,fontWeight:500,outline:"none",boxSizing:"border-box",height:50}}
-        />
-      </div>
-      {(() => {
-        const budgetNum = parseFloat(budgetInput);
-        const minBudget = profile?.proteinG
-          ? Math.round(profile.proteinG * 0.18 + 15)
-          : null;
-        if (minBudget && budgetNum && budgetNum < minBudget) {
-          return (
-            <p style={{ color: '#C9A84C', fontSize: '0.78rem', marginTop: '6px', lineHeight: 1.4 }}>
-              ⚠️ For your protein target, we recommend a minimum of ${minBudget}/week for accurate meal plans. Lower budgets may reduce macro accuracy.
-            </p>
-          );
-        }
-        return null;
-      })()}
-      {(()=>{
-        try {
-          const budgetVal = parseInt(budgetInput, 10);
-          if (!budgetInput || isNaN(budgetVal) || budgetVal <= 0) return null;
-          const protein = calcMacros(profile).proteinG;
-          const { minimumBudget, suggestedBudget } = calculateMinimumBudget(protein);
-          if (budgetVal >= minimumBudget) return null;
-          return (
-            <p style={{fontSize:12,color:"#C9A84C",margin:"0 0 10px",lineHeight:1.5,fontWeight:400}}>
-              {`⚠️ Your protein target of ${protein}g/day typically requires at least $${minimumBudget}/week in groceries. We recommend $${suggestedBudget}/week for comfortable meal variety.`}
-            </p>
-          );
-        } catch { return null; }
-      })()}
-      <p style={{fontSize:12,color:T.txM,margin:"0 0 12px",lineHeight:1.6}}>
-        This helps us tailor your meal plans to fit your budget. Without a budget set, suggested meals and ingredients may be more extensive or costly.
-      </p>
-      <p style={{fontSize:10,color:T.txM,margin:"0 0 28px",lineHeight:1.6,opacity:0.7}}>
-        Note: Macra cannot guarantee exact budget accuracy. Grocery prices vary by location, store, and season. Budget guidance is approximate and intended as a helpful starting point only.
+      <p style={{fontSize:14,color:T.txM,margin:"0 0 20px",lineHeight:1.5}}>Choose the tier that fits your grocery budget. We'll tailor your meal plans accordingly.</p>
+      <BudgetTierCards
+        selectedValue={budgetInput ? parseInt(budgetInput, 10) : null}
+        onSelect={v => setBudgetInput(String(v))}
+        proteinG={(() => { try { return calcMacros(profile).proteinG; } catch { return null; } })()}
+      />
+      <p style={{fontSize:10,color:T.txM,margin:"16px 0 20px",lineHeight:1.6,opacity:0.7}}>
+        Grocery prices vary by location, store, and season. Budget guidance is approximate and intended as a helpful starting point only.
       </p>
       <button onClick={()=>{set("weeklyBudget",null);next();}} style={{width:"100%",padding:12,borderRadius:T.r,border:`1px solid ${T.bd}`,background:"transparent",color:T.tx2,fontSize:14,fontWeight:500,cursor:"pointer",fontFamily:T.font}}>
         Skip
@@ -4065,44 +4079,17 @@ const ProfileScreen = ({profile, userId, userEmail, isPro, onProfileUpdate, onSi
 
   // ── Budget sub-view ──
   if(view==="budget"){
+    const profileProteinG = profile?.macros?.proteinG || (profile ? (() => { try { return calcMacros(profile).proteinG; } catch { return null; } })() : null);
     return <div style={{padding:"0 20px 24px"}}>
       <BackBtn onBack={()=>setView(null)}/>
-      <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 20px",letterSpacing:"-0.02em"}}>Weekly Grocery Budget</h1>
-      <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:8}}>
-        <span style={{padding:"14px 0 14px 16px",borderRadius:`${T.r} 0 0 ${T.r}`,border:`1px solid ${T.bd}`,borderRight:"none",background:T.sf,color:T.txM,fontSize:16,fontWeight:600,display:"flex",alignItems:"center"}}>$</span>
-        <input type="number" inputMode="numeric" placeholder="e.g. 100" value={draftBudget} onChange={e=>setDraftBudget(e.target.value.replace(/[^0-9]/g,""))} style={{flex:1,padding:"14px 16px",borderRadius:`0 ${T.r} ${T.r} 0`,border:`1px solid ${T.bd}`,background:T.sf,color:T.tx,fontSize:16,fontFamily:T.font,fontWeight:500,outline:"none",boxSizing:"border-box"}}/>
-      </div>
-      {(() => {
-        const budgetNum = parseFloat(draftBudget);
-        const minBudget = profile?.proteinG
-          ? Math.round(profile.proteinG * 0.18 + 15)
-          : null;
-        if (minBudget && budgetNum && budgetNum < minBudget) {
-          return (
-            <p style={{ color: '#C9A84C', fontSize: '0.78rem', marginTop: '6px', lineHeight: 1.4 }}>
-              ⚠️ For your protein target, we recommend a minimum of ${minBudget}/week for accurate meal plans. Lower budgets may reduce macro accuracy.
-            </p>
-          );
-        }
-        return null;
-      })()}
-      {(()=>{
-        try {
-          const budgetVal = parseInt(draftBudget, 10);
-          if (!draftBudget || isNaN(budgetVal) || budgetVal <= 0) return null;
-          const adjustedProtein = profile?.macros?.proteinG;
-          if (!adjustedProtein) return null;
-          const { minimumBudget, suggestedBudget } = calculateMinimumBudget(adjustedProtein);
-          if (budgetVal >= minimumBudget) return null;
-          return (
-            <p style={{fontSize:12,color:"#C9A84C",margin:"0 0 10px",lineHeight:1.5,fontWeight:400}}>
-              {`⚠️ Your protein target of ${adjustedProtein}g/day typically requires at least $${minimumBudget}/week in groceries. We recommend $${suggestedBudget}/week for comfortable meal variety.`}
-            </p>
-          );
-        } catch { return null; }
-      })()}
-      <p style={{fontSize:12,color:T.txM,margin:"0 0 10px",lineHeight:1.6}}>This helps us tailor your meal plans to fit your budget. Without a budget set, suggested meals and ingredients may be more extensive or costly.</p>
-      <p style={{fontSize:10,color:T.txM,margin:"0 0 24px",lineHeight:1.6,opacity:0.7}}>Note: Macra cannot guarantee exact budget accuracy. Grocery prices vary by location, store, and season. Budget guidance is approximate and intended as a helpful starting point only.</p>
+      <h1 style={{fontSize:22,fontWeight:700,color:T.tx,margin:"0 0 8px",letterSpacing:"-0.02em"}}>Weekly Grocery Budget</h1>
+      <p style={{fontSize:13,color:T.txM,margin:"0 0 20px",lineHeight:1.5}}>Choose the tier that fits your grocery budget.</p>
+      <BudgetTierCards
+        selectedValue={draftBudget ? parseInt(draftBudget, 10) : null}
+        onSelect={v => setDraftBudget(String(v))}
+        proteinG={profileProteinG}
+      />
+      <p style={{fontSize:10,color:T.txM,margin:"16px 0 20px",lineHeight:1.6,opacity:0.7}}>Grocery prices vary by location, store, and season. Budget guidance is approximate and intended as a helpful starting point only.</p>
       <SaveBtn onClick={()=>{
         const val = draftBudget ? parseInt(draftBudget, 10) : null;
         saveField({weeklyBudget: val && val > 0 ? val : null}, null);
