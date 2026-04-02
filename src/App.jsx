@@ -48,7 +48,7 @@ const BUDGET_TIERS = [
 
 const BudgetTierCards = ({ selectedValue, onSelect, proteinG, isPro = false }) => {
   const isChef = false;
-  const [gourmetInput, setGourmetInput] = React.useState('');
+  const [gourmetInput, setGourmetInput] = useState('');
   const getMinBudget = (tierKey, pg) => {
     if (tierKey === 'strict' || tierKey === 'moderate') return Math.round(pg * 0.135 + 20);
     if (tierKey === 'flexible' || tierKey === 'premium') return Math.round(pg * 0.25 + 25);
