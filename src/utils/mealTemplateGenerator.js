@@ -833,6 +833,58 @@ function generateMealTemplate(profile) {
 
     }
 
+    // ── Budget enforcement swap (strict/moderate only) ──────────────────────
+    // Check before dayTotals so all variables (budget, mealMacroTargets, dayMeats) are in scope.
+    // Proxy weekly cost = dayCost × 7 / days (days = 2 for a standard A/B week split 4/3).
+    if (budgetTier === 'strict' || budgetTier === 'moderate') {
+      const dayCost = ORDER.reduce((s, mt) => s + (meals[mt]?.totalCost || 0), 0);
+      const projectedWeekly = dayCost * (7 / days);
+      if (projectedWeekly > weeklyBudget * 1.15) {
+        // Find the most expensive protein used in this day's meals (by per-meal actualCost)
+        let mostExpensiveName = null;
+        let mostExpensiveCost = -1;
+        for (const mealType of ORDER) {
+          const protein = meals[mealType]?.protein;
+          if (!protein) continue;
+          if (protein.actualCost > mostExpensiveCost) {
+            mostExpensiveCost = protein.actualCost;
+            mostExpensiveName = protein.name;
+          }
+        }
+
+        if (mostExpensiveName) {
+          const usedThisDay = new Set(dayMeats);
+          usedThisDay.add(mostExpensiveName);
+          // Replacement must be a meat not already used today, cheapest first
+          const candidates = PROTEIN_POOL
+            .filter(p => MEAT_PROTEINS.has(p.name) && !usedThisDay.has(p.name))
+            .sort((a, b) => getCostPerGramProtein(a) - getCostPerGramProtein(b));
+
+          if (candidates.length > 0) {
+            const replacement = candidates[0];
+            for (const mealType of ORDER) {
+              const meal = meals[mealType];
+              if (!meal?.protein || meal.protein.name !== mostExpensiveName) continue;
+              const swapped = makeProteinIngredient(replacement.name, mealType, mealMacroTargets[mealType], budget.perMeal[mealType]);
+              if (swapped) {
+                meal.protein = { name: swapped.name, quantity: swapped.quantity, unit: swapped.unit, actualProteinG: swapped.actualProteinG, actualCost: swapped.actualCost, nutritionDbKey: swapped.nutritionDbKey };
+                let m = roundMacros(dbMacros(meal.protein.name, meal.protein.quantity, meal.protein.unit, null));
+                if (meal.carbs)  m = addMacros(m, meal.carbs.macros);
+                if (meal.fat)    m = addMacros(m, meal.fat.macros);
+                for (const v of meal.vegetables) m = addMacros(m, v.macros);
+                meal.totalMacros = roundMacros(m);
+                meal.totalCost = Math.round(((meal.protein.actualCost || 0) + (meal.carbs?.cost || 0) + (meal.fat?.cost || 0) + meal.vegetables.reduce((s, v) => s + v.cost, 0)) * 100) / 100;
+              }
+            }
+            const newDayCost = ORDER.reduce((s, mt) => s + (meals[mt]?.totalCost || 0), 0);
+            if (newDayCost * (7 / days) > weeklyBudget * 1.15) {
+              console.warn(`[template] ${dayLabel} budget swap (${mostExpensiveName} → ${replacement.name}) still over 115% of $${weeklyBudget}`);
+            }
+          }
+        }
+      }
+    }
+
     const dayTotals = {
       calories: Math.round(ORDER.reduce((s, mt) => s + (meals[mt]?.totalMacros?.calories || 0), 0)),
       protein:  Math.round(ORDER.reduce((s, mt) => s + (meals[mt]?.totalMacros?.protein  || 0), 0) * 10) / 10,
@@ -896,63 +948,6 @@ function generateMealTemplate(profile) {
     }
 
     weeklyProjectedCost = computeWeeklyPkgCost(dayAResult.meals, dayBResult.meals, ORDER);
-  }
-
-  // Budget enforcement swap for strict/moderate tiers
-  if ((budgetTier === 'strict' || budgetTier === 'moderate') && weeklyProjectedCost > weeklyBudget * 1.15) {
-    // Find the most expensive protein used across the plan (by weekly pkg cost)
-    const proteinCosts = {};
-    for (const [dayResult, multiplier] of [[dayAResult, 4], [dayBResult, 3]]) {
-      for (const mealType of ORDER) {
-        const meal = dayResult.meals[mealType];
-        if (!meal?.protein) continue;
-        const { name, quantity, unit } = meal.protein;
-        if (!proteinCosts[name]) proteinCosts[name] = { name, unit, totalQty: 0 };
-        proteinCosts[name].totalQty += quantity * multiplier;
-      }
-    }
-    let mostExpensiveName = null;
-    let mostExpensivePkgCost = -1;
-    for (const [name, { totalQty, unit }] of Object.entries(proteinCosts)) {
-      const c = pkgCost(name, totalQty, unit);
-      if (c > mostExpensivePkgCost) { mostExpensivePkgCost = c; mostExpensiveName = name; }
-    }
-
-    if (mostExpensiveName) {
-      const usedNames = new Set(Object.keys(proteinCosts));
-      const nonMeatNames = PROTEIN_POOL.filter(p => !MEAT_PROTEINS.has(p.name)).map(p => p.name);
-      // Build candidate pool: meats only, not already used, sorted cheapest first
-      const candidates = PROTEIN_POOL
-        .filter(p => MEAT_PROTEINS.has(p.name) && !usedNames.has(p.name) && !nonMeatNames.includes(p.name))
-        .sort((a, b) => getCostPerGramProtein(a) - getCostPerGramProtein(b));
-
-      if (candidates.length > 0) {
-        const replacement = candidates[0];
-        // Swap every occurrence of mostExpensiveName across both day results
-        for (const dayResult of [dayAResult, dayBResult]) {
-          for (const mealType of ORDER) {
-            const meal = dayResult.meals[mealType];
-            if (!meal?.protein || meal.protein.name !== mostExpensiveName) continue;
-            const swapped = makeProteinIngredient(replacement.name, mealType, dayResult.meals[mealType].totalMacros, budget.perMeal[mealType]);
-            if (swapped) {
-              meal.protein = { name: swapped.name, quantity: swapped.quantity, unit: swapped.unit, actualProteinG: swapped.actualProteinG, actualCost: swapped.actualCost, nutritionDbKey: swapped.nutritionDbKey };
-              // Recompute meal totals
-              let m = roundMacros(dbMacros(meal.protein.name, meal.protein.quantity, meal.protein.unit, null));
-              if (meal.carbs)  m = addMacros(m, meal.carbs.macros);
-              if (meal.fat)    m = addMacros(m, meal.fat.macros);
-              for (const v of meal.vegetables) m = addMacros(m, v.macros);
-              meal.totalMacros = roundMacros(m);
-              meal.totalCost = Math.round(((meal.protein.actualCost || 0) + (meal.carbs?.cost || 0) + (meal.fat?.cost || 0) + meal.vegetables.reduce((s, v) => s + v.cost, 0)) * 100) / 100;
-            }
-          }
-          dayResult.dayTotals.cost = Math.round(ORDER.reduce((s, mt) => s + (dayResult.meals[mt]?.totalCost || 0), 0) * 100) / 100;
-        }
-        weeklyProjectedCost = computeWeeklyPkgCost(dayAResult.meals, dayBResult.meals, ORDER);
-        if (weeklyProjectedCost > weeklyBudget * 1.15) {
-          console.warn(`[template] Budget swap still over 115% of $${weeklyBudget} after swapping ${mostExpensiveName} → ${replacement.name}: $${weeklyProjectedCost}`);
-        }
-      }
-    }
   }
 
   const weeklyProjectedMacros = {
