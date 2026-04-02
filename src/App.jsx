@@ -49,18 +49,26 @@ const BUDGET_TIERS = [
 const BudgetTierCards = ({ selectedValue, onSelect, proteinG, isPro = false }) => {
   const isChef = false;
   const [gourmetInput, setGourmetInput] = React.useState('');
-  const minBudget = proteinG ? Math.round(proteinG * 0.45 + 20) : null;
+  const getMinBudget = (tierKey, pg) => {
+    if (tierKey === 'strict' || tierKey === 'moderate') return Math.round(pg * 0.135 + 20);
+    if (tierKey === 'flexible' || tierKey === 'premium') return Math.round(pg * 0.25 + 25);
+    return 0; // gourmet — always compatible
+  };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {BUDGET_TIERS.map(tier => {
         const isGourmet = tier.value === null;
         const locked = (tier.requiredPlan === 'pro' && !isPro) || (tier.requiredPlan === 'chef' && !isChef);
         const selected = isGourmet ? (selectedValue != null && selectedValue >= 250) : selectedValue === tier.value;
+        const minBudget = proteinG ? getMinBudget(tier.tier, proteinG) : null;
+        const budgetValue = tier.value || 250;
+        const compatible = !minBudget || budgetValue >= minBudget;
+        const marginal = !compatible && budgetValue >= minBudget * 0.85;
         let compat = null;
-        if (!isGourmet && minBudget) {
-          if (tier.value >= minBudget) {
+        if (tier.tier !== 'chef' && proteinG) {
+          if (compatible) {
             compat = { icon: '✓', text: 'Compatible with your goals', color: '#6BCB77' };
-          } else if (tier.value >= minBudget * 0.85) {
+          } else if (marginal) {
             compat = { icon: '⚠️', text: 'May have reduced accuracy', color: '#C9A84C' };
           } else {
             compat = { icon: '✗', text: `Not recommended for your protein target of ${proteinG}g`, color: '#EF4444' };
