@@ -85,8 +85,111 @@ const Ring=({pct,r,stroke,w,children})=>{
   </div>;
 };
 
+// ─── LEGAL SCREENS ──────────────────────────────────────────────
+const LegalBackBtn = ({onBack}) => (
+  <button onClick={onBack} style={{background:"none",border:"none",color:"#C8B88A",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:T.font,padding:"8px 0",marginBottom:20,display:"flex",alignItems:"center",gap:6}}>
+    ← Back
+  </button>
+);
+
+const LegalHeading = ({children}) => (
+  <h2 style={{fontSize:15,fontWeight:700,color:"#fff",margin:"24px 0 6px",letterSpacing:"-0.01em"}}>{children}</h2>
+);
+
+const LegalBody = ({children}) => (
+  <p style={{fontSize:"0.9rem",color:"rgba(255,255,255,0.7)",lineHeight:1.6,margin:"0 0 8px"}}>{children}</p>
+);
+
+const TermsScreen = ({onBack}) => (
+  <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"#09090B",fontFamily:T.font,overflowY:"auto"}}>
+    <div style={{padding:"20px 24px 48px"}}>
+      <LegalBackBtn onBack={onBack}/>
+      <h1 style={{fontSize:22,fontWeight:700,color:"#fff",margin:"0 0 4px",letterSpacing:"-0.02em"}}>Terms of Service</h1>
+      <p style={{fontSize:"0.78rem",color:"rgba(255,255,255,0.35)",margin:"0 0 28px"}}>Last updated: April 1, 2026</p>
+
+      <LegalHeading>1. Acceptance of Terms</LegalHeading>
+      <LegalBody>By accessing or using Macra ("the App"), you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the App.</LegalBody>
+
+      <LegalHeading>2. Description of Service</LegalHeading>
+      <LegalBody>Macra is a meal planning and nutrition tracking application that provides personalized meal suggestions, macro estimates, and grocery cost guidance. The App is provided for informational and personal use only.</LegalBody>
+
+      <LegalHeading>3. Informational Purposes Only</LegalHeading>
+      <LegalBody>All meal plans, macro calculations, calorie estimates, and nutritional information provided by Macra are approximations based on general data and average ingredient weights. They are intended as general guidance only and are not a substitute for professional medical or dietary advice.</LegalBody>
+      <LegalBody>Grocery cost estimates are based on average national retail pricing and will vary by location, store, season, and brand. Macra does not guarantee the accuracy of any cost estimates.</LegalBody>
+      <LegalBody>Consult a qualified healthcare provider or registered dietitian before making significant changes to your diet, especially if you have a medical condition.</LegalBody>
+
+      <LegalHeading>4. User Accounts</LegalHeading>
+      <LegalBody>You are responsible for maintaining the confidentiality of your account credentials and for all activity that occurs under your account. You must provide accurate information when creating your account and keep it up to date.</LegalBody>
+
+      <LegalHeading>5. Acceptable Use</LegalHeading>
+      <LegalBody>You agree not to misuse the App, attempt to access it by unauthorized means, reverse-engineer any component, or use it for any unlawful purpose. We reserve the right to suspend or terminate accounts that violate these terms.</LegalBody>
+
+      <LegalHeading>6. Intellectual Property</LegalHeading>
+      <LegalBody>All content, design, code, and branding within Macra is the property of Macra and its licensors. You may not reproduce, distribute, or create derivative works without express written permission.</LegalBody>
+
+      <LegalHeading>7. Disclaimer of Warranties</LegalHeading>
+      <LegalBody>The App is provided "as is" without warranties of any kind, express or implied. We do not warrant that the App will be error-free, uninterrupted, or that any nutritional or cost data will be accurate or complete.</LegalBody>
+
+      <LegalHeading>8. Limitation of Liability</LegalHeading>
+      <LegalBody>To the maximum extent permitted by law, Macra shall not be liable for any indirect, incidental, special, or consequential damages arising from your use of the App, including but not limited to reliance on nutritional information or cost estimates.</LegalBody>
+
+      <LegalHeading>9. Governing Law</LegalHeading>
+      <LegalBody>These Terms shall be governed by the laws of the State of Utah. Any disputes shall be resolved in the courts of Salt Lake County, Utah.</LegalBody>
+
+      <LegalHeading>10. Changes to Terms</LegalHeading>
+      <LegalBody>We may update these Terms from time to time. Continued use of the App after changes are posted constitutes acceptance of the revised Terms. We will indicate the date of the most recent update at the top of this page.</LegalBody>
+
+      <LegalHeading>11. Contact</LegalHeading>
+      <LegalBody>For questions about these Terms, contact us at support@macra.dev.</LegalBody>
+    </div>
+  </div>
+);
+
+const PrivacyScreen = ({onBack}) => (
+  <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"#09090B",fontFamily:T.font,overflowY:"auto"}}>
+    <div style={{padding:"20px 24px 48px"}}>
+      <LegalBackBtn onBack={onBack}/>
+      <h1 style={{fontSize:22,fontWeight:700,color:"#fff",margin:"0 0 4px",letterSpacing:"-0.02em"}}>Privacy Policy</h1>
+      <p style={{fontSize:"0.78rem",color:"rgba(255,255,255,0.35)",margin:"0 0 28px"}}>Last updated: April 1, 2026</p>
+
+      <LegalHeading>1. Information We Collect</LegalHeading>
+      <LegalBody>We collect information you provide directly: your name, email address, physical stats (height, weight, age, activity level, dietary goals), food preferences, and meal logs. We also collect usage data such as features used and session activity to improve the App.</LegalBody>
+
+      <LegalHeading>2. How We Use Your Information</LegalHeading>
+      <LegalBody>Your information is used to generate personalized meal plans and macro calculations, provide grocery cost estimates, maintain your account, and improve the App experience. We do not sell your personal data to third parties.</LegalBody>
+
+      <LegalHeading>3. Data Storage and Security</LegalHeading>
+      <LegalBody>Your data is stored securely using Supabase, a third-party database provider. We implement reasonable technical safeguards to protect your information. However, no method of transmission over the internet is 100% secure.</LegalBody>
+
+      <LegalHeading>4. Third-Party Services</LegalHeading>
+      <LegalBody>Macra uses Supabase for data storage and authentication, and Anthropic's Claude API to generate meal plan content. These providers have their own privacy policies governing how they handle data. We share only the minimum data necessary for these services to function.</LegalBody>
+
+      <LegalHeading>5. Data Retention</LegalHeading>
+      <LegalBody>We retain your data for as long as your account is active. You may request deletion of your account and associated data at any time by contacting us at support@macra.dev. We will process deletion requests within 30 days.</LegalBody>
+
+      <LegalHeading>6. Your Rights</LegalHeading>
+      <LegalBody>You have the right to access, correct, or delete the personal data we hold about you. You may also request a copy of your data or withdraw consent for processing at any time. To exercise these rights, contact us at support@macra.dev.</LegalBody>
+
+      <LegalHeading>7. Children's Privacy</LegalHeading>
+      <LegalBody>Macra is not intended for use by individuals under the age of 13. We do not knowingly collect personal information from children. If we become aware that a child has provided personal information, we will delete it promptly.</LegalBody>
+
+      <LegalHeading>8. Cookies and Local Storage</LegalHeading>
+      <LegalBody>Macra uses browser local storage and session tokens to maintain your login state and app preferences. We do not use third-party advertising cookies. You can clear local storage through your browser settings, though this will log you out of the App.</LegalBody>
+
+      <LegalHeading>9. Changes to This Policy</LegalHeading>
+      <LegalBody>We may update this Privacy Policy periodically. We will notify you of significant changes by updating the date at the top of this page. Continued use of the App after changes are posted constitutes acceptance of the revised policy.</LegalBody>
+
+      <LegalHeading>10. Governing Law</LegalHeading>
+      <LegalBody>This Privacy Policy is governed by the laws of the State of Utah. Any disputes shall be resolved in the courts of Salt Lake County, Utah.</LegalBody>
+
+      <LegalHeading>11. Contact</LegalHeading>
+      <LegalBody>For privacy-related questions or requests, contact us at support@macra.dev.</LegalBody>
+    </div>
+  </div>
+);
+
 // ─── AUTH SCREEN ────────────────────────────────────────────────
-const AuthScreen = ({onAuth}) => {
+const AuthScreen = ({onAuth, onShowTerms, onShowPrivacy}) => {
   const [mode,setMode]=useState("login"); // login | signup
   const [email,setEmail]=useState("");
   const [password,setPassword]=useState("");
@@ -147,6 +250,11 @@ const AuthScreen = ({onAuth}) => {
       <span onClick={()=>{setMode(mode==="login"?"signup":"login");setError("")}} style={{color:T.acc,fontWeight:600,cursor:"pointer"}}>
         {mode==="login"?"Sign Up":"Sign In"}
       </span>
+    </p>
+    <p style={{textAlign:"center",fontSize:11,color:"rgba(255,255,255,0.3)",margin:"24px 0 0"}}>
+      <span onClick={onShowTerms} style={{cursor:"pointer",textDecoration:"underline",textDecorationColor:"rgba(255,255,255,0.2)"}}>Terms of Service</span>
+      {" · "}
+      <span onClick={onShowPrivacy} style={{cursor:"pointer",textDecoration:"underline",textDecorationColor:"rgba(255,255,255,0.2)"}}>Privacy Policy</span>
     </p>
   </div>;
 };
@@ -3475,7 +3583,7 @@ const CUISINE_LIST = [
 ];
 const DIET_OPTIONS = ["None","Vegan","Vegetarian","Keto","Carnivore","Gluten-Free","Dairy-Free","Halal","Kosher","Paleo","High Protein","High Fiber"];
 
-const ProfileScreen = ({profile, userId, userEmail, isPro, onProfileUpdate, onSignOut, onUpgrade, onSetIsPro}) => {
+const ProfileScreen = ({profile, userId, userEmail, isPro, onProfileUpdate, onSignOut, onUpgrade, onSetIsPro, onShowTerms, onShowPrivacy}) => {
   const m = profile?.macros;
   const isAdmin = userEmail === ADMIN_EMAIL;
   // view: null | "diet" | "foods" | "cuisines" | "name" | "sex" | "age" | "weight" | "height" | "activity" | "goal" | "macrosplit"
@@ -4159,6 +4267,15 @@ const ProfileScreen = ({profile, userId, userEmail, isPro, onProfileUpdate, onSi
       </div>
       <Chevron/>
     </Card>
+    {/* Legal */}
+    <Card onClick={onShowTerms} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginTop:8,marginBottom:6,cursor:"pointer"}}>
+      <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>Terms of Service</p>
+      <Chevron/>
+    </Card>
+    <Card onClick={onShowPrivacy} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",marginBottom:6,cursor:"pointer"}}>
+      <p style={{fontSize:14,fontWeight:600,color:T.tx,margin:0}}>Privacy Policy</p>
+      <Chevron/>
+    </Card>
     {/* Dev panel — only visible to dev accounts (is_dev_account = true in DB) */}
     {profile?.isDevAccount&&<div style={{marginTop:28,padding:"16px 18px",border:"1.5px solid rgba(200,184,138,0.5)",borderRadius:T.r,background:"rgba(200,184,138,0.06)"}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
@@ -4586,6 +4703,7 @@ export default function App() {
   const [user,setUser] = useState(null);
   const [profile,setProfile] = useState(null);
   const [tab,setTab] = useState("home");
+  const [legalScreen,setLegalScreen] = useState(null); // null | 'terms' | 'privacy'
   const [savedMeals,setSavedMeals] = useState([]);
   const [isPro,setIsPro] = useState(false);
   const [todayLog,setTodayLog] = useState([]);
@@ -4924,8 +5042,11 @@ export default function App() {
     setTab("log");
   };
 
+  if(legalScreen==="terms") return <TermsScreen onBack={()=>setLegalScreen(null)}/>;
+  if(legalScreen==="privacy") return <PrivacyScreen onBack={()=>setLegalScreen(null)}/>;
+
   if(phase==="splash") return <Splash onFinish={checkAuth}/>;
-  if(phase==="auth") return <AuthScreen onAuth={handleAuth}/>;
+  if(phase==="auth") return <AuthScreen onAuth={handleAuth} onShowTerms={()=>setLegalScreen("terms")} onShowPrivacy={()=>setLegalScreen("privacy")}/>;
   if(phase==="onboarding") return <Onboarding onComplete={handleComplete}/>;
 
   const screens = {
@@ -4944,7 +5065,7 @@ export default function App() {
     log:<LogMeal savedMeals={savedMeals} onSaveMeal={handleSaveMeal} todayLog={todayLog} onLogMeal={handleLogMeal} userId={user?.id} onDeleteSavedMeal={handleDeleteSavedMeal} defaultMealType={defaultLogMealType}/>,
     stats:<StatsTab profile={profile} userId={user?.id} isPro={isPro}/>,
     grocery:<Grocery isPro={isPro} setIsPro={handleSetIsPro} weekPlans={weekPlans} userId={user?.id} onUpgrade={()=>setShowPricingModal(true)} profile={profile}/>,
-    profile:<ProfileScreen profile={profile} userId={user?.id} userEmail={user?.email} isPro={isPro} onProfileUpdate={p=>setProfile(p)} onSignOut={handleSignOut} onUpgrade={()=>setShowPricingModal(true)} onSetIsPro={handleSetIsPro}/>
+    profile:<ProfileScreen profile={profile} userId={user?.id} userEmail={user?.email} isPro={isPro} onProfileUpdate={p=>setProfile(p)} onSignOut={handleSignOut} onUpgrade={()=>setShowPricingModal(true)} onSetIsPro={handleSetIsPro} onShowTerms={()=>setLegalScreen("terms")} onShowPrivacy={()=>setLegalScreen("privacy")}/>
   };
 
   return <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:T.bg,fontFamily:T.font,position:"relative"}}>
