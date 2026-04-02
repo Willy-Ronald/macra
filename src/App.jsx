@@ -5068,15 +5068,8 @@ export default function App() {
     profile:<ProfileScreen profile={profile} userId={user?.id} userEmail={user?.email} isPro={isPro} onProfileUpdate={p=>setProfile(p)} onSignOut={handleSignOut} onUpgrade={()=>setShowPricingModal(true)} onSetIsPro={handleSetIsPro} onShowTerms={()=>setLegalScreen("terms")} onShowPrivacy={()=>setLegalScreen("privacy")}/>
   };
 
-  return <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:T.bg,fontFamily:T.font,position:"relative"}}>
+  return <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:T.bg,fontFamily:T.font,position:"relative",paddingTop:"env(safe-area-inset-top)"}}>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
-    <div style={{padding:"12px 20px 8px",display:"flex",justifyContent:"space-between",fontSize:12,fontWeight:600,color:T.txM}}>
-      <span>9:41</span>
-      <div style={{display:"flex",gap:6,alignItems:"center"}}>
-        <svg width="16" height="12" viewBox="0 0 16 12" fill={T.txM}><rect x="0" y="4" width="3" height="8" rx=".5"/><rect x="4.5" y="2" width="3" height="10" rx=".5"/><rect x="9" y="0" width="3" height="12" rx=".5"/><rect x="13.5" y="3" width="2.5" height="9" rx=".5" opacity=".3"/></svg>
-        <svg width="22" height="12" viewBox="0 0 22 12" fill="none"><rect x=".5" y=".5" width="19" height="11" rx="2" stroke={T.txM}/><rect x="2" y="2" width="14" height="8" rx="1" fill={T.acc}/><rect x="20" y="4" width="2" height="4" rx=".5" fill={T.txM}/></svg>
-      </div>
-    </div>
     <div style={{paddingBottom:88,overflowY:"auto"}}>{screens[tab]}</div>
 
     {tab==="home"&&<button onClick={()=>switchTab("log")} style={{position:"fixed",bottom:86,right:"calc(50% - 195px)",width:52,height:52,borderRadius:"50%",background:T.acc,border:"none",cursor:"pointer",boxShadow:`0 4px 20px ${T.accM}`,display:"flex",alignItems:"center",justifyContent:"center",zIndex:20}}>
