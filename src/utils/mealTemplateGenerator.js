@@ -90,7 +90,7 @@ const PROTEIN_POOL = [
   { name: 'chicken thighs',  proteinPer28g: 4.9,   costPerOz: 0.156,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium'] },
   { name: 'chicken breast',  proteinPer28g: 6.6,   costPerOz: 0.343,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['moderate','flexible','premium'] },
   { name: 'ground turkey',   proteinPer28g: 5.6,   costPerOz: 0.312,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium'] },
-  { name: 'ground beef',     proteinPer28g: 5.7,   costPerOz: 0.562,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['flexible','premium'] },
+  { name: 'ground beef',     proteinPer28g: 5.7,   costPerOz: 0.562,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['moderate','flexible','premium'] },
   { name: 'canned tuna',     proteinPer28g: 7.2,   costPerOz: 0.20,    unit: 'oz',    maxPerMeal: 6,  tiers: ['strict','moderate','flexible','premium'] },
   { name: 'tilapia',         proteinPer28g: 5.7,   costPerOz: 0.313,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['moderate','flexible','premium'] },
   { name: 'salmon',          proteinPer28g: 5.8,   costPerOz: 0.687,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['flexible','premium'] },
@@ -228,10 +228,12 @@ function selectProtein(mealType, proteinTargetG, mealBudget, budgetTier, exclude
   }
   if (pool.length === 0) return null;
 
-  // Shuffle first so proteins with similar costs vary between generations
-  pool = [...pool].sort(() => Math.random() - 0.5);
-  // Then sort cheapest cost-per-gram-of-protein first (stable relative order within similar costs)
+  // Sort cheapest cost-per-gram first, then pick randomly from top 3 to add variety
+  // while still preferring budget-appropriate proteins
   pool = [...pool].sort((a, b) => getCostPerGramProtein(a) - getCostPerGramProtein(b));
+  const pickIdx = Math.floor(Math.random() * Math.min(3, pool.length));
+  // Rotate pool so the randomly chosen candidate is tried first, rest follow in cost order
+  pool = [...pool.slice(pickIdx), ...pool.slice(0, pickIdx)];
 
   const budgetLimit = mealBudget * 0.65;
 
@@ -734,29 +736,34 @@ function generateMealTemplate(profile) {
 
     // First meat (used for lunch; also for dinner if strict/moderate)
     // Exclude Day A meats AND all non-meat proteins so selectProtein must pick a meat
+    // Also exclude canned tuna if the plan-wide 2-slot cap has been reached
+    const tunaExclude = tunaSlotCount >= 2 ? ['canned tuna'] : [];
     let firstMeatResult = selectProtein(
       'lunch', mealMacroTargets.lunch.protein, budget.perMeal.lunch,
-      budgetTier, [...dayAMeats, ...nonMeatNames], dietaryRestrictions, mealMacroTargets.lunch.calories
+      budgetTier, [...dayAMeats, ...nonMeatNames, ...tunaExclude], dietaryRestrictions, mealMacroTargets.lunch.calories
     );
     // If exclusion of Day A meats left the pool empty, allow any meat (relax Day A exclusion)
     if (!firstMeatResult) {
       firstMeatResult = selectProtein(
         'lunch', mealMacroTargets.lunch.protein, budget.perMeal.lunch,
-        budgetTier, [...nonMeatNames], dietaryRestrictions, mealMacroTargets.lunch.calories
+        budgetTier, [...nonMeatNames, ...tunaExclude], dietaryRestrictions, mealMacroTargets.lunch.calories
       );
     }
     if (firstMeatResult && MEAT_PROTEINS.has(firstMeatResult.name)) {
       dayMeats.push(firstMeatResult.name);
+      if (firstMeatResult.name === 'canned tuna') tunaSlotCount++;
     }
 
     // Second meat for dinner (flexible+) — must differ from first and from Day A meats
     if (maxMeat >= 2) {
+      const tunaExclude2 = tunaSlotCount >= 2 ? ['canned tuna'] : [];
       const secondMeatResult = selectProtein(
         'dinner', mealMacroTargets.dinner.protein, budget.perMeal.dinner,
-        budgetTier, [...dayAMeats, ...dayMeats, ...nonMeatNames], dietaryRestrictions, mealMacroTargets.dinner.calories
+        budgetTier, [...dayAMeats, ...dayMeats, ...nonMeatNames, ...tunaExclude2], dietaryRestrictions, mealMacroTargets.dinner.calories
       );
       if (secondMeatResult && MEAT_PROTEINS.has(secondMeatResult.name)) {
         dayMeats.push(secondMeatResult.name);
+        if (secondMeatResult.name === 'canned tuna') tunaSlotCount++;
       }
     }
 
@@ -895,6 +902,9 @@ function generateMealTemplate(profile) {
 
     return { meals, dayTotals, dayMeats, carbPerMeal };
   }
+
+  // Shared tuna slot counter across both days — cap at 2 slots total (mercury safety)
+  let tunaSlotCount = 0;
 
   const dayAResult = generateDay('DayA');
   const dayBResult = generateDay('DayB', dayAResult.dayMeats, dayAResult.carbPerMeal);
