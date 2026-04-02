@@ -1145,6 +1145,7 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
 
     // ── First Claude call ────────────────────────────────────────
     let totalUsage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+    let finalUsage = null;
 
     const budgetTier = weeklyBudget < 60 ? 'strict' : weeklyBudget < 90 ? 'moderate' : weeklyBudget < 150 ? 'flexible' : 'premium';
     const { assignments: proteinAssignments, estimatedProteinCost } = selectProteinsForPlan(budgetTier, macros, weeklyBudget);
@@ -1158,6 +1159,7 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
     }
 
     totalUsage = mergeUsage(totalUsage, firstResult.usage || {});
+    finalUsage = firstResult.usage || null;
 
     const firstParsed = parsePlan(firstResult.rawText);
 
@@ -1171,6 +1173,7 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
 
       const truncRetry = await callClaude(apiKey, model, truncRetryContent, { useCache: true });
       totalUsage = mergeUsage(totalUsage, truncRetry.usage || {});
+      if (truncRetry.usage) finalUsage = truncRetry.usage;
 
       if (truncRetry.error) {
         console.error("Retry after truncation also failed:", truncRetry.error);
@@ -1224,6 +1227,7 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
 
       const retryResult = await callClaude(apiKey, MODEL_SONNET, buildDynamicContent(retryPrefix, null, weeklyBudget, estimatedProteinCost, mealTemplates), { useCache: true });
       totalUsage = mergeUsage(totalUsage, retryResult.usage || {});
+      if (retryResult.usage) finalUsage = retryResult.usage;
 
       if (!retryResult.error) {
         const retryParsed = parsePlan(retryResult.rawText);
@@ -1314,7 +1318,7 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
     }
 
     // TODO V1.5: Validate estimated cost here and retry if >150% of budget
-    return res.json({ abPlan, remaining, debug: { templateInjected: mealTemplates !== null, templateProjectedCost: mealTemplates?.weeklyProjectedCost, templateDayAProteins: ['breakfast','lunch','snack','dinner'].map(mt => mt + ':' + (mealTemplates?.dayA?.[mt]?.protein?.name ?? 'null')), dayAKeys: mealTemplates?.dayA ? Object.keys(mealTemplates.dayA) : null } });
+    return res.json({ abPlan, remaining, debug: { templateInjected: mealTemplates !== null, templateProjectedCost: mealTemplates?.weeklyProjectedCost, templateDayAProteins: ['breakfast','lunch','snack','dinner'].map(mt => mt + ':' + (mealTemplates?.dayA?.[mt]?.protein?.name ?? 'null')), dayAKeys: mealTemplates?.dayA ? Object.keys(mealTemplates.dayA) : null, inputTokens: finalUsage?.input_tokens || 0, outputTokens: finalUsage?.output_tokens || 0, estimatedCostUSD: finalUsage ? Math.round(((finalUsage.input_tokens * 0.000003) + (finalUsage.output_tokens * 0.000015)) * 10000) / 10000 : null, modelUsed: model } });
   } catch (err) {
     console.error("Generate plan error:", err);
     return res.status(500).json({ error: err.message || "Failed to generate meal plan" });
