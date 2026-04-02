@@ -39,20 +39,25 @@ const T = {
 
 // ── Budget tier definitions ────────────────────────────────────────────────────
 const BUDGET_TIERS = [
-  { name: 'Budget',   value: 60,  desc: 'Best for lower protein targets under 150g daily. Simple meals, maximum savings.',                   accent: '#6B9F6B' },
-  { name: 'Moderate', value: 85,  desc: 'Supports most macro goals up to 185g protein daily. Good variety and accuracy.',                    accent: '#C8B88A' },
-  { name: 'Flexible', value: 125, desc: 'Full protein variety, more cuisine options, best for higher macro targets.',                        accent: '#6B8FBF' },
-  { name: 'Premium',  value: 175, desc: 'Maximum variety, 5 protein options per week, all cuisine styles available.',                        accent: '#9B7EBD' },
+  { name: 'Budget',   value: 60,   tier: 'strict',   color: '#5C8A5C', description: 'Best for protein targets under 150g daily. Bulk protein cooking for maximum savings.',           requiredPlan: 'free' },
+  { name: 'Moderate', value: 85,   tier: 'moderate', color: '#C8B88A', description: 'Supports most macro goals up to 185g protein. Two proteins per week, good variety.',             requiredPlan: 'free' },
+  { name: 'Flexible', value: 125,  tier: 'flexible', color: '#5C7A8A', description: 'More protein variety, fuller cuisine options, ideal for higher macro targets.',                   requiredPlan: 'pro' },
+  { name: 'Premium',  value: 175,  tier: 'premium',  color: '#8A6CA8', description: 'Maximum variety, full protein pool, best accuracy at any macro target.',                         requiredPlan: 'pro' },
+  { name: 'Gourmet',  value: null, tier: 'chef',     color: '#C8A84C', description: 'Creative high-end meal curation. Set your own weekly budget. All premium ingredients unlocked.', requiredPlan: 'chef' },
 ];
 
-const BudgetTierCards = ({ selectedValue, onSelect, proteinG }) => {
+const BudgetTierCards = ({ selectedValue, onSelect, proteinG, isPro = false }) => {
+  const isChef = false;
+  const [gourmetInput, setGourmetInput] = React.useState('');
   const minBudget = proteinG ? Math.round(proteinG * 0.45 + 20) : null;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {BUDGET_TIERS.map(tier => {
-        const selected = selectedValue === tier.value;
+        const isGourmet = tier.value === null;
+        const locked = (tier.requiredPlan === 'pro' && !isPro) || (tier.requiredPlan === 'chef' && !isChef);
+        const selected = isGourmet ? (selectedValue != null && selectedValue >= 250) : selectedValue === tier.value;
         let compat = null;
-        if (minBudget) {
+        if (!isGourmet && minBudget) {
           if (tier.value >= minBudget) {
             compat = { icon: '✓', text: 'Compatible with your goals', color: '#6BCB77' };
           } else if (tier.value >= minBudget * 0.85) {
@@ -62,18 +67,58 @@ const BudgetTierCards = ({ selectedValue, onSelect, proteinG }) => {
           }
         }
         return (
-          <button key={tier.value} onClick={() => onSelect(tier.value)} style={{
+          <button key={tier.tier} onClick={() => { if (!locked && !isGourmet) onSelect(tier.value); }} disabled={locked} style={{
             width: '100%', textAlign: 'left', padding: '14px 16px', borderRadius: 12,
-            border: `1.5px solid ${selected ? tier.accent : 'rgba(255,255,255,0.08)'}`,
-            background: selected ? `rgba(${tier.accent === '#6B9F6B' ? '107,159,107' : tier.accent === '#C8B88A' ? '200,184,138' : tier.accent === '#6B8FBF' ? '107,143,191' : '155,126,189'},0.10)` : 'rgba(255,255,255,0.02)',
-            cursor: 'pointer', fontFamily: "'Outfit',sans-serif", transition: 'all 0.18s',
+            border: `1.5px solid ${selected ? tier.color : 'rgba(255,255,255,0.08)'}`,
+            background: selected ? `${tier.color}1A` : 'rgba(255,255,255,0.02)',
+            cursor: locked ? 'not-allowed' : 'pointer', opacity: locked ? 0.5 : 1,
+            fontFamily: "'Outfit',sans-serif", transition: 'all 0.18s',
           }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 16, fontWeight: 700, color: selected ? tier.accent : '#FAFAF9' }}>{tier.name}</span>
-              <span style={{ fontSize: 15, fontWeight: 700, color: selected ? tier.accent : '#A1A1AA', fontFamily: "'DM Mono',monospace" }}>${tier.value}/wk</span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: selected ? tier.color : '#FAFAF9' }}>
+                {tier.name}
+                {locked && <span style={{ fontSize: 11, marginLeft: 6, opacity: 0.8 }}>
+                  {tier.requiredPlan === 'chef' ? ' 🔒 Chef feature' : ' 🔒 Pro feature'}
+                </span>}
+              </span>
+              {!isGourmet && (
+                <span style={{ fontSize: 15, fontWeight: 700, color: selected ? tier.color : '#A1A1AA', fontFamily: "'DM Mono',monospace" }}>${tier.value}/wk</span>
+              )}
+              {isGourmet && !selected && (
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#A1A1AA' }}>You set the price</span>
+              )}
             </div>
-            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', margin: '0 0 8px', lineHeight: 1.45 }}>{tier.desc}</p>
-            {compat && (
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', margin: '0 0 8px', lineHeight: 1.45 }}>{tier.description}</p>
+            {isGourmet && !locked && !selected && (
+              <button onClick={e => { e.stopPropagation(); setGourmetInput('250'); onSelect(250); }} style={{
+                marginTop: 4, padding: '6px 14px', borderRadius: 8, border: `1px solid ${tier.color}`,
+                background: 'transparent', color: tier.color, fontSize: 12, fontWeight: 600,
+                cursor: 'pointer', fontFamily: "'Outfit',sans-serif",
+              }}>Select Gourmet</button>
+            )}
+            {isGourmet && !locked && selected && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                <span style={{ fontSize: 14, color: tier.color, fontFamily: "'DM Mono',monospace" }}>$</span>
+                <input
+                  type="number" min={250} max={1000} value={gourmetInput}
+                  onClick={e => e.stopPropagation()}
+                  onChange={e => {
+                    const v = e.target.value;
+                    setGourmetInput(v);
+                    const n = parseInt(v, 10);
+                    if (n >= 250 && n <= 1000) onSelect(n);
+                  }}
+                  placeholder="250–1000"
+                  style={{
+                    background: 'rgba(255,255,255,0.06)', border: `1px solid ${tier.color}`,
+                    borderRadius: 8, padding: '6px 10px', fontSize: 14, color: '#FAFAF9',
+                    fontFamily: "'DM Mono',monospace", width: 120, outline: 'none',
+                  }}
+                />
+                <span style={{ fontSize: 12, color: '#A1A1AA' }}>/wk (min $250)</span>
+              </div>
+            )}
+            {compat && !locked && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ fontSize: 11 }}>{compat.icon}</span>
                 <span style={{ fontSize: 11, fontWeight: 600, color: compat.color }}>{compat.text}</span>
@@ -4088,6 +4133,7 @@ const ProfileScreen = ({profile, userId, userEmail, isPro, onProfileUpdate, onSi
         selectedValue={draftBudget ? parseInt(draftBudget, 10) : null}
         onSelect={v => setDraftBudget(String(v))}
         proteinG={profileProteinG}
+        isPro={isPro}
       />
       <p style={{fontSize:10,color:T.txM,margin:"16px 0 20px",lineHeight:1.6,opacity:0.7}}>Grocery prices vary by location, store, and season. Budget guidance is approximate and intended as a helpful starting point only.</p>
       <SaveBtn onClick={()=>{

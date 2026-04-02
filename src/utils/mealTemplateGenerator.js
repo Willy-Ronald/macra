@@ -87,22 +87,97 @@ function pkgCost(name, totalQty, unit) {
 }
 
 const PROTEIN_POOL = [
-  { name: 'chicken thighs',  proteinPer28g: 4.9,   costPerOz: 0.156,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium'] },
-  { name: 'chicken breast',  proteinPer28g: 6.6,   costPerOz: 0.343,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['moderate','flexible','premium'] },
-  { name: 'ground turkey',   proteinPer28g: 5.6,   costPerOz: 0.312,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium'] },
-  { name: 'ground beef',     proteinPer28g: 5.7,   costPerOz: 0.562,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['moderate','flexible','premium'] },
-  { name: 'canned tuna',     proteinPer28g: 7.2,   costPerOz: 0.20,    unit: 'oz',    maxPerMeal: 6,  tiers: ['strict','moderate','flexible','premium'] },
-  { name: 'tilapia',         proteinPer28g: 5.7,   costPerOz: 0.313,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['moderate','flexible','premium'] },
-  { name: 'salmon',          proteinPer28g: 5.8,   costPerOz: 0.687,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['flexible','premium'] },
-  { name: 'shrimp',          proteinPer28g: 5.9,   costPerOz: 0.583,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['flexible','premium'] },
-  { name: 'pork tenderloin', proteinPer28g: 5.9,   costPerOz: 0.249,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['moderate','flexible','premium'] },
-  { name: 'pork chops',      proteinPer28g: 5.5,   costPerOz: 0.374,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['flexible','premium'] },
-  { name: 'eggs',            proteinEach:   6.5,   costEach:  0.15,    unit: 'each',  maxPerMeal: 4,  tiers: ['strict','moderate','flexible','premium'] },
-  { name: 'firm tofu',       proteinPer28g: 2.3,   costPerOz: 0.142,   unit: 'oz',    maxPerMeal: 8,  tiers: ['strict','moderate','flexible','premium'] },
-  { name: 'deli turkey',     proteinPer28g: 5.0,   costPerOz: 0.443,   unit: 'oz',    maxPerMeal: 4,  tiers: ['moderate','flexible','premium'] },
-  { name: 'bacon',           proteinPerSlice: 3.7, costPerSlice: 0.40, unit: 'slice', maxPerMeal: 3,  tiers: ['flexible','premium'] },
-  { name: 'turkey bacon',    proteinPerSlice: 3.96, costPerSlice: 0.40, unit: 'slice', maxPerMeal: 3,  tiers: ['moderate','flexible','premium'] },
+  { name: 'chicken thighs',  proteinPer28g: 4.9,   costPerOz: 0.156,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'chicken breast',  proteinPer28g: 6.6,   costPerOz: 0.343,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'ground turkey',   proteinPer28g: 5.6,   costPerOz: 0.312,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'ground beef',     proteinPer28g: 5.7,   costPerOz: 0.562,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'canned tuna',     proteinPer28g: 7.2,   costPerOz: 0.20,    unit: 'oz',    maxPerMeal: 6,  tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'tilapia',         proteinPer28g: 5.7,   costPerOz: 0.313,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['moderate','flexible','premium','chef'] },
+  { name: 'salmon',          proteinPer28g: 5.8,   costPerOz: 0.687,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['flexible','premium','chef'] },
+  { name: 'shrimp',          proteinPer28g: 5.9,   costPerOz: 0.583,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['moderate','flexible','premium','chef'] },
+  { name: 'pork tenderloin', proteinPer28g: 5.9,   costPerOz: 0.249,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['moderate','flexible','premium','chef'] },
+  { name: 'pork chops',      proteinPer28g: 5.5,   costPerOz: 0.374,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['flexible','premium','chef'] },
+  { name: 'eggs',            proteinEach:   6.5,   costEach:  0.15,    unit: 'each',  maxPerMeal: 4,  tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'firm tofu',       proteinPer28g: 2.3,   costPerOz: 0.142,   unit: 'oz',    maxPerMeal: 8,  tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'deli turkey',     proteinPer28g: 5.0,   costPerOz: 0.443,   unit: 'oz',    maxPerMeal: 4,  tiers: ['moderate','flexible','premium','chef'] },
+  { name: 'bacon',           proteinPerSlice: 3.7, costPerSlice: 0.40, unit: 'slice', maxPerMeal: 3,  tiers: ['flexible','premium','chef'] },
+  { name: 'turkey bacon',    proteinPerSlice: 3.96, costPerSlice: 0.40, unit: 'slice', maxPerMeal: 3,  tiers: ['moderate','flexible','premium','chef'] },
+  { name: 'pork shoulder',   proteinPer28g: 5.9,   costPerOz: 0.156,   unit: 'oz',    maxPerMeal: 12, maxPerMealDinner: 16, tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'beef chuck roast', proteinPer28g: 6.0,  costPerOz: 0.281,   unit: 'oz',    maxPerMeal: 12, maxPerMealDinner: 16, tiers: ['strict','moderate','flexible','premium','chef'] },
 ];
+
+const BUDGET_TIER_CONFIG = {
+  strict:   { model: 'bulk',    primaryProteins: 1, secondaryProteins: 0, bulkCuts: ['pork shoulder','beef chuck roast','chicken thighs','ground turkey'], eggBreakfast: true, maxProteinVariety: 2 },
+  moderate: { model: 'bulk',    primaryProteins: 1, secondaryProteins: 1, bulkCuts: ['pork shoulder','beef chuck roast','chicken thighs','ground turkey','chicken breast','ground beef'], eggBreakfast: true, maxProteinVariety: 3 },
+  flexible: { model: 'hybrid',  primaryProteins: 2, secondaryProteins: 1, bulkCuts: null, eggBreakfast: true, maxProteinVariety: 4 },
+  premium:  { model: 'variety', primaryProteins: 3, secondaryProteins: 1, bulkCuts: null, eggBreakfast: true, maxProteinVariety: 4 },
+  chef:     { model: 'gourmet', primaryProteins: 5, secondaryProteins: 0, bulkCuts: null, eggBreakfast: true, maxProteinVariety: 5 },
+};
+
+const FLAVOR_DATABASE = {
+  bulkCookSeasonings: [
+    { name: 'garlic herb',        spices: ['garlic powder','dried thyme','dried rosemary','black pepper','salt'],         cookingFat: 'olive oil',   method: 'roast' },
+    { name: 'smoky paprika',      spices: ['smoked paprika','garlic powder','onion powder','cumin','cayenne','salt'],     cookingFat: 'olive oil',   method: 'roast' },
+    { name: 'lemon pepper',       spices: ['lemon zest','black pepper','garlic powder','salt'],                           cookingFat: 'olive oil',   method: 'pan-sear' },
+    { name: 'tex-mex',            spices: ['chili powder','cumin','garlic powder','onion powder','oregano','salt'],       cookingFat: 'olive oil',   method: 'skillet' },
+    { name: 'italian seasoning',  spices: ['italian seasoning','garlic powder','onion powder','red pepper flakes','salt'],cookingFat: 'olive oil',   method: 'bake' },
+    { name: 'cajun',              spices: ['paprika','cayenne','garlic powder','onion powder','thyme','oregano','salt'],  cookingFat: 'olive oil',   method: 'skillet' },
+    { name: 'curry',              spices: ['curry powder','cumin','coriander','turmeric','garlic powder','salt'],         cookingFat: 'coconut oil', method: 'skillet' },
+    { name: 'teriyaki',           spices: ['soy sauce','garlic powder','ginger powder','brown sugar','sesame oil'],       cookingFat: 'coconut oil', method: 'stir-fry' },
+    { name: 'mediterranean',      spices: ['oregano','garlic powder','lemon zest','cumin','coriander','salt'],            cookingFat: 'olive oil',   method: 'roast' },
+    { name: 'simple salt pepper', spices: ['salt','black pepper','garlic powder'],                                        cookingFat: 'olive oil',   method: 'pan-sear' },
+  ],
+  saucesAndFinishing: {
+    american:      ['hot sauce','BBQ sauce','ranch','honey mustard','buffalo sauce'],
+    mexican:       ['salsa','guacamole','sour cream','chipotle sauce','lime crema'],
+    asian:         ['soy sauce','sriracha','hoisin sauce','sesame oil','ponzu','gochujang'],
+    mediterranean: ['tzatziki','hummus','tahini','harissa','lemon-herb yogurt'],
+    italian:       ['marinara','pesto','alfredo','arrabbiata','lemon-caper butter'],
+    indian:        ['raita','mango chutney','tikka sauce','coconut curry','mint chutney'],
+    middleEastern: ['tahini sauce','garlic sauce','zhug','sumac yogurt'],
+    french:        ['dijon vinaigrette','beurre blanc','herb butter','béarnaise'],
+  },
+  breakfastProfiles: {
+    eggs: {
+      styles: ['scrambled','over-easy','poached','hard-boiled','soft-boiled'],
+      addIns: ['spinach','bell pepper','onion','mushroom','tomato','cheddar cheese','salsa','hot sauce'],
+    },
+    burritos: [
+      { name: 'classic breakfast burrito',  fillings: ['scrambled eggs','cheddar cheese','salsa','black beans'] },
+      { name: 'veggie burrito',             fillings: ['scrambled eggs','spinach','bell pepper','onion','cheddar cheese'] },
+      { name: 'meat lovers burrito',        fillings: ['scrambled eggs','turkey bacon','cheddar cheese','salsa'] },
+      { name: 'southwest burrito',          fillings: ['scrambled eggs','black beans','salsa','avocado','cumin'] },
+      { name: 'spicy chorizo-style burrito',fillings: ['scrambled eggs','ground turkey (chorizo-spiced)','jalapeño','cheddar cheese'] },
+      { name: 'greek burrito',              fillings: ['scrambled eggs','spinach','feta','tomato','olives'] },
+      { name: 'avocado burrito',            fillings: ['scrambled eggs','avocado','tomato','onion','lime'] },
+      { name: 'ham and cheese burrito',     fillings: ['scrambled eggs','deli turkey','cheddar cheese','mustard'] },
+      { name: 'mushroom swiss burrito',     fillings: ['scrambled eggs','mushrooms','swiss cheese','thyme'] },
+      { name: 'loaded potato burrito',      fillings: ['scrambled eggs','diced potato','cheddar cheese','sour cream','chives'] },
+    ],
+    toast: [
+      { name: 'avocado toast',            toppings: ['avocado','lemon juice','red pepper flakes','salt'] },
+      { name: 'peanut butter banana toast',toppings: ['peanut butter','banana','honey','cinnamon'] },
+      { name: 'cottage cheese toast',     toppings: ['cottage cheese','tomato','black pepper','everything bagel seasoning'] },
+      { name: 'egg and cheese toast',     toppings: ['fried egg','cheddar cheese','hot sauce'] },
+      { name: 'smoked salmon toast',      toppings: ['cream cheese','smoked salmon','red onion','capers','dill'] },
+      { name: 'greek toast',              toppings: ['hummus','cucumber','tomato','feta','olives'] },
+      { name: 'turkey and avocado toast', toppings: ['deli turkey','avocado','spinach','mustard'] },
+      { name: 'BLT toast',               toppings: ['turkey bacon','tomato','lettuce','mayo'] },
+      { name: 'ricotta honey toast',      toppings: ['ricotta','honey','walnuts','cinnamon'] },
+      { name: 'tuna melt toast',          toppings: ['canned tuna','cheddar cheese','tomato','pickle'] },
+      { name: 'bruschetta toast',         toppings: ['tomato','basil','garlic','olive oil','balsamic'] },
+      { name: 'almond butter apple toast',toppings: ['almond butter','apple slices','cinnamon','honey'] },
+    ],
+    yogurtBowls: {
+      bases:   ['Greek yogurt','Icelandic yogurt','cottage cheese'],
+      toppings: ['granola','blueberries','strawberries','banana','honey','chia seeds','almonds','walnuts','peanut butter','protein powder'],
+    },
+    cottageCheese: {
+      savory: ['tomato','cucumber','black pepper','everything bagel seasoning','hot sauce'],
+      sweet:  ['honey','berries','banana','cinnamon','granola'],
+    },
+  },
+};
 
 // carbs — macros are per 1 unit quantity; used for quantity planning and as DB fallback
 const CARB_SOURCES = [
