@@ -742,6 +742,101 @@ function computeWeeklyPkgCost(dayAMeals, dayBMeals, order) {
 
 // ── SECTION 5 — PLAN ASSEMBLER ───────────────────────────────────────────────
 
+function calculateBulkProteinOz(protein, dailyProteinG, mealType) {
+  const mealProteinTarget = mealType === 'dinner'
+    ? Math.round(dailyProteinG * 0.36)
+    : Math.round(dailyProteinG * 0.28);
+  const proteinPerOz = protein.proteinPer28g / 28;
+  const ozNeeded = mealProteinTarget / proteinPerOz;
+  const cap = protein.maxPerMealDinner || protein.maxPerMeal || 12;
+  return Math.min(ozNeeded, cap);
+}
+
+function selectWeeklyProteins(budgetTier, weeklyBudget, proteinG, dietaryRestrictions, days, mealsPerDay) {
+  const config = BUDGET_TIER_CONFIG[budgetTier] || BUDGET_TIER_CONFIG.moderate;
+
+  // Filter protein pool by tier and dietary restrictions, exclude eggs and tofu
+  // (those are handled separately as breakfast/snack proteins)
+  const NON_BULK = new Set(['eggs', 'firm tofu']);
+  let pool = PROTEIN_POOL.filter(p =>
+    p.tiers.includes(budgetTier) &&
+    !NON_BULK.has(p.name)
+  );
+
+  if (dietaryRestrictions.includes('vegetarian')) {
+    pool = pool.filter(p => !MEAT_PROTEINS.has(p.name));
+  }
+  if (dietaryRestrictions.includes('vegan')) {
+    pool = pool.filter(() => false); // no animal proteins
+  }
+
+  // For bulk model tiers prefer bulk cuts if defined
+  if (config.model === 'bulk' && config.bulkCuts) {
+    const bulkPool = pool.filter(p => config.bulkCuts.includes(p.name));
+    if (bulkPool.length > 0) pool = bulkPool;
+  }
+
+  if (pool.length === 0) return { primaryProtein: null, secondaryProtein: null, weeklyProteinCost: 0, primarySeasoning: null, secondarySeasoning: null, sauceSuggestions: [] };
+
+  // Sort by cost per gram then pick randomly from top 3
+  pool = [...pool].sort((a, b) => getCostPerGramProtein(a) - getCostPerGramProtein(b));
+  const pickIdx = Math.floor(Math.random() * Math.min(3, pool.length));
+  pool = [...pool.slice(pickIdx), ...pool.slice(0, pickIdx)];
+
+  const primaryProtein = pool[0];
+
+  // Secondary protein — exclude primary, pick again
+  let secondaryProtein = null;
+  if (config.secondaryProteins > 0) {
+    const secondaryPool = pool.filter(p => p.name !== primaryProtein.name);
+    if (secondaryPool.length > 0) {
+      const pickIdx2 = Math.floor(Math.random() * Math.min(3, secondaryPool.length));
+      secondaryProtein = [...secondaryPool.slice(pickIdx2), ...secondaryPool.slice(0, pickIdx2)][0];
+    }
+  }
+
+  // Calculate weekly protein cost based on bulk purchasing
+  // Lunch and dinner slots need the full protein target
+  // Day A repeats 4x per week, Day B repeats 3x per week
+  const dayALunchDinnerOz = calculateBulkProteinOz(primaryProtein, proteinG, 'lunch') +
+                             calculateBulkProteinOz(primaryProtein, proteinG, 'dinner');
+  const dayBLunchDinnerOz = secondaryProtein
+    ? calculateBulkProteinOz(secondaryProtein, proteinG, 'lunch') +
+      calculateBulkProteinOz(secondaryProtein, proteinG, 'dinner')
+    : dayALunchDinnerOz;
+
+  const totalPrimaryOz   = dayALunchDinnerOz * 4; // Day A repeats 4x
+  const totalSecondaryOz = dayBLunchDinnerOz * 3; // Day B repeats 3x
+
+  const primaryCost   = Math.ceil(totalPrimaryOz / 16) * (primaryProtein.costPerOz * 16);
+  const secondaryCost = secondaryProtein
+    ? Math.ceil(totalSecondaryOz / 16) * (secondaryProtein.costPerOz * 16)
+    : 0;
+
+  const weeklyProteinCost = Math.round((primaryCost + secondaryCost) * 100) / 100;
+
+  // Pick random bulk cook seasonings from the flavor database
+  const seasonings = FLAVOR_DATABASE.bulkCookSeasonings;
+  const primarySeasoning   = seasonings[Math.floor(Math.random() * seasonings.length)];
+  const secondarySeasoning = secondaryProtein
+    ? seasonings[Math.floor(Math.random() * seasonings.length)]
+    : null;
+
+  // Pick 3 random sauce options for Claude to vary meals with
+  const allSauces = Object.values(FLAVOR_DATABASE.saucesAndFinishing).flat();
+  const shuffled = [...allSauces].sort(() => Math.random() - 0.5);
+  const sauceSuggestions = shuffled.slice(0, 3);
+
+  return {
+    primaryProtein,
+    secondaryProtein,
+    weeklyProteinCost,
+    primarySeasoning,
+    secondarySeasoning,
+    sauceSuggestions,
+  };
+}
+
 function generateMealTemplate(profile) {
   const {
     weeklyBudget,
@@ -754,6 +849,15 @@ function generateMealTemplate(profile) {
   } = profile;
 
   const budget = allocateBudget(weeklyBudget, mealsPerDay, days);
+
+  const weeklyProteins = selectWeeklyProteins(
+    budgetTier,
+    weeklyBudget,
+    macros.proteinG,
+    dietaryRestrictions,
+    days,
+    mealsPerDay
+  );
 
   // Per-meal macro targets (protein split matches generate-plan.js)
   const mealMacroTargets = {
@@ -790,7 +894,7 @@ function generateMealTemplate(profile) {
 
   // dayAMeats: meat protein name(s) used on Day A — Day B must pick different meat(s)
   // dayACarbPerMeal: { breakfast: carbName, ... } from Day A, deprioritised in Day B
-  function generateDay(dayLabel, dayAMeats = [], dayACarbPerMeal = {}) {
+  function generateDay(dayLabel, dayAMeats = [], dayACarbPerMeal = {}, weeklyProteins = null) {
     const meals       = {};
     const carbPerMeal = {};
     const tierRules   = BUDGET_TIER_PROTEIN_RULES[budgetTier] || { maxMeatPerDay: 1 };
@@ -855,7 +959,12 @@ function generateMealTemplate(profile) {
       let proteinIngredient;
       let coldFormatOnly = false;
 
-      if (mealType === 'breakfast') {
+      if (weeklyProteins && weeklyProteins.primaryProtein && (mealType === 'lunch' || mealType === 'dinner')) {
+        const bulkProtein = dayLabel === 'DayA'
+          ? weeklyProteins.primaryProtein
+          : (weeklyProteins.secondaryProtein || weeklyProteins.primaryProtein);
+        proteinIngredient = makeProteinIngredient(bulkProtein.name, mealType, macroTarget, mealBudget);
+      } else if (mealType === 'breakfast') {
         if (!eggsExcluded) {
           proteinIngredient = makeProteinIngredient('eggs', 'breakfast', macroTarget, mealBudget);
         } else {
@@ -981,8 +1090,8 @@ function generateMealTemplate(profile) {
   // Shared tuna slot counter across both days — cap at 2 slots total (mercury safety)
   let tunaSlotCount = 0;
 
-  const dayAResult = generateDay('DayA');
-  const dayBResult = generateDay('DayB', dayAResult.dayMeats, dayAResult.carbPerMeal);
+  const dayAResult = generateDay('DayA', [], {}, weeklyProteins);
+  const dayBResult = generateDay('DayB', dayAResult.dayMeats, dayAResult.carbPerMeal, weeklyProteins);
 
   // Weekly projected cost: package-rounding math (Change 5)
   let weeklyProjectedCost = computeWeeklyPkgCost(dayAResult.meals, dayBResult.meals, ORDER);
@@ -1051,6 +1160,7 @@ function generateMealTemplate(profile) {
     },
     weeklyProjectedCost,
     weeklyProjectedMacros,
+    weeklyProteins,
   };
 }
 

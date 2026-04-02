@@ -1084,6 +1084,16 @@ PERMANENTLY PROHIBITED — never generate under any circumstances: sake, galanga
               templateLines.push(`Cuisine style: [Claude picks based on user preferences and variety]`);
             }
           }
+          if (mealTemplates.weeklyProteins && mealTemplates.weeklyProteins.primaryProtein) {
+            const wp = mealTemplates.weeklyProteins;
+            const ps = wp.primarySeasoning;
+            const seasoningDesc = ps ? `${ps.spices.join(', ')}` : 'salt, pepper, garlic powder';
+            let bulkCookLine = `\nBULK COOK METHOD: Cook ${wp.primaryProtein.name} with ${seasoningDesc} as the base seasoning. Vary each meal using different sauces and preparations from the flavor profiles below. Do not re-season the protein differently for each meal — the variety comes from the sauce and sides.`;
+            if (wp.sauceSuggestions && wp.sauceSuggestions.length > 0) {
+              bulkCookLine += `\nSuggested sauce variety (use across the meals): ${wp.sauceSuggestions.join(', ')}.`;
+            }
+            templateLines.push(bulkCookLine);
+          }
           if (budgetForPrompt != null && estimatedProteinCostForPrompt != null) {
             templateLines.push(`\nWEEKLY GROCERY BUDGET: $${budgetForPrompt}\nEstimated protein cost: $${estimatedProteinCostForPrompt.toFixed(2)}. Remaining budget for all other ingredients: $${(budgetForPrompt - estimatedProteinCostForPrompt).toFixed(2)}. Keep all non-protein ingredients affordable and within this remaining budget. Use simple staple ingredients only — no premium items.`);
           }
