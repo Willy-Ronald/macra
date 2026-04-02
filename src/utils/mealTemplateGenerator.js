@@ -906,48 +906,59 @@ function generateMealTemplate(profile) {
 
     // ── Pre-select the day meat(s) ──────────────────────────────────────────
     // Day B excludes Day A meats so a different protein is chosen
+    // Only run old selectProtein logic when bulk model is not active
     const dayMeats = [];
 
-    // Force meat-only selection by excluding all non-meat protein names from the pool
-    const nonMeatNames = PROTEIN_POOL
-      .filter(p => !MEAT_PROTEINS.has(p.name))
-      .map(p => p.name);
+    if (!weeklyProteins || !weeklyProteins.primaryProtein) {
+      // Force meat-only selection by excluding all non-meat protein names from the pool
+      const nonMeatNames = PROTEIN_POOL
+        .filter(p => !MEAT_PROTEINS.has(p.name))
+        .map(p => p.name);
 
-    // First meat (used for lunch; also for dinner if strict/moderate)
-    // Exclude Day A meats AND all non-meat proteins so selectProtein must pick a meat
-    // Also exclude canned tuna if the plan-wide 2-slot cap has been reached
-    const tunaExclude = tunaSlotCount >= 2 ? ['canned tuna'] : [];
-    let firstMeatResult = selectProtein(
-      'lunch', mealMacroTargets.lunch.protein, budget.perMeal.lunch,
-      budgetTier, [...dayAMeats, ...nonMeatNames, ...tunaExclude], dietaryRestrictions, mealMacroTargets.lunch.calories
-    );
-    // If exclusion of Day A meats left the pool empty, allow any meat (relax Day A exclusion)
-    if (!firstMeatResult) {
-      firstMeatResult = selectProtein(
+      // First meat (used for lunch; also for dinner if strict/moderate)
+      // Exclude Day A meats AND all non-meat proteins so selectProtein must pick a meat
+      // Also exclude canned tuna if the plan-wide 2-slot cap has been reached
+      const tunaExclude = tunaSlotCount >= 2 ? ['canned tuna'] : [];
+      let firstMeatResult = selectProtein(
         'lunch', mealMacroTargets.lunch.protein, budget.perMeal.lunch,
-        budgetTier, [...nonMeatNames, ...tunaExclude], dietaryRestrictions, mealMacroTargets.lunch.calories
+        budgetTier, [...dayAMeats, ...nonMeatNames, ...tunaExclude], dietaryRestrictions, mealMacroTargets.lunch.calories
       );
-    }
-    if (firstMeatResult && MEAT_PROTEINS.has(firstMeatResult.name)) {
-      dayMeats.push(firstMeatResult.name);
-      if (firstMeatResult.name === 'canned tuna') tunaSlotCount++;
-    }
+      // If exclusion of Day A meats left the pool empty, allow any meat (relax Day A exclusion)
+      if (!firstMeatResult) {
+        firstMeatResult = selectProtein(
+          'lunch', mealMacroTargets.lunch.protein, budget.perMeal.lunch,
+          budgetTier, [...nonMeatNames, ...tunaExclude], dietaryRestrictions, mealMacroTargets.lunch.calories
+        );
+      }
+      if (firstMeatResult && MEAT_PROTEINS.has(firstMeatResult.name)) {
+        dayMeats.push(firstMeatResult.name);
+        if (firstMeatResult.name === 'canned tuna') tunaSlotCount++;
+      }
 
-    // Second meat for dinner (flexible+) — must differ from first and from Day A meats
-    if (maxMeat >= 2) {
-      const tunaExclude2 = tunaSlotCount >= 2 ? ['canned tuna'] : [];
-      const secondMeatResult = selectProtein(
-        'dinner', mealMacroTargets.dinner.protein, budget.perMeal.dinner,
-        budgetTier, [...dayAMeats, ...dayMeats, ...nonMeatNames, ...tunaExclude2], dietaryRestrictions, mealMacroTargets.dinner.calories
-      );
-      if (secondMeatResult && MEAT_PROTEINS.has(secondMeatResult.name)) {
-        dayMeats.push(secondMeatResult.name);
-        if (secondMeatResult.name === 'canned tuna') tunaSlotCount++;
+      // Second meat for dinner (flexible+) — must differ from first and from Day A meats
+      if (maxMeat >= 2) {
+        const tunaExclude2 = tunaSlotCount >= 2 ? ['canned tuna'] : [];
+        const secondMeatResult = selectProtein(
+          'dinner', mealMacroTargets.dinner.protein, budget.perMeal.dinner,
+          budgetTier, [...dayAMeats, ...dayMeats, ...nonMeatNames, ...tunaExclude2], dietaryRestrictions, mealMacroTargets.dinner.calories
+        );
+        if (secondMeatResult && MEAT_PROTEINS.has(secondMeatResult.name)) {
+          dayMeats.push(secondMeatResult.name);
+          if (secondMeatResult.name === 'canned tuna') tunaSlotCount++;
+        }
       }
     }
 
     const lunchMeatName  = dayMeats[0] || null;
     const dinnerMeatName = dayMeats[1] || dayMeats[0] || null; // same meat for strict/moderate
+
+    // When bulk model is active, derive effective proteins from weeklyProteins
+    const effectiveLunchMeat = (weeklyProteins?.primaryProtein && dayLabel === 'DayA')
+      ? weeklyProteins.primaryProtein.name
+      : (weeklyProteins?.secondaryProtein && dayLabel === 'DayB')
+        ? weeklyProteins.secondaryProtein.name
+        : (weeklyProteins?.primaryProtein?.name || lunchMeatName);
+    const effectiveDinnerMeat = effectiveLunchMeat; // same bulk protein for both lunch and dinner
 
     const usedProteins = [...dayMeats];
 
@@ -968,8 +979,8 @@ function generateMealTemplate(profile) {
         if (!eggsExcluded) {
           proteinIngredient = makeProteinIngredient('eggs', 'breakfast', macroTarget, mealBudget);
         } else {
-          proteinIngredient = lunchMeatName
-            ? makeProteinIngredient(lunchMeatName, 'breakfast', macroTarget, mealBudget)
+          proteinIngredient = effectiveLunchMeat
+            ? makeProteinIngredient(effectiveLunchMeat, 'breakfast', macroTarget, mealBudget)
             : selectProtein('breakfast', macroTarget.protein, mealBudget, budgetTier, [], dietaryRestrictions, macroTarget.calories);
         }
       } else if (mealType === 'snack') {
@@ -977,17 +988,17 @@ function generateMealTemplate(profile) {
           proteinIngredient = makeProteinIngredient('eggs', 'snack', macroTarget, mealBudget);
           coldFormatOnly = true;
         } else {
-          proteinIngredient = lunchMeatName
-            ? makeProteinIngredient(lunchMeatName, 'snack', macroTarget, mealBudget)
+          proteinIngredient = effectiveLunchMeat
+            ? makeProteinIngredient(effectiveLunchMeat, 'snack', macroTarget, mealBudget)
             : selectProtein('snack', macroTarget.protein, mealBudget, budgetTier, [], dietaryRestrictions, macroTarget.calories);
         }
       } else if (mealType === 'lunch') {
-        proteinIngredient = lunchMeatName
-          ? makeProteinIngredient(lunchMeatName, 'lunch', macroTarget, mealBudget)
+        proteinIngredient = effectiveLunchMeat
+          ? makeProteinIngredient(effectiveLunchMeat, 'lunch', macroTarget, mealBudget)
           : selectProtein('lunch', macroTarget.protein, mealBudget, budgetTier, [], dietaryRestrictions, macroTarget.calories);
       } else { // dinner
-        proteinIngredient = dinnerMeatName
-          ? makeProteinIngredient(dinnerMeatName, 'dinner', macroTarget, mealBudget)
+        proteinIngredient = effectiveDinnerMeat
+          ? makeProteinIngredient(effectiveDinnerMeat, 'dinner', macroTarget, mealBudget)
           : selectProtein('dinner', macroTarget.protein, mealBudget, budgetTier, [], dietaryRestrictions, macroTarget.calories);
       }
 
@@ -1027,7 +1038,7 @@ function generateMealTemplate(profile) {
     // ── Budget enforcement swap (strict/moderate only) ──────────────────────
     // Check before dayTotals so all variables (budget, mealMacroTargets, dayMeats) are in scope.
     // Proxy weekly cost = dayCost × 7 / days (days = 2 for a standard A/B week split 4/3).
-    if (budgetTier === 'strict' || budgetTier === 'moderate') {
+    if ((budgetTier === 'strict' || budgetTier === 'moderate') && !weeklyProteins) {
       const dayCost = ORDER.reduce((s, mt) => s + (meals[mt]?.totalCost || 0), 0);
       const projectedWeekly = dayCost * (7 / days);
       if (projectedWeekly > weeklyBudget * 1.15) {

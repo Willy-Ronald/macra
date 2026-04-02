@@ -360,7 +360,7 @@ Generate realistic portion sizes that fit within the user's weekly budget. The e
 RULES:
 - Day A and B must be completely different meals — no repeated dishes across days
 - Each day: exactly 4 meals in order: BREAKFAST, LUNCH, SNACK, DINNER
-- "name" = dish name only, never include the cuisine label in the name
+- "name" = dish name only, never include the cuisine label in the name. "name": "Meal name in English only — no foreign language words, must be immediately readable by an English speaker"
 - Share base ingredients across A and B where practical to keep shopping simple
 - Never repeat the exact same meal as previous generations
 - instructions: 5 to 8 steps total per meal, aim for 5 but use up to 8 if needed for clear instructions, each under 20 words, starting with an action verb
@@ -1087,7 +1087,7 @@ PERMANENTLY PROHIBITED — never generate under any circumstances: sake, galanga
           if (mealTemplates.weeklyProteins && mealTemplates.weeklyProteins.primaryProtein) {
             const wp = mealTemplates.weeklyProteins;
             const ps = wp.primarySeasoning;
-            const seasoningDesc = ps ? `${ps.spices.join(', ')}` : 'salt, pepper, garlic powder';
+            const seasoningDesc = ps ? (ps.ingredients || ps.spices?.join(', ') || 'salt, pepper, garlic powder') : 'salt, pepper, garlic powder';
             let bulkCookLine = `\nBULK COOK METHOD: Cook ${wp.primaryProtein.name} with ${seasoningDesc} as the base seasoning. Vary each meal using different sauces and preparations from the flavor profiles below. Do not re-season the protein differently for each meal — the variety comes from the sauce and sides.`;
             if (wp.sauceSuggestions && wp.sauceSuggestions.length > 0) {
               bulkCookLine += `\nSuggested sauce variety (use across the meals): ${wp.sauceSuggestions.join(', ')}.`;
@@ -1157,7 +1157,11 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
     let totalUsage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
     let finalUsage = null;
 
-    const budgetTier = weeklyBudget < 60 ? 'strict' : weeklyBudget < 90 ? 'moderate' : weeklyBudget < 150 ? 'flexible' : 'premium';
+    const budgetTier = weeklyBudget <= 74 ? 'strict'
+      : weeklyBudget <= 99 ? 'moderate'
+      : weeklyBudget <= 149 ? 'flexible'
+      : weeklyBudget <= 249 ? 'premium'
+      : 'chef';
     const { assignments: proteinAssignments, estimatedProteinCost } = selectProteinsForPlan(budgetTier, macros, weeklyBudget);
     const mealTemplates = generateMealTemplate({ weeklyBudget, macros, budgetTier, dietaryRestrictions: dietList, pickinessLevel: pickinessLevel, days: 2, mealsPerDay: 4 });
 
