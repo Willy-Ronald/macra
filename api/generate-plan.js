@@ -1296,6 +1296,71 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
       console.warn("[rate-limit] Generation served WITHOUT being logged — limit may not enforce correctly");
     }
 
+    // ── Layer 2b: Overwrite Claude macro fields with server-calculated template values ──
+    // Claude's self-reported cal/p/c/f are estimates and unreliable.
+    // The template totalMacros were calculated server-side before Claude was called.
+    // Always use those values when a template was injected.
+    if (mealTemplates) {
+      const dayMap = { A: 'dayA', B: 'dayB' };
+      const mealTypeMap = {
+        BREAKFAST: 'breakfast',
+        LUNCH: 'lunch',
+        SNACK: 'snack',
+        DINNER: 'dinner',
+      };
+      for (const [dayLetter, dayKey] of Object.entries(dayMap)) {
+        const dayMeals = abPlan[dayLetter];
+        if (!Array.isArray(dayMeals)) continue;
+        for (const meal of dayMeals) {
+          const mealTypeKey = mealTypeMap[(meal.type || '').toUpperCase()];
+          if (!mealTypeKey) continue;
+          const templateMeal = mealTemplates[dayKey]?.[mealTypeKey];
+          if (!templateMeal) continue;
+          // Overwrite macro fields
+          if (templateMeal.totalMacros) {
+            const tm = templateMeal.totalMacros;
+            meal.cal = Math.round(tm.calories || 0);
+            meal.p   = Math.round((tm.protein  || 0) * 10) / 10;
+            meal.c   = Math.round((tm.carbs    || 0) * 10) / 10;
+            meal.f   = Math.round((tm.fat      || 0) * 10) / 10;
+          }
+          // Overwrite ingredient list with template's exact quantities
+          const ingredients = [];
+          if (templateMeal.protein) {
+            ingredients.push({
+              name: templateMeal.protein.name,
+              qty:  String(templateMeal.protein.quantity),
+              unit: templateMeal.protein.unit,
+            });
+          }
+          if (templateMeal.carbs) {
+            ingredients.push({
+              name: templateMeal.carbs.name,
+              qty:  String(templateMeal.carbs.quantity),
+              unit: templateMeal.carbs.unit,
+            });
+          }
+          if (templateMeal.fat) {
+            ingredients.push({
+              name: templateMeal.fat.name,
+              qty:  String(templateMeal.fat.quantity),
+              unit: templateMeal.fat.unit,
+            });
+          }
+          for (const veg of (templateMeal.vegetables || [])) {
+            ingredients.push({
+              name: veg.name,
+              qty:  String(veg.quantity),
+              unit: veg.unit,
+            });
+          }
+          if (ingredients.length > 0) {
+            meal.ingredients = ingredients;
+          }
+        }
+      }
+    }
+
     // ── Layer 3: Nutrition verification against local database ───
     function verifyMealMacrosWithDatabase(meal) {
       if (!meal || !meal.ingredients) return { verified: false, reason: 'no ingredients' };
