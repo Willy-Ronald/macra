@@ -490,23 +490,16 @@ export function estimateItem(name, qty, unit) {
     const normalized = normalizeName(name);
     const isPantry = PANTRY_ITEMS.has(normalized);
 
-    console.log(`\n--- Estimating: ${name} (${qty} ${unit || ""}) ---`);
-    console.log(`  Original name: "${name}"`);
-    console.log(`  Normalized name: "${normalized}"`);
 
     if (isPantry) {
-      console.log(`  ✓ Found in pantry items - Cost: $0.00`);
       return { pkgCount: 0, pkgLabel: null, cost: 0, isPantry: true };
     }
 
     const pkg = findPackage(name);
     if (!pkg) {
-      console.log(`  Database match: NO`);
-      console.log(`  ⚠️ NO DATABASE MATCH - will use buffer in list estimator`);
       return { pkgCount: null, pkgLabel: null, cost: null, isPantry: false };
     }
 
-    console.log(`  Database match: YES`);
 
     const pkgUnit = pkg.unit.toLowerCase();
     let workUnit = (unit || "").toLowerCase().trim();
@@ -516,7 +509,6 @@ export function estimateItem(name, qty, unit) {
     if (normalized === "garlic" && (workUnit === "clove" || workUnit === "cloves")) {
       workQty  = Math.ceil(workQty / 10);
       workUnit = "head";
-      console.log(`  Unit conversion: ${qty} cloves → ${workQty} heads`);
     }
 
     // Unit conversion: sweet potato oz → each (1 medium sweet potato ≈ 8 oz)
@@ -524,7 +516,6 @@ export function estimateItem(name, qty, unit) {
         (workUnit === "oz" || workUnit === "ounce" || workUnit === "ounces")) {
       workQty  = Math.ceil(workQty / 8);
       workUnit = "each";
-      console.log(`  Unit conversion: ${qty} oz sweet potato → ${workQty} each`);
     }
 
     // Unit conversion: russet potato oz → each (1 medium russet potato ≈ 8 oz)
@@ -532,7 +523,6 @@ export function estimateItem(name, qty, unit) {
         (workUnit === "oz" || workUnit === "ounce" || workUnit === "ounces")) {
       workQty  = Math.ceil(workQty / 8);
       workUnit = "each";
-      console.log(`  Unit conversion: ${qty} oz russet potato → ${workQty} each`);
     }
 
     // Unit conversion: bok choy cups → each (1 head bok choy ≈ 6 cups)
@@ -540,7 +530,6 @@ export function estimateItem(name, qty, unit) {
         (workUnit === "cup" || workUnit === "cups")) {
       workQty  = Math.ceil(workQty / 6);
       workUnit = "each";
-      console.log(`  Unit conversion: ${qty} cups bok choy → ${workQty} each`);
     }
 
     // Unit conversion: lettuce/romaine cups → heads (1 head ≈ 8 cups shredded); max 2 heads
@@ -548,7 +537,6 @@ export function estimateItem(name, qty, unit) {
         (workUnit === "cup" || workUnit === "cups")) {
       workQty  = Math.min(2, Math.ceil(workQty / 8));
       workUnit = "head";
-      console.log(`  Unit conversion: ${qty} cups lettuce → ${workQty} heads (max 2 cap)`);
     }
 
     // Unit conversion: lettuce leaves → heads (1 head ≈ 18 leaves); min 1, max 2 heads
@@ -556,7 +544,6 @@ export function estimateItem(name, qty, unit) {
         (workUnit === "leaf" || workUnit === "leaves")) {
       workQty  = Math.min(2, Math.max(1, Math.ceil(workQty / 18)));
       workUnit = "head";
-      console.log(`  Unit conversion: ${qty} leaves lettuce → ${workQty} heads (min 1, max 2 cap)`);
     }
 
     // Unit conversion: lemongrass/lemongrass paste tbsp → each (< 6 tbsp = 1 unit; >= 6 tbsp = 2 max)
@@ -564,7 +551,6 @@ export function estimateItem(name, qty, unit) {
         (workUnit === "tbsp" || workUnit === "tablespoon" || workUnit === "tablespoons")) {
       workQty  = workQty < 6 ? 1 : 2;
       workUnit = "each";
-      console.log(`  Unit conversion: ${qty} tbsp lemongrass → ${workQty} each`);
     }
 
     // Unit conversion: broccoli cups → heads (÷2) OR oz → heads (÷12); max 3 heads
@@ -572,11 +558,9 @@ export function estimateItem(name, qty, unit) {
       if (workUnit === "cup" || workUnit === "cups") {
         workQty  = Math.min(3, Math.ceil(workQty / 2));
         workUnit = "head";
-        console.log(`  Unit conversion: ${qty} cups broccoli → ${workQty} heads (max 3 cap)`);
       } else if (workUnit === "oz" || workUnit === "ounce" || workUnit === "ounces") {
         workQty  = Math.min(3, Math.ceil(workQty / 12));
         workUnit = "head";
-        console.log(`  Unit conversion: ${qty} oz broccoli → ${workQty} heads (max 3 cap)`);
       }
     }
 
@@ -585,11 +569,9 @@ export function estimateItem(name, qty, unit) {
       if (workUnit === "cup" || workUnit === "cups") {
         workQty  = Math.min(2, Math.ceil(workQty / 2));
         workUnit = "head";
-        console.log(`  Unit conversion: ${qty} cups cauliflower → ${workQty} heads (max 2 cap)`);
       } else if (workUnit === "oz" || workUnit === "ounce" || workUnit === "ounces") {
         workQty  = Math.min(2, Math.ceil(workQty / 24));
         workUnit = "head";
-        console.log(`  Unit conversion: ${qty} oz cauliflower → ${workQty} heads (max 2 cap)`);
       }
     }
 
@@ -598,7 +580,6 @@ export function estimateItem(name, qty, unit) {
         (workUnit === "stalk" || workUnit === "stalks" || workUnit === "large")) {
       workQty  = Math.min(2, Math.ceil(workQty / 10));
       workUnit = "bunch";
-      console.log(`  Unit conversion: ${qty} stalks celery → ${workQty} bunches (max 2 cap)`);
     }
 
     // Unit conversion: asparagus spears → bunches (÷20) OR oz → bunches (÷16); max 2 bunches
@@ -606,11 +587,9 @@ export function estimateItem(name, qty, unit) {
       if (workUnit === "spear" || workUnit === "spears") {
         workQty  = Math.min(2, Math.ceil(workQty / 20));
         workUnit = "bunch";
-        console.log(`  Unit conversion: ${qty} spears asparagus → ${workQty} bunches (max 2 cap)`);
       } else if (workUnit === "oz" || workUnit === "ounce" || workUnit === "ounces") {
         workQty  = Math.min(2, Math.ceil(workQty / 16));
         workUnit = "bunch";
-        console.log(`  Unit conversion: ${qty} oz asparagus → ${workQty} bunches (max 2 cap)`);
       }
     }
 
@@ -619,7 +598,6 @@ export function estimateItem(name, qty, unit) {
         (workUnit === "cup" || workUnit === "cups")) {
       workQty  = workQty * 1;  // 1 oz per cup
       workUnit = "oz";
-      console.log(`  Unit conversion: ${qty} cups spinach → ${workQty} oz (spinach density: 1 oz/cup)`);
     }
 
     // Unit conversion: shredded cheese cups → oz (1 cup shredded ≈ 4 oz, not 8 oz — air-filled)
@@ -628,7 +606,6 @@ export function estimateItem(name, qty, unit) {
         (workUnit === "cup" || workUnit === "cups")) {
       workQty  = workQty * 4;  // 4 oz per cup shredded
       workUnit = "oz";
-      console.log(`  Unit conversion: ${qty} cups shredded cheese → ${workQty} oz (4 oz/cup density)`);
     }
 
     // Unit conversion: onion/onions each/medium/large → oz (1 medium onion ≈ 8 oz)
@@ -636,14 +613,12 @@ export function estimateItem(name, qty, unit) {
         (workUnit === "each" || workUnit === "medium" || workUnit === "large")) {
       workQty  = workQty * 8;  // 8 oz per onion
       workUnit = "oz";
-      console.log(`  Unit conversion: ${qty} ${unit} onion → ${workQty} oz (8 oz/onion)`);
     }
 
     // Unit conversion: pepperoni slices → oz (1 slice ≈ 0.35 oz)
     if (normalized === "pepperoni" && (workUnit === "slice" || workUnit === "slices")) {
       workQty  = workQty * 0.35;
       workUnit = "oz";
-      console.log(`  Unit conversion: ${qty} slices pepperoni → ${workQty.toFixed(1)} oz (0.35 oz/slice)`);
     }
 
     // Unit conversion: pita each/pita/piece → oz (1 pita ≈ 2.8 oz)
@@ -651,7 +626,6 @@ export function estimateItem(name, qty, unit) {
         (workUnit === "each" || workUnit === "pita" || workUnit === "piece" || workUnit === "pieces")) {
       workQty  = workQty * 2.8;
       workUnit = "oz";
-      console.log(`  Unit conversion: ${qty} pitas → ${workQty} oz (2.8 oz/pita)`);
     }
 
     // Unit conversion: scallion/green onion tbsp → cap at 1 bunch (garnish amount)
@@ -660,7 +634,6 @@ export function estimateItem(name, qty, unit) {
         (workUnit === "tbsp" || workUnit === "tablespoon" || workUnit === "tablespoons")) {
       workQty  = 1;
       workUnit = "bunch";
-      console.log(`  Unit conversion: ${qty} tbsp scallion → 1 bunch (garnish cap)`);
     }
 
     // Unit conversion: scallion/green onion stalks → bunches (1 bunch ≈ 8 stalks); max 2 bunches
@@ -669,21 +642,18 @@ export function estimateItem(name, qty, unit) {
         (workUnit === "stalk" || workUnit === "stalks")) {
       workQty  = Math.min(2, Math.ceil(workQty / 8));
       workUnit = "bunch";
-      console.log(`  Unit conversion: ${qty} stalks → ${workQty} bunches (max 2 cap applied)`);
     }
 
     // Unit conversion: cilantro tbsp → bunches (1 bunch yields ~24 tbsp)
     if (normalized === "cilantro" && (workUnit === "tbsp" || workUnit === "tablespoon" || workUnit === "tablespoons")) {
       workQty  = Math.ceil(workQty / 24);
       workUnit = "bunch";
-      console.log(`  Unit conversion: ${qty} tbsp cilantro → ${workQty} bunches`);
     }
 
     // Unit conversion: coleslaw mix cups → oz (1 cup coleslaw mix ≈ 2 oz, not 8 oz)
     if (normalized === "coleslaw mix" && (workUnit === "cup" || workUnit === "cups")) {
       workQty  = workQty * 2;
       workUnit = "oz";
-      console.log(`  Unit conversion: ${qty} cups coleslaw mix → ${workQty} oz (2 oz/cup density)`);
     }
 
     let pkgCount;
@@ -716,12 +686,9 @@ export function estimateItem(name, qty, unit) {
       ? `1 ${pkg.package}`
       : `${pkgCount} ${pkg.package}${pkg.package.endsWith("s") || pkg.package === "bunch" ? "" : "s"}`;
 
-    console.log(`  Package size: ${pkg.size} ${pkg.unit} @ $${pkg.avgCost}`);
     const _densityNote = name.toLowerCase().includes("frozen") && workUnit.startsWith("cup") ? " [frozen density: 5 oz/cup]"
                        : normalized.includes("rice") && workUnit.startsWith("cup")           ? " [dry rice: 6 oz/cup]"
                        : "";
-    console.log(`  Packages needed: Math.ceil(${workQty} ${workUnit} → oz / ${pkg.size} ${pkg.unit}) = ${pkgCount}${_densityNote}`);
-    console.log(`  Item cost: ${pkgCount} × $${pkg.avgCost} = $${cost.toFixed(2)}`);
 
     return { pkgCount, pkgLabel, cost, isPantry: false };
   } catch (e) {
@@ -742,8 +709,6 @@ export function estimateGroceryList(planCategories, weeklyBudget) {
   let pantryCount = 0;
 
   const allItems = (planCategories || []).flatMap(cat => (cat.items || []).filter(Boolean));
-  console.log("=== GROCERY COST ESTIMATOR DEBUG ===");
-  console.log("Total items to estimate:", allItems.length);
 
   for (const item of allItems) {
     const est = estimateItem(item.name, item.qty, item.unit);
@@ -769,9 +734,6 @@ export function estimateGroceryList(planCategories, weeklyBudget) {
                       :                                   3.50;
 
   if (unknownCount > 0) {
-    console.log(`\n--- Buffer items (no database match) ---`);
-    console.log(`  Budget tier: ${budgetTier}`);
-    console.log(`  Buffer amount: $${bufferPerItem.toFixed(2)} × ${unknownCount} items = $${(unknownCount * bufferPerItem).toFixed(2)}`);
   }
 
   const buffer = unknownCount * bufferPerItem;
@@ -781,12 +743,6 @@ export function estimateGroceryList(planCategories, weeklyBudget) {
   const diff = budget !== null ? Math.abs(budget - total) : null;
   const pct  = budget !== null ? Math.min(Math.round((total / budget) * 100), 999) : null;
 
-  console.log("\n=== FINAL COST BREAKDOWN ===");
-  console.log(`Total estimated cost: $${total.toFixed(2)}`);
-  console.log(`Items from database: ${databaseMatchCount}`);
-  console.log(`Items using buffer: ${unknownCount}`);
-  console.log(`Pantry items (free): ${pantryCount}`);
-  console.log(`[costEstimator] total=$${total.toFixed(2)} (items=$${totalCost.toFixed(2)} + buffer=$${buffer.toFixed(2)} × ${unknownCount} unknowns @ $${bufferPerItem}) budget=${budget ?? "none"}${pct != null ? " "+pct+"%" : ""}`);
 
   return { itemMap, totalCost, buffer, total, budget, withinBudget, diff, pct, unknownCount };
 }

@@ -107,8 +107,8 @@ const PROTEIN_POOL = [
 ];
 
 const BUDGET_TIER_CONFIG = {
-  strict:   { model: 'bulk',    primaryProteins: 1, secondaryProteins: 0, bulkCuts: ['pork shoulder','beef chuck roast','chicken thighs','ground turkey'], eggBreakfast: true, maxProteinVariety: 2 },
-  moderate: { model: 'bulk',    primaryProteins: 1, secondaryProteins: 1, bulkCuts: ['pork shoulder','beef chuck roast','chicken thighs','ground turkey','chicken breast','ground beef'], eggBreakfast: true, maxProteinVariety: 3 },
+  strict:   { model: 'bulk',    primaryProteins: 1, secondaryProteins: 0, bulkCuts: ['ground turkey','chicken breast'], eggBreakfast: true, maxProteinVariety: 2 },
+  moderate: { model: 'bulk',    primaryProteins: 1, secondaryProteins: 1, bulkCuts: ['ground turkey','chicken breast','chicken thighs'], eggBreakfast: true, maxProteinVariety: 3 },
   flexible: { model: 'hybrid',  primaryProteins: 2, secondaryProteins: 1, bulkCuts: null, eggBreakfast: true, maxProteinVariety: 4 },
   premium:  { model: 'variety', primaryProteins: 3, secondaryProteins: 1, bulkCuts: null, eggBreakfast: true, maxProteinVariety: 4 },
   chef:     { model: 'gourmet', primaryProteins: 5, secondaryProteins: 0, bulkCuts: null, eggBreakfast: true, maxProteinVariety: 5 },
