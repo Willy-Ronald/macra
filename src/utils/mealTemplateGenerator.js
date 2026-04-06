@@ -704,25 +704,17 @@ function makeProteinIngredient(proteinName, mealType, macroTarget, mealBudget) {
   // Fat ceiling check — reduce quantity if protein fat contribution
   // would exceed the meal fat target. This prevents high-fat proteins
   // like ground turkey from blowing the daily fat budget.
-  // Returns null if the fat-capped quantity can't deliver ≥50% of protein target.
   if (macroTarget.fat != null && macroTarget.fat > 0) {
     const nutritionPerUnit = dbMacros(p.name, 1, p.unit, null);
     const fatPerUnit = nutritionPerUnit?.fat || 0;
     if (fatPerUnit > 0) {
       const maxQtyByFat = macroTarget.fat / fatPerUnit;
       if (quantity > maxQtyByFat) {
-        let cappedQty;
         if (p.unit === 'each' || p.unit === 'slice') {
-          cappedQty = Math.max(1, Math.floor(maxQtyByFat));
+          quantity = Math.max(1, Math.floor(maxQtyByFat));
         } else {
-          cappedQty = Math.max(0.5, Math.round(maxQtyByFat * 2) / 2);
+          quantity = Math.max(0.5, Math.round(maxQtyByFat * 2) / 2);
         }
-        // If fat-capped quantity delivers < 50% of protein target, reject this protein
-        const proteinAtCap = cappedQty * proteinPerUnit;
-        if (macroTarget.protein > 0 && proteinAtCap < macroTarget.protein * 0.5) {
-          return null;
-        }
-        quantity = cappedQty;
         actualCost = Math.round(quantity * costPerUnit * 100) / 100;
       }
     }
@@ -1018,12 +1010,11 @@ function generateMealTemplate(profile) {
             p.tiers.includes(budgetTier) &&
             p.name !== 'canned tuna' &&
             p.name !== 'eggs' &&
-            p.name !== 'firm tofu'
+            p.name !== 'firm tofu' &&
+            p.name !== 'pork shoulder' &&
+            p.name !== 'beef chuck roast'
           ).sort((a, b) => getCostPerGramProtein(a) - getCostPerGramProtein(b));
-          const validFallback = fallbackPool.find(p =>
-            makeProteinIngredient(p.name, mealType, macroTarget, mealBudget) !== null
-          );
-          if (validFallback) bulkProteinName = validFallback.name;
+          if (fallbackPool.length > 0) bulkProteinName = fallbackPool[0].name;
         }
 
         // Canned tuna is capped at 1 slot per day
@@ -1033,12 +1024,11 @@ function generateMealTemplate(profile) {
               p.tiers.includes(budgetTier) &&
               p.name !== 'canned tuna' &&
               p.name !== 'eggs' &&
-              p.name !== 'firm tofu'
+              p.name !== 'firm tofu' &&
+              p.name !== 'pork shoulder' &&
+              p.name !== 'beef chuck roast'
             ).sort((a, b) => getCostPerGramProtein(a) - getCostPerGramProtein(b));
-            const validFallback = fallbackPool.find(p =>
-              makeProteinIngredient(p.name, mealType, macroTarget, mealBudget) !== null
-            );
-            if (validFallback) bulkProteinName = validFallback.name;
+            if (fallbackPool.length > 0) bulkProteinName = fallbackPool[0].name;
           } else {
             dayTunaSlots++;
           }
