@@ -92,10 +92,10 @@ const PROTEIN_POOL = [
   { name: 'ground turkey',   proteinPer28g: 5.6,   costPerOz: 0.312,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
   { name: 'ground beef',     proteinPer28g: 5.7,   costPerOz: 0.562,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
   { name: 'canned tuna',     proteinPer28g: 7.2,   costPerOz: 0.20,    unit: 'oz',    maxPerMeal: 6,  tiers: ['strict','moderate','flexible','premium','chef'] },
-  { name: 'tilapia',         proteinPer28g: 5.7,   costPerOz: 0.313,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['moderate','flexible','premium','chef'] },
+  { name: 'tilapia',         proteinPer28g: 5.7,   costPerOz: 0.313,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
   { name: 'salmon',          proteinPer28g: 5.8,   costPerOz: 0.687,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['flexible','premium','chef'] },
   { name: 'shrimp',          proteinPer28g: 5.9,   costPerOz: 0.583,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['moderate','flexible','premium','chef'] },
-  { name: 'pork tenderloin', proteinPer28g: 5.9,   costPerOz: 0.249,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['moderate','flexible','premium','chef'] },
+  { name: 'pork tenderloin', proteinPer28g: 5.9,   costPerOz: 0.249,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
   { name: 'pork chops',      proteinPer28g: 5.5,   costPerOz: 0.374,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['flexible','premium','chef'] },
   { name: 'eggs',            proteinEach:   6.5,   costEach:  0.15,    unit: 'each',  maxPerMeal: 4,  tiers: ['strict','moderate','flexible','premium','chef'] },
   { name: 'firm tofu',       proteinPer28g: 2.3,   costPerOz: 0.142,   unit: 'oz',    maxPerMeal: 8,  tiers: ['strict','moderate','flexible','premium','chef'] },
@@ -107,8 +107,8 @@ const PROTEIN_POOL = [
 ];
 
 const BUDGET_TIER_CONFIG = {
-  strict:   { model: 'bulk',    primaryProteins: 1, secondaryProteins: 0, bulkCuts: ['ground turkey','chicken breast'], eggBreakfast: true, maxProteinVariety: 2 },
-  moderate: { model: 'bulk',    primaryProteins: 1, secondaryProteins: 1, bulkCuts: ['ground turkey','chicken breast','chicken thighs'], eggBreakfast: true, maxProteinVariety: 3 },
+  strict:   { model: 'bulk',    primaryProteins: 1, secondaryProteins: 0, bulkCuts: ['ground turkey','pork tenderloin','canned tuna','chicken thighs'], eggBreakfast: true, maxProteinVariety: 2 },
+  moderate: { model: 'bulk',    primaryProteins: 1, secondaryProteins: 1, bulkCuts: ['ground turkey','chicken breast','chicken thighs','pork tenderloin','tilapia'], eggBreakfast: true, maxProteinVariety: 3 },
   flexible: { model: 'hybrid',  primaryProteins: 2, secondaryProteins: 1, bulkCuts: null, eggBreakfast: true, maxProteinVariety: 4 },
   premium:  { model: 'variety', primaryProteins: 3, secondaryProteins: 1, bulkCuts: null, eggBreakfast: true, maxProteinVariety: 4 },
   chef:     { model: 'gourmet', primaryProteins: 5, secondaryProteins: 0, bulkCuts: null, eggBreakfast: true, maxProteinVariety: 5 },
