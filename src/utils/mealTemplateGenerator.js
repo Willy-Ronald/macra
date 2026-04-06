@@ -1001,7 +1001,36 @@ function generateMealTemplate(profile) {
         const bulkProtein = dayLabel === 'DayA'
           ? weeklyProteins.primaryProtein
           : (weeklyProteins.secondaryProtein || weeklyProteins.primaryProtein);
-        proteinIngredient = makeProteinIngredient(bulkProtein.name, mealType, macroTarget, mealBudget);
+
+        let bulkProteinName = bulkProtein.name;
+
+        // Canned tuna is never used for dinner
+        if (mealType === 'dinner' && bulkProteinName === 'canned tuna') {
+          const fallbackPool = PROTEIN_POOL.filter(p =>
+            p.tiers.includes(budgetTier) &&
+            p.name !== 'canned tuna' &&
+            p.name !== 'eggs' &&
+            p.name !== 'firm tofu'
+          ).sort((a, b) => getCostPerGramProtein(a) - getCostPerGramProtein(b));
+          if (fallbackPool.length > 0) bulkProteinName = fallbackPool[0].name;
+        }
+
+        // Canned tuna is capped at 1 slot per day
+        if (mealType === 'lunch' && bulkProteinName === 'canned tuna') {
+          if (dayTunaSlots >= 1) {
+            const fallbackPool = PROTEIN_POOL.filter(p =>
+              p.tiers.includes(budgetTier) &&
+              p.name !== 'canned tuna' &&
+              p.name !== 'eggs' &&
+              p.name !== 'firm tofu'
+            ).sort((a, b) => getCostPerGramProtein(a) - getCostPerGramProtein(b));
+            if (fallbackPool.length > 0) bulkProteinName = fallbackPool[0].name;
+          } else {
+            dayTunaSlots++;
+          }
+        }
+
+        proteinIngredient = makeProteinIngredient(bulkProteinName, mealType, macroTarget, mealBudget);
       } else if (mealType === 'breakfast') {
         if (!eggsExcluded) {
           proteinIngredient = makeProteinIngredient('eggs', 'breakfast', macroTarget, mealBudget);
