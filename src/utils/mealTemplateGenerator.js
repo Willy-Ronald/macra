@@ -546,9 +546,11 @@ function balanceMacros(proteinIngredient, mealType, macroTargets, mealBudget, di
   }
 
   // ── Vegetable selection ────────────────────────────────────────────────────
+  // Frozen vegetables are never appropriate for breakfast
+  const FROZEN_VEG_NAMES = new Set(['frozen broccoli', 'frozen mixed veg']);
   const vegPool = pickinessLevel <= 2
-    ? VEGETABLE_SOURCES.filter(v => v.simple)
-    : [...VEGETABLE_SOURCES];
+    ? VEGETABLE_SOURCES.filter(v => v.simple && (mealType !== 'breakfast' || !FROZEN_VEG_NAMES.has(v.name)))
+    : VEGETABLE_SOURCES.filter(v => mealType !== 'breakfast' || !FROZEN_VEG_NAMES.has(v.name));
 
   const vegSorted = [...vegPool].sort((a, b) => a.cost - b.cost);
   const vegetables = [];
@@ -918,6 +920,8 @@ function generateMealTemplate(profile) {
   // dayAMeats: meat protein name(s) used on Day A — Day B must pick different meat(s)
   // dayACarbPerMeal: { breakfast: carbName, ... } from Day A, deprioritised in Day B
   function generateDay(dayLabel, dayAMeats = [], dayACarbPerMeal = {}, weeklyProteins = null) {
+    // Canned tuna cap: max 1 slot per day, never dinner
+    let dayTunaSlots = 0;
     const meals       = {};
     const carbPerMeal = {};
     const tierRules   = BUDGET_TIER_PROTEIN_RULES[budgetTier] || { maxMeatPerDay: 1 };
@@ -1016,12 +1020,42 @@ function generateMealTemplate(profile) {
             : selectProtein('snack', macroTarget.protein, mealBudget, budgetTier, [], dietaryRestrictions, macroTarget.calories);
         }
       } else if (mealType === 'lunch') {
-        proteinIngredient = effectiveLunchMeat
-          ? makeProteinIngredient(effectiveLunchMeat, 'lunch', macroTarget, mealBudget)
+        // If the selected bulk protein is canned tuna and we already used
+        // tuna today, fall back to the next cheapest non-tuna protein
+        let lunchProteinName = effectiveLunchMeat;
+        if (lunchProteinName === 'canned tuna' && dayTunaSlots >= 1) {
+          const fallbackPool = PROTEIN_POOL.filter(p =>
+            p.tiers.includes(budgetTier) &&
+            p.name !== 'canned tuna' &&
+            p.name !== 'eggs' &&
+            p.name !== 'firm tofu'
+          );
+          if (fallbackPool.length > 0) {
+            fallbackPool.sort((a, b) => getCostPerGramProtein(a) - getCostPerGramProtein(b));
+            lunchProteinName = fallbackPool[0].name;
+          }
+        }
+        if (lunchProteinName === 'canned tuna') dayTunaSlots++;
+        proteinIngredient = lunchProteinName
+          ? makeProteinIngredient(lunchProteinName, 'lunch', macroTarget, mealBudget)
           : selectProtein('lunch', macroTarget.protein, mealBudget, budgetTier, [], dietaryRestrictions, macroTarget.calories);
       } else { // dinner
-        proteinIngredient = effectiveDinnerMeat
-          ? makeProteinIngredient(effectiveDinnerMeat, 'dinner', macroTarget, mealBudget)
+        // Canned tuna is never used for dinner — fall back to cheapest non-tuna protein
+        let dinnerProteinName = effectiveDinnerMeat;
+        if (dinnerProteinName === 'canned tuna') {
+          const fallbackPool = PROTEIN_POOL.filter(p =>
+            p.tiers.includes(budgetTier) &&
+            p.name !== 'canned tuna' &&
+            p.name !== 'eggs' &&
+            p.name !== 'firm tofu'
+          );
+          if (fallbackPool.length > 0) {
+            fallbackPool.sort((a, b) => getCostPerGramProtein(a) - getCostPerGramProtein(b));
+            dinnerProteinName = fallbackPool[0].name;
+          }
+        }
+        proteinIngredient = dinnerProteinName
+          ? makeProteinIngredient(dinnerProteinName, 'dinner', macroTarget, mealBudget)
           : selectProtein('dinner', macroTarget.protein, mealBudget, budgetTier, [], dietaryRestrictions, macroTarget.calories);
       }
 
