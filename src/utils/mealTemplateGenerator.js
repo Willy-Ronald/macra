@@ -1118,8 +1118,13 @@ function generateMealTemplate(profile) {
         const s = weeklyProteins.primarySeasoning;
         const isMainMeal = mealType === 'lunch' || mealType === 'dinner';
         if (isMainMeal) {
-          // Cooking fat + up to 4 spices at 0.5 tsp each
-          if (s.cookingFat) seasoningIngredients.push({ name: s.cookingFat, qty: '1', unit: 'tbsp' });
+          // Cooking fat — strict and moderate tiers use vegetable oil to keep cost down
+          if (s.cookingFat) {
+            const cookingFat = (budgetTier === 'strict' || budgetTier === 'moderate')
+              ? 'vegetable oil'
+              : s.cookingFat;
+            seasoningIngredients.push({ name: cookingFat, qty: '1', unit: 'tbsp' });
+          }
           const spices = (s.spices || []).slice(0, 4);
           for (const spice of spices) {
             seasoningIngredients.push({ name: spice, qty: '0.5', unit: 'tsp' });

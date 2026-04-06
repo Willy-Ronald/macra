@@ -420,6 +420,14 @@ const PANTRY_ITEMS = new Set([
   "sugar", "brown sugar", "cornstarch", "yeast",
   // Sweeteners treated as pantry
   "honey",
+  // Zests
+  "lemon zest", "lime zest", "orange zest",
+  // Additional salt/pepper variants
+  "ground pepper", "iodized salt",
+  // Additional seasoning blends
+  "five spice powder", "berbere spice", "za atar",
+  // Budget cooking oils (treated as pantry like olive oil spray)
+  "vegetable oil", "canola oil",
   // Cooking sprays
   "cooking spray", "olive oil spray", "nonstick spray",
   // Water
@@ -678,6 +686,13 @@ export function estimateItem(name, qty, unit) {
     // Unit conversion: coleslaw mix cups → oz (1 cup coleslaw mix ≈ 2 oz, not 8 oz)
     if (normalized === "coleslaw mix" && (workUnit === "cup" || workUnit === "cups")) {
       workQty  = workQty * 2;
+      workUnit = "oz";
+    }
+
+    // Unit conversion: carrots "2 each" → oz (2 medium carrots ≈ 6 oz)
+    if (normalized === "carrots" &&
+        (workUnit === "2 each" || workUnit === "2each")) {
+      workQty  = workQty * 6;
       workUnit = "oz";
     }
 
