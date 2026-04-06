@@ -203,7 +203,7 @@ const VEGETABLE_SOURCES = [
   { name: 'onion',            protein: 1.2, carbs: 10.2, fat: 0.1, calories: 44, cost: 0.50, unit: 'each',  simple: true  },
   { name: 'tomato',           protein: 1.1, carbs: 4.8,  fat: 0.2, calories: 22, cost: 0.45, unit: 'each',  simple: false },
   { name: 'zucchini',         protein: 2.4, carbs: 6.1,  fat: 0.6, calories: 33, cost: 0.85, unit: 'each',  simple: false },
-  { name: 'carrots',          protein: 1.1, carbs: 12.2, fat: 0.2, calories: 50, cost: 0.50, unit: '2 each', simple: true  },
+  { name: 'carrots',          protein: 1.1, carbs: 12.2, fat: 0.2, calories: 50, cost: 0.40, unit: 'cup',   simple: true  },
   { name: 'cucumber',         protein: 1.4, carbs: 7.2,  fat: 0.2, calories: 30, cost: 0.79, unit: 'each',  simple: false },
   { name: 'mushrooms',        protein: 2.2, carbs: 2.3,  fat: 0.2, calories: 15, cost: 1.50, unit: 'cup',   simple: false },
   { name: 'kale',             protein: 1.9, carbs: 2.9,  fat: 1.0, calories: 23, cost: 0.54, unit: 'cup',   simple: false },

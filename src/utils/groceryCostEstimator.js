@@ -426,8 +426,8 @@ const PANTRY_ITEMS = new Set([
   "ground pepper", "iodized salt",
   // Additional seasoning blends
   "five spice powder", "berbere spice", "za atar",
-  // Budget cooking oils (treated as pantry like olive oil spray)
-  "vegetable oil", "canola oil",
+  // Cooking oils (treated as pantry like olive oil spray)
+  "vegetable oil", "canola oil", "cooking oil", "olive oil", "coconut oil",
   // Cooking sprays
   "cooking spray", "olive oil spray", "nonstick spray",
   // Water

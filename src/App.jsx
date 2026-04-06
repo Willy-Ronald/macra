@@ -3332,9 +3332,30 @@ const Grocery = ({isPro,setIsPro,weekPlans={},userId,onUpgrade,profile}) => {
     const dayB = weekPlans[1] || []; // B: Tue/Thu/Sat = 3×
     const combined = {};
 
+    const GROCERY_SKIP = new Set([
+      'salt', 'black pepper', 'white pepper', 'pepper', 'garlic powder', 'onion powder',
+      'cumin', 'oregano', 'thyme', 'rosemary', 'paprika', 'smoked paprika', 'sweet paprika',
+      'chili powder', 'cayenne', 'cayenne pepper', 'red pepper flakes', 'crushed red pepper',
+      'cinnamon', 'ground cinnamon', 'turmeric', 'ground turmeric', 'ginger powder',
+      'curry powder', 'garam masala', 'coriander', 'italian seasoning', 'bay leaves', 'bay leaf',
+      'lemon pepper', 'garlic salt', 'jerk seasoning', 'cajun seasoning', 'taco seasoning',
+      'fajita seasoning', 'five spice powder', 'berbere spice', 'za atar', 'everything bagel seasoning',
+      'ranch seasoning', 'lemon zest', 'lime zest', 'orange zest',
+      'vegetable oil', 'canola oil', 'olive oil', 'coconut oil', 'cooking oil', 'cooking spray',
+      'olive oil spray', 'nonstick spray',
+      'water', 'ice',
+      'honey', 'sugar', 'brown sugar', 'vanilla extract',
+      'baking powder', 'baking soda', 'cornstarch', 'flour',
+      'soy sauce packet', 'hot sauce packet',
+      'lemon juice', 'lime juice',
+    ]);
+
     const absorb = (meals, mult) => {
       meals.forEach(meal => {
         (meal.ingredients||[]).forEach(ing => {
+          // Skip pantry staples — they are zero cost and clutter the grocery list
+          const ingNameLower = (ing.name || '').toLowerCase().trim();
+          if (GROCERY_SKIP.has(ingNameLower)) return;
           // Normalize volume units before keying so tsp/fl oz aggregate with tbsp
           let normUnit = ing.unit.toLowerCase().trim();
           let normQty  = parseFloat(ing.qty) || 0;

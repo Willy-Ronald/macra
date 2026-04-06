@@ -361,6 +361,7 @@ RULES:
 - Day A and B must be completely different meals — no repeated dishes across days
 - Each day: exactly 4 meals in order: BREAKFAST, LUNCH, SNACK, DINNER
 - "name" = dish name only, never include the cuisine label in the name. "name": "Meal name in English only — no foreign language words, must be immediately readable by an English speaker"
+- "name" must only reference ingredients that actually appear in the meal's ingredient list. Never name a meal after a spice, sauce, or ingredient not in the ingredients array. A meal with chicken, rice, and broccoli cannot be called "Berbere Spiced Chicken" unless berbere appears in the ingredients list.
 - Share base ingredients across A and B where practical to keep shopping simple
 - Never repeat the exact same meal as previous generations
 - instructions: 5 to 8 steps total per meal, aim for 5 but use up to 8 if needed for clear instructions, each under 20 words, starting with an action verb
