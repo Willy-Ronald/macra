@@ -704,17 +704,25 @@ function makeProteinIngredient(proteinName, mealType, macroTarget, mealBudget) {
   // Fat ceiling check — reduce quantity if protein fat contribution
   // would exceed the meal fat target. This prevents high-fat proteins
   // like ground turkey from blowing the daily fat budget.
+  // Returns null if the fat-capped quantity can't deliver ≥50% of protein target.
   if (macroTarget.fat != null && macroTarget.fat > 0) {
     const nutritionPerUnit = dbMacros(p.name, 1, p.unit, null);
     const fatPerUnit = nutritionPerUnit?.fat || 0;
     if (fatPerUnit > 0) {
       const maxQtyByFat = macroTarget.fat / fatPerUnit;
       if (quantity > maxQtyByFat) {
+        let cappedQty;
         if (p.unit === 'each' || p.unit === 'slice') {
-          quantity = Math.max(1, Math.floor(maxQtyByFat));
+          cappedQty = Math.max(1, Math.floor(maxQtyByFat));
         } else {
-          quantity = Math.max(0.5, Math.round(maxQtyByFat * 2) / 2);
+          cappedQty = Math.max(0.5, Math.round(maxQtyByFat * 2) / 2);
         }
+        // If fat-capped quantity delivers < 50% of protein target, reject this protein
+        const proteinAtCap = cappedQty * proteinPerUnit;
+        if (macroTarget.protein > 0 && proteinAtCap < macroTarget.protein * 0.5) {
+          return null;
+        }
+        quantity = cappedQty;
         actualCost = Math.round(quantity * costPerUnit * 100) / 100;
       }
     }
@@ -1012,7 +1020,10 @@ function generateMealTemplate(profile) {
             p.name !== 'eggs' &&
             p.name !== 'firm tofu'
           ).sort((a, b) => getCostPerGramProtein(a) - getCostPerGramProtein(b));
-          if (fallbackPool.length > 0) bulkProteinName = fallbackPool[0].name;
+          const validFallback = fallbackPool.find(p =>
+            makeProteinIngredient(p.name, mealType, macroTarget, mealBudget) !== null
+          );
+          if (validFallback) bulkProteinName = validFallback.name;
         }
 
         // Canned tuna is capped at 1 slot per day
@@ -1024,7 +1035,10 @@ function generateMealTemplate(profile) {
               p.name !== 'eggs' &&
               p.name !== 'firm tofu'
             ).sort((a, b) => getCostPerGramProtein(a) - getCostPerGramProtein(b));
-            if (fallbackPool.length > 0) bulkProteinName = fallbackPool[0].name;
+            const validFallback = fallbackPool.find(p =>
+              makeProteinIngredient(p.name, mealType, macroTarget, mealBudget) !== null
+            );
+            if (validFallback) bulkProteinName = validFallback.name;
           } else {
             dayTunaSlots++;
           }
@@ -1108,12 +1122,32 @@ function generateMealTemplate(profile) {
 
       carbPerMeal[mealType] = carbIngredient?.name;
 
+      // Build seasoning list from the weekly protein's seasoning profile
+      const seasoningIngredients = [];
+      if (weeklyProteins?.primarySeasoning) {
+        const s = weeklyProteins.primarySeasoning;
+        const isMainMeal = mealType === 'lunch' || mealType === 'dinner';
+        if (isMainMeal) {
+          // Cooking fat + up to 4 spices at 0.5 tsp each
+          if (s.cookingFat) seasoningIngredients.push({ name: s.cookingFat, qty: '1', unit: 'tbsp' });
+          const spices = (s.spices || []).slice(0, 4);
+          for (const spice of spices) {
+            seasoningIngredients.push({ name: spice, qty: '0.5', unit: 'tsp' });
+          }
+        } else {
+          // Breakfast/snack: just salt and pepper
+          seasoningIngredients.push({ name: 'salt', qty: '0.25', unit: 'tsp' });
+          seasoningIngredients.push({ name: 'black pepper', qty: '0.25', unit: 'tsp' });
+        }
+      }
+
       meals[mealType] = {
         mealType,
         protein:    proteinIngredient,
         carbs:      carbIngredient,
         fat:        fatIngredient,
         vegetables,
+        seasonings: seasoningIngredients,
         totalMacros,
         totalCost,
         ...(coldFormatOnly ? { coldFormatOnly: true } : {}),

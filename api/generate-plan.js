@@ -1354,6 +1354,13 @@ MACRO DISTRIBUTION — breakfast lighter, dinner heavier:
               unit: veg.unit,
             });
           }
+          for (const s of (templateMeal.seasonings || [])) {
+            ingredients.push({
+              name: s.name,
+              qty:  String(s.qty),
+              unit: s.unit,
+            });
+          }
           if (ingredients.length > 0) {
             meal.ingredients = ingredients;
           }

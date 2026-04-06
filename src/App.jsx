@@ -1957,7 +1957,7 @@ const RecipeDetail = ({meal, savedMeals=[], onHeartMeal, onLogMeal, onBack}) => 
         <p style={{fontSize:11,fontWeight:700,color:T.txM,margin:"0 0 12px",letterSpacing:"0.08em",textTransform:"uppercase"}}>You'll Need</p>
         <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
           {equipmentItems.map((item,i)=>(
-            <span key={i} style={{padding:"7px 14px",borderRadius:20,border:`1px solid ${T.bd}`,fontSize:12,color:T.tx2,background:T.sf,fontWeight:500}}>{item}</span>
+            <span key={i} style={{padding:"7px 14px",borderRadius:20,border:`1px solid ${T.bd}`,fontSize:12,color:T.tx,background:T.sf,fontWeight:500}}>{item}</span>
           ))}
         </div>
       </div>}
