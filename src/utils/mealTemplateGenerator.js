@@ -686,7 +686,7 @@ function makeProteinIngredient(proteinName, mealType, macroTarget, mealBudget) {
     actualCost = Math.round(quantity * costPerUnit * 100) / 100;
   }
 
-  // Calorie pre-check
+  // Calorie pre-check — reduce quantity if protein alone exceeds meal calorie ceiling
   if (macroTarget.calories != null) {
     const calPerUnit = dbMacros(p.name, 1, p.unit, null).calories || 0;
     if (calPerUnit > 0 && quantity * calPerUnit > macroTarget.calories * 1.20) {
@@ -696,6 +696,25 @@ function makeProteinIngredient(proteinName, mealType, macroTarget, mealBudget) {
         quantity = Math.max(0.5, Math.round(((macroTarget.calories * 1.20) / calPerUnit) * 2) / 2);
       }
       actualCost = Math.round(quantity * costPerUnit * 100) / 100;
+    }
+  }
+
+  // Fat ceiling check — reduce quantity if protein fat contribution
+  // would exceed the meal fat target. This prevents high-fat proteins
+  // like ground turkey from blowing the daily fat budget.
+  if (macroTarget.fat != null && macroTarget.fat > 0) {
+    const nutritionPerUnit = dbMacros(p.name, 1, p.unit, null);
+    const fatPerUnit = nutritionPerUnit?.fat || 0;
+    if (fatPerUnit > 0) {
+      const maxQtyByFat = macroTarget.fat / fatPerUnit;
+      if (quantity > maxQtyByFat) {
+        if (p.unit === 'each' || p.unit === 'slice') {
+          quantity = Math.max(1, Math.floor(maxQtyByFat));
+        } else {
+          quantity = Math.max(0.5, Math.round(maxQtyByFat * 2) / 2);
+        }
+        actualCost = Math.round(quantity * costPerUnit * 100) / 100;
+      }
     }
   }
 
@@ -860,30 +879,34 @@ function generateMealTemplate(profile) {
   );
 
   // Per-meal macro targets (protein split matches generate-plan.js)
+  // Meal plan targets 85% of daily macro targets.
+  // This produces realistic portion sizes within budget constraints
+  // and leaves ~15% for users to fill with snacks and personal choices.
+  const PLAN_TARGET_RATIO = 0.85;
   const mealMacroTargets = {
     breakfast: {
-      calories: Math.round(macros.target   * 0.18),
-      protein:  Math.round(macros.proteinG * 0.18),
-      carbs:    Math.round(macros.carbG    * 0.18),
-      fat:      Math.round(macros.fatG     * 0.18),
+      calories: Math.round(macros.target   * 0.18 * PLAN_TARGET_RATIO),
+      protein:  Math.round(macros.proteinG * 0.18 * PLAN_TARGET_RATIO),
+      carbs:    Math.round(macros.carbG    * 0.18 * PLAN_TARGET_RATIO),
+      fat:      Math.round(macros.fatG     * 0.18 * PLAN_TARGET_RATIO),
     },
     snack: {
-      calories: Math.round(macros.target   * 0.18),
-      protein:  Math.round(macros.proteinG * 0.18),
-      carbs:    Math.round(macros.carbG    * 0.18),
-      fat:      Math.round(macros.fatG     * 0.18),
+      calories: Math.round(macros.target   * 0.18 * PLAN_TARGET_RATIO),
+      protein:  Math.round(macros.proteinG * 0.18 * PLAN_TARGET_RATIO),
+      carbs:    Math.round(macros.carbG    * 0.18 * PLAN_TARGET_RATIO),
+      fat:      Math.round(macros.fatG     * 0.18 * PLAN_TARGET_RATIO),
     },
     lunch: {
-      calories: Math.round(macros.target   * 0.28),
-      protein:  Math.round(macros.proteinG * 0.28),
-      carbs:    Math.round(macros.carbG    * 0.28),
-      fat:      Math.round(macros.fatG     * 0.28),
+      calories: Math.round(macros.target   * 0.28 * PLAN_TARGET_RATIO),
+      protein:  Math.round(macros.proteinG * 0.28 * PLAN_TARGET_RATIO),
+      carbs:    Math.round(macros.carbG    * 0.28 * PLAN_TARGET_RATIO),
+      fat:      Math.round(macros.fatG     * 0.28 * PLAN_TARGET_RATIO),
     },
     dinner: {
-      calories: Math.round(macros.target   * 0.36),
-      protein:  Math.round(macros.proteinG * 0.36),
-      carbs:    Math.round(macros.carbG    * 0.36),
-      fat:      Math.round(macros.fatG     * 0.36),
+      calories: Math.round(macros.target   * 0.36 * PLAN_TARGET_RATIO),
+      protein:  Math.round(macros.proteinG * 0.36 * PLAN_TARGET_RATIO),
+      carbs:    Math.round(macros.carbG    * 0.36 * PLAN_TARGET_RATIO),
+      fat:      Math.round(macros.fatG     * 0.36 * PLAN_TARGET_RATIO),
     },
   };
 

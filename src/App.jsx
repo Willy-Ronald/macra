@@ -2182,11 +2182,16 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,o
       {sel==="A"?"Mon · Wed · Fri · Sun":"Tue · Thu · Sat"}
     </p>
 
-    <div style={{display:"flex",justifyContent:"space-between",padding:"0 4px",marginBottom:18}}>
+    <div style={{display:"flex",justifyContent:"space-between",padding:"0 4px",marginBottom:6}}>
       {[{l:"Calories",v:Math.round(dayTotals.cal).toLocaleString(),c:T.acc},{l:"Protein",v:Math.round(dayTotals.p)+"g",c:T.pro},{l:"Carbs",v:Math.round(dayTotals.c)+"g",c:T.carb},{l:"Fat",v:Math.round(dayTotals.f)+"g",c:T.fat}].map(s=>
         <div key={s.l} style={{textAlign:"center"}}><p style={{fontSize:17,fontWeight:700,color:s.c,margin:0,fontFamily:T.mono}}>{s.v}</p><Lbl>{s.l}</Lbl></div>
       )}
     </div>
+    {profile?.macros && (
+      <p style={{fontSize:10,color:T.txM,textAlign:"center",margin:"0 0 14px",letterSpacing:"0.03em"}}>
+        Plan target: {Math.round(profile.macros.target*0.85).toLocaleString()} cal · {Math.round(profile.macros.proteinG*0.85)}g P · {Math.round(profile.macros.carbG*0.85)}g C · {Math.round(profile.macros.fatG*0.85)}g F
+      </p>
+    )}
 
     {/* Loading */}
     {loading && <Card style={{padding:"40px 20px",textAlign:"center",marginBottom:12}}>
@@ -2291,7 +2296,7 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,o
       })()}
 
       <p style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.35)', textAlign: 'center', marginBottom: '8px' }}>
-        Estimates based on raw ingredient weights · Grocery costs based on average national retail pricing
+        Your meal plan covers ~85% of your daily targets — leaving room for snacks and personal choices to complete your day. Grocery costs based on average national retail pricing.
       </p>
 
       {/* Generate / Regenerate button */}
