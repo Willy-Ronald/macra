@@ -87,25 +87,25 @@ function pkgCost(name, totalQty, unit) {
 }
 
 const PROTEIN_POOL = [
-  { name: 'chicken thighs',  proteinPer28g: 4.9,   costPerOz: 0.156,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
-  { name: 'chicken breast',  proteinPer28g: 6.6,   costPerOz: 0.343,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
-  { name: 'ground turkey',   proteinPer28g: 5.6,   costPerOz: 0.312,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
-  { name: 'ground beef',     proteinPer28g: 5.7,   costPerOz: 0.562,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
-  { name: 'canned tuna',     proteinPer28g: 7.2,   costPerOz: 0.20,    unit: 'oz',    maxPerMeal: 6,  tiers: ['strict','moderate','flexible','premium','chef'] },
-  { name: 'tilapia',         proteinPer28g: 5.7,   costPerOz: 0.313,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
-  { name: 'salmon',          proteinPer28g: 5.8,   costPerOz: 0.687,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['flexible','premium','chef'] },
-  { name: 'shrimp',          proteinPer28g: 5.9,   costPerOz: 0.583,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['moderate','flexible','premium','chef'] },
-  { name: 'pork tenderloin', proteinPer28g: 5.9,   costPerOz: 0.249,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
-  { name: 'pork chops',      proteinPer28g: 5.5,   costPerOz: 0.374,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['flexible','premium','chef'] },
-  { name: 'eggs',            proteinEach:   6.5,   costEach:  0.15,    unit: 'each',  maxPerMeal: 4,  tiers: ['strict','moderate','flexible','premium','chef'] },
-  { name: 'greek yogurt',   proteinPerCup: 17.0,  costPerCup: 0.83,   unit: 'cup',   maxPerMeal: 2,  tiers: ['strict','moderate','flexible','premium','chef'] },
-  { name: 'cottage cheese', proteinPerCup: 25.0,  costPerCup: 0.56,   unit: 'cup',   maxPerMeal: 2,  tiers: ['strict','moderate','flexible','premium','chef'] },
-  { name: 'firm tofu',       proteinPer28g: 2.3,   costPerOz: 0.142,   unit: 'oz',    maxPerMeal: 8,  tiers: ['strict','moderate','flexible','premium','chef'] },
-  { name: 'deli turkey',     proteinPer28g: 5.0,   costPerOz: 0.443,   unit: 'oz',    maxPerMeal: 4,  tiers: ['moderate','flexible','premium','chef'] },
-  { name: 'bacon',           proteinPerSlice: 3.7, costPerSlice: 0.40, unit: 'slice', maxPerMeal: 3,  tiers: ['flexible','premium','chef'] },
-  { name: 'turkey bacon',    proteinPerSlice: 3.96, costPerSlice: 0.40, unit: 'slice', maxPerMeal: 3,  tiers: ['strict','moderate','flexible','premium','chef'] },
-  { name: 'pork shoulder',   proteinPer28g: 5.9,   costPerOz: 0.156,   unit: 'oz',    maxPerMeal: 12, maxPerMealDinner: 16, tiers: ['strict','moderate','flexible','premium','chef'] },
-  { name: 'beef chuck roast', proteinPer28g: 6.0,  costPerOz: 0.281,   unit: 'oz',    maxPerMeal: 12, maxPerMealDinner: 16, tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'chicken thighs',  proteinPer28g: 4.9,   fatPer28g: 2.81,  costPerOz: 0.156,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'chicken breast',  proteinPer28g: 6.6,   fatPer28g: 0.34,  costPerOz: 0.343,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'ground turkey',   proteinPer28g: 5.6,   fatPer28g: 2.13,  costPerOz: 0.312,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'ground beef',     proteinPer28g: 5.7,   fatPer28g: 4.00,  costPerOz: 0.562,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'canned tuna',     proteinPer28g: 7.2,   fatPer28g: 0.14,  costPerOz: 0.20,    unit: 'oz',    maxPerMeal: 6,  tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'tilapia',         proteinPer28g: 5.7,   fatPer28g: 0.48,  costPerOz: 0.313,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'salmon',          proteinPer28g: 5.8,   fatPer28g: 2.50,  costPerOz: 0.687,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['flexible','premium','chef'] },
+  { name: 'shrimp',          proteinPer28g: 5.9,   fatPer28g: 0.28,  costPerOz: 0.583,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['moderate','flexible','premium','chef'] },
+  { name: 'pork tenderloin', proteinPer28g: 5.9,   fatPer28g: 0.68,  costPerOz: 0.249,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'pork chops',      proteinPer28g: 5.5,   fatPer28g: 1.50,  costPerOz: 0.374,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['flexible','premium','chef'] },
+  { name: 'eggs',            proteinEach:   6.5,   fatEach:   5.0,   costEach:  0.15,    unit: 'each',  maxPerMeal: 4,  tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'greek yogurt',    proteinPerCup: 17.0,  fatPerCup: 0.70,  costPerCup: 0.83,   unit: 'cup',   maxPerMeal: 2,  tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'cottage cheese',  proteinPerCup: 25.0,  fatPerCup: 5.00,  costPerCup: 0.56,   unit: 'cup',   maxPerMeal: 2,  tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'firm tofu',       proteinPer28g: 2.3,   fatPer28g: 0.90,  costPerOz: 0.142,   unit: 'oz',    maxPerMeal: 8,  tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'deli turkey',     proteinPer28g: 5.0,   fatPer28g: 0.50,  costPerOz: 0.443,   unit: 'oz',    maxPerMeal: 4,  tiers: ['moderate','flexible','premium','chef'] },
+  { name: 'bacon',           proteinPerSlice: 3.7, fatPerSlice: 3.50, costPerSlice: 0.40, unit: 'slice', maxPerMeal: 3,  tiers: ['flexible','premium','chef'] },
+  { name: 'turkey bacon',    proteinPerSlice: 3.96, fatPerSlice: 2.00, costPerSlice: 0.40, unit: 'slice', maxPerMeal: 3,  tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'pork shoulder',   proteinPer28g: 5.9,   fatPer28g: 3.66,  costPerOz: 0.156,   unit: 'oz',    maxPerMeal: 12, maxPerMealDinner: 16, tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'beef chuck roast', proteinPer28g: 6.0,  fatPer28g: 2.50,  costPerOz: 0.281,   unit: 'oz',    maxPerMeal: 12, maxPerMealDinner: 16, tiers: ['strict','moderate','flexible','premium','chef'] },
 ];
 
 const BUDGET_TIER_CONFIG = {
@@ -229,6 +229,13 @@ function getProteinPerUnit(p) {
   if (p.unit === 'slice') return p.proteinPerSlice;
   if (p.unit === 'cup')   return p.proteinPerCup;
   return p.proteinPer28g; // oz
+}
+
+function getFatPerUnit(p) {
+  if (p.unit === 'each')  return p.fatEach       || 0;
+  if (p.unit === 'slice') return p.fatPerSlice    || 0;
+  if (p.unit === 'cup')   return p.fatPerCup      || 0;
+  return p.fatPer28g || 0; // oz
 }
 
 function getCostPerUnit(p) {
@@ -707,8 +714,7 @@ function makeProteinIngredient(proteinName, mealType, macroTarget, mealBudget) {
   // would exceed the meal fat target. This prevents high-fat proteins
   // like ground turkey from blowing the daily fat budget.
   if (macroTarget.fat != null && macroTarget.fat > 0) {
-    const nutritionPerUnit = dbMacros(p.name, 1, p.unit, null);
-    const fatPerUnit = nutritionPerUnit?.fat || 0;
+    const fatPerUnit = getFatPerUnit(p);
     if (fatPerUnit > 0) {
       const maxQtyByFat = macroTarget.fat / fatPerUnit;
       if (quantity > maxQtyByFat) {
@@ -1040,7 +1046,13 @@ function generateMealTemplate(profile) {
       } else if (mealType === 'breakfast') {
         if (!eggsExcluded && weeklyEggsUsed < WEEKLY_EGG_CAP) {
           proteinIngredient = makeProteinIngredient('eggs', 'breakfast', macroTarget, mealBudget);
-          if (proteinIngredient) weeklyEggsUsed += proteinIngredient.quantity;
+          if (proteinIngredient) {
+            // Hard cap: never use more than 4 eggs at breakfast
+            proteinIngredient.quantity = Math.min(proteinIngredient.quantity, 4);
+            proteinIngredient.actualProteinG = Math.round(proteinIngredient.quantity * 6.5 * 10) / 10;
+            proteinIngredient.actualCost = Math.round(proteinIngredient.quantity * 0.15 * 100) / 100;
+            weeklyEggsUsed += proteinIngredient.quantity;
+          }
         } else if (!eggsExcluded && weeklyEggsUsed >= WEEKLY_EGG_CAP) {
           // Egg cap reached — rotate to Greek yogurt or cottage cheese
           const altName = dayLabel === 'DayA' ? 'greek yogurt' : 'cottage cheese';
@@ -1057,7 +1069,13 @@ function generateMealTemplate(profile) {
       } else if (mealType === 'snack') {
         if (!eggsExcluded && weeklyEggsUsed < WEEKLY_EGG_CAP) {
           proteinIngredient = makeProteinIngredient('eggs', 'snack', macroTarget, mealBudget);
-          if (proteinIngredient) weeklyEggsUsed += proteinIngredient.quantity;
+          if (proteinIngredient) {
+            // Hard cap: never use more than 3 eggs at snack
+            proteinIngredient.quantity = Math.min(proteinIngredient.quantity, 3);
+            proteinIngredient.actualProteinG = Math.round(proteinIngredient.quantity * 6.5 * 10) / 10;
+            proteinIngredient.actualCost = Math.round(proteinIngredient.quantity * 0.15 * 100) / 100;
+            weeklyEggsUsed += proteinIngredient.quantity;
+          }
           coldFormatOnly = true;
         } else if (!eggsExcluded && weeklyEggsUsed >= WEEKLY_EGG_CAP) {
           // Egg cap reached — rotate to cottage cheese for snack
