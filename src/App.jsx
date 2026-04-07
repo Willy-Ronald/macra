@@ -2273,20 +2273,45 @@ const Plan = ({profile,userId,isPro,onWeekPlanUpdate,savedMeals=[],onHeartMeal,o
       {(()=>{
         try {
           const budget = profile?.weeklyBudget;
-          const adjustedProtein = profile?.macros?.proteinG;
-          if (!budget || !adjustedProtein) return null;
-          const { minimumBudget, suggestedBudget } = calculateMinimumBudget(adjustedProtein);
-          if (budget >= minimumBudget) return null;
+          const proteinG = profile?.macros?.proteinG;
+          if (!budget || !proteinG) return null;
+
+          // Realistic minimum budget calculation:
+          // Cheapest protein sources at Walmart prices:
+          // Eggs: $0.032/g protein, Canned tuna: $0.027/g protein
+          // Assume 50% eggs + 50% tuna blended cost = $0.030/g protein
+          // Weekly protein needed = proteinG × 7 days
+          // Add 40% for carbs, vegetables, dairy
+          const weeklyProteinG = proteinG * 7;
+          const proteinCostPerG = 0.030;
+          const proteinWeeklyCost = weeklyProteinG * proteinCostPerG;
+          const totalEstimatedMinimum = Math.round(proteinWeeklyCost * 1.40);
+          const suggestedBudget = Math.round(totalEstimatedMinimum * 1.15);
+
+          if (budget >= totalEstimatedMinimum) return null;
+
           return (
-            <div style={{padding:"14px 16px",borderRadius:T.r,border:"1px solid rgba(201,168,76,0.35)",background:"rgba(201,168,76,0.07)",marginBottom:10}}>
-              <p style={{fontSize:12,color:"#C9A84C",margin:"0 0 12px",lineHeight:1.5,fontWeight:400}}>
-                {`Your current budget of $${budget} may not cover your protein needs (${adjustedProtein}g/day). Plans may exceed your budget. Consider updating your budget to at least $${minimumBudget}/week.`}
+            <div style={{
+              background: 'rgba(239,68,68,0.08)',
+              border: '1px solid rgba(239,68,68,0.3)',
+              borderRadius: '10px',
+              padding: '14px 16px',
+              marginBottom: '12px',
+            }}>
+              <p style={{fontSize:13,fontWeight:700,color:'#EF4444',margin:'0 0 6px'}}>
+                ⚠️ Budget may be too low for your protein target
               </p>
-              <div style={{display:"flex",gap:8}}>
-                <button onClick={generatePlan} disabled={limitHit} style={{flex:1,padding:"9px 12px",borderRadius:T.r,border:`1px solid rgba(201,168,76,0.5)`,background:"transparent",color:"#C9A84C",fontSize:12,fontWeight:600,cursor:limitHit?"not-allowed":"pointer",fontFamily:T.font}}>
+              <p style={{fontSize:12,color:'rgba(255,255,255,0.7)',margin:'0 0 10px',lineHeight:1.5}}>
+                Your goal of {proteinG}g protein daily requires an estimated minimum of ${totalEstimatedMinimum}/week at current grocery prices. Your current budget of ${budget}/week may result in plans that fall short of your protein target.
+              </p>
+              <p style={{fontSize:12,color:'rgba(255,255,255,0.5)',margin:'0 0 12px',lineHeight:1.5}}>
+                Suggested budget for your protein target: <strong style={{color:'#C8B88A'}}>${suggestedBudget}/week</strong>
+              </p>
+              <div style={{display:'flex',gap:8}}>
+                <button onClick={generatePlan} disabled={limitHit} style={{flex:1,padding:'9px 12px',borderRadius:10,border:'1px solid rgba(239,68,68,0.4)',background:'transparent',color:'#EF4444',fontSize:12,fontWeight:600,cursor:limitHit?'not-allowed':'pointer',fontFamily:'inherit'}}>
                   Generate Anyway
                 </button>
-                <button onClick={()=>setTab&&setTab("profile")} style={{flex:1,padding:"9px 12px",borderRadius:T.r,border:"none",background:"rgba(201,168,76,0.2)",color:"#C9A84C",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:T.font}}>
+                <button onClick={()=>setTab&&setTab('profile')} style={{flex:1,padding:'9px 12px',borderRadius:10,border:'none',background:'rgba(239,68,68,0.15)',color:'#EF4444',fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
                   Update Budget
                 </button>
               </div>

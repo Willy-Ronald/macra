@@ -98,10 +98,12 @@ const PROTEIN_POOL = [
   { name: 'pork tenderloin', proteinPer28g: 5.9,   costPerOz: 0.249,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['strict','moderate','flexible','premium','chef'] },
   { name: 'pork chops',      proteinPer28g: 5.5,   costPerOz: 0.374,   unit: 'oz',    maxPerMeal: 8,  maxPerMealDinner: 12, tiers: ['flexible','premium','chef'] },
   { name: 'eggs',            proteinEach:   6.5,   costEach:  0.15,    unit: 'each',  maxPerMeal: 4,  tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'greek yogurt',   proteinPerCup: 17.0,  costPerCup: 0.83,   unit: 'cup',   maxPerMeal: 2,  tiers: ['strict','moderate','flexible','premium','chef'] },
+  { name: 'cottage cheese', proteinPerCup: 25.0,  costPerCup: 0.56,   unit: 'cup',   maxPerMeal: 2,  tiers: ['strict','moderate','flexible','premium','chef'] },
   { name: 'firm tofu',       proteinPer28g: 2.3,   costPerOz: 0.142,   unit: 'oz',    maxPerMeal: 8,  tiers: ['strict','moderate','flexible','premium','chef'] },
   { name: 'deli turkey',     proteinPer28g: 5.0,   costPerOz: 0.443,   unit: 'oz',    maxPerMeal: 4,  tiers: ['moderate','flexible','premium','chef'] },
   { name: 'bacon',           proteinPerSlice: 3.7, costPerSlice: 0.40, unit: 'slice', maxPerMeal: 3,  tiers: ['flexible','premium','chef'] },
-  { name: 'turkey bacon',    proteinPerSlice: 3.96, costPerSlice: 0.40, unit: 'slice', maxPerMeal: 3,  tiers: ['moderate','flexible','premium','chef'] },
+  { name: 'turkey bacon',    proteinPerSlice: 3.96, costPerSlice: 0.40, unit: 'slice', maxPerMeal: 3,  tiers: ['strict','moderate','flexible','premium','chef'] },
   { name: 'pork shoulder',   proteinPer28g: 5.9,   costPerOz: 0.156,   unit: 'oz',    maxPerMeal: 12, maxPerMealDinner: 16, tiers: ['strict','moderate','flexible','premium','chef'] },
   { name: 'beef chuck roast', proteinPer28g: 6.0,  costPerOz: 0.281,   unit: 'oz',    maxPerMeal: 12, maxPerMealDinner: 16, tiers: ['strict','moderate','flexible','premium','chef'] },
 ];
@@ -1036,16 +1038,34 @@ function generateMealTemplate(profile) {
 
         proteinIngredient = makeProteinIngredient(bulkProteinName, mealType, macroTarget, mealBudget);
       } else if (mealType === 'breakfast') {
-        if (!eggsExcluded) {
+        if (!eggsExcluded && weeklyEggsUsed < WEEKLY_EGG_CAP) {
           proteinIngredient = makeProteinIngredient('eggs', 'breakfast', macroTarget, mealBudget);
+          if (proteinIngredient) weeklyEggsUsed += proteinIngredient.quantity;
+        } else if (!eggsExcluded && weeklyEggsUsed >= WEEKLY_EGG_CAP) {
+          // Egg cap reached — rotate to Greek yogurt or cottage cheese
+          const altName = dayLabel === 'DayA' ? 'greek yogurt' : 'cottage cheese';
+          proteinIngredient = makeProteinIngredient(altName, 'breakfast', macroTarget, mealBudget);
+          if (!proteinIngredient) {
+            proteinIngredient = makeProteinIngredient('eggs', 'breakfast', macroTarget, mealBudget);
+            if (proteinIngredient) weeklyEggsUsed += proteinIngredient.quantity;
+          }
         } else {
           proteinIngredient = effectiveLunchMeat
             ? makeProteinIngredient(effectiveLunchMeat, 'breakfast', macroTarget, mealBudget)
             : selectProtein('breakfast', macroTarget.protein, mealBudget, budgetTier, [], dietaryRestrictions, macroTarget.calories);
         }
       } else if (mealType === 'snack') {
-        if (!eggsExcluded) {
+        if (!eggsExcluded && weeklyEggsUsed < WEEKLY_EGG_CAP) {
           proteinIngredient = makeProteinIngredient('eggs', 'snack', macroTarget, mealBudget);
+          if (proteinIngredient) weeklyEggsUsed += proteinIngredient.quantity;
+          coldFormatOnly = true;
+        } else if (!eggsExcluded && weeklyEggsUsed >= WEEKLY_EGG_CAP) {
+          // Egg cap reached — rotate to cottage cheese for snack
+          proteinIngredient = makeProteinIngredient('cottage cheese', 'snack', macroTarget, mealBudget);
+          if (!proteinIngredient) {
+            proteinIngredient = makeProteinIngredient('eggs', 'snack', macroTarget, mealBudget);
+            if (proteinIngredient) weeklyEggsUsed += proteinIngredient.quantity;
+          }
           coldFormatOnly = true;
         } else {
           proteinIngredient = effectiveLunchMeat
@@ -1215,6 +1235,10 @@ function generateMealTemplate(profile) {
 
   // Shared tuna slot counter across both days — cap at 2 slots total (mercury safety)
   let tunaSlotCount = 0;
+
+  // Weekly egg cap — max 18 eggs per week (reasonable meal prep quantity)
+  const WEEKLY_EGG_CAP = 18;
+  let weeklyEggsUsed = 0;
 
   const dayAResult = generateDay('DayA', [], {}, weeklyProteins);
   const dayBResult = generateDay('DayB', dayAResult.dayMeats, dayAResult.carbPerMeal, weeklyProteins);
